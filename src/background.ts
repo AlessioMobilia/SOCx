@@ -149,7 +149,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "CyberChef") {
     if (txt.length > 0) {
       // Converti il testo in Base64 (supporto per Unicode)
-      const base64Text = btoa(txt).replace("=","");
+      const base64Text = btoa(txt).replaceAll("=","");
   
       // Costruisci l'URL di CyberChef con l'input in Base64
       const cyberChefUrl = `https://gchq.github.io/CyberChef/#input=${base64Text}`;
