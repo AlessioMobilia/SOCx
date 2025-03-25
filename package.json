@@ -1,0 +1,85 @@
+{
+  "name": "so-cx",
+  "displayName": "SOCx",
+  "version": "0.0.3",
+  "description": "Simple OSINT Centralized eXtension",
+  "author": "Alessio Mobilia",
+  "privacy_policy": "https://socx.alessiomobilia.com/privacy.html",
+  "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build",
+    "package": "plasmo package"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "bootstrap": "^5.3.3",
+    "plasmo": "0.90.3",
+    "react": "18.2.0",
+    "react-bootstrap": "^2.10.9",
+    "react-dom": "18.2.0",
+    "react-icons": "^5.5.0",
+    "stable": "^0.1.8",
+    "tippy.js": "^6.3.7"
+  },
+  "extends": "plasmo/templates/tsconfig.base",
+  "exclude": [
+    "node_modules"
+  ],
+  "include": [
+    ".plasmo/index.d.ts",
+    "./**/*.ts",
+    "./**/*.tsx",
+    "./**/*.html",
+    "./**/**/*.ts",
+    "./**/**/*.tsx",
+    "./**/**/*.html"
+  ],
+  "compilerOptions": {
+    "paths": {
+      "~*": [
+        "./src/*"
+      ]
+    },
+    "baseUrl": "."
+  },
+  "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "4.1.1",
+    "@parcel/transformer-react-refresh-wrap": "^2.14.1",
+    "@types/chrome": "0.0.258",
+    "@types/node": "20.11.5",
+    "@types/react": "18.2.48",
+    "@types/react-dom": "18.2.18",
+    "cross-env": "^7.0.3",
+    "prettier": "3.2.4",
+    "typescript": "5.3.3"
+  },
+  "manifest": {
+    "host_permissions": [
+      "https://*/*"
+    ],
+    "permissions": [
+      "contextMenus",
+      "storage",
+      "notifications",
+      "tabs",
+      "sidePanel",
+      "clipboardWrite",
+      "scripting"
+    ],
+    "web_accessible_resources": [
+      {
+        "matches": [
+          "<all_urls>"
+        ],
+        "resources": [
+          "assets/*"
+        ]
+      }
+    ]
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "@swc/core"
+    ]
+  }
+}

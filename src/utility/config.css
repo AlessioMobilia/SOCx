@@ -1,0 +1,38 @@
+/* src/utility/config.css */
+@import url("./colors.css");
+
+/* Font */
+:root {
+  --font-primary: "Arial, sans-serif";
+  --font-secondary: "Georgia, serif";
+  --font-size-small: 12px;
+  --font-size-medium: 14px;
+  --font-size-large: 16px;
+  --font-size-xlarge: 18px;
+}
+
+/* Colori dei Pulsanti */
+:root {
+  --button-primary-light: var(--button-primary-light);
+  --button-primary-dark: var(--button-primary-dark);
+  --button-secondary-light: var(--button-secondary-light);
+  --button-secondary-dark: var(--button-secondary-dark);
+  --button-text-light: #fff;
+  --button-text-dark: #000;
+}
+
+/* Colori di Testo */
+:root {
+  --text-primary-light: var(--text-light);
+  --text-primary-dark: var(--text-dark);
+  --text-secondary-light: var(--secondary-text-color);
+  --text-secondary-dark: var(--secondary-text-color);
+}
+
+/* Colori delle Textbox */
+:root {
+  --input-bg-light: var(--input-bg-light);
+  --input-bg-dark: var(--input-bg-dark);
+  --input-text-light: var(--input-text-light);
+  --input-text-dark: var(--input-text-dark);
+}

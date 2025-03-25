@@ -1,0 +1,27 @@
+/* src/utility/colors.css */
+:root {
+  /* Colori per la Light Mode */
+  --background-light: #ffffff;
+  --text-light: #000000;
+  --secondary-text-color: #666666;
+  --button-primary-light: #007bff;
+  --button-secondary-light: #ffcccc;
+  --border-light: #ccc;
+
+  /* Colori per la Dark Mode */
+  --background-dark: #1e1e1e;
+  --text-dark: #e0e0e0;
+  --secondary-text-color: #a0a0a0;
+  --button-primary-dark: #333;
+  --button-secondary-dark: #5a0000;
+  --border-dark: #555;
+  
+  --background-light: #ffffff;
+  --background-dark: #1a1a1a;
+  --text-light: #000000;
+  --text-dark: #ffffff;
+  --input-bg-light: #ffffff;
+  --input-bg-dark: #2d2d2d;
+  --input-text-light: #000000;
+  --input-text-dark: #ffffff;
+}

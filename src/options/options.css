@@ -1,0 +1,37 @@
+/* src/options/options.css */
+/* Stili Globali */
+@import "bootstrap/dist/css/bootstrap.min.css";
+@import url("../utility/config.css");
+
+/* Stili Globali */
+body.dark-mode {
+  background-color: var(--bs-dark) !important;
+  color: var(--bs-body-color) !important;
+}
+
+body.light-mode {
+  background-color: var(--bs-light) !important;
+  color: var(--bs-body-color) !important;
+}
+
+/* Stili della Card */
+.card {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px;
+  background-color: var(--background-light);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .card {
+  background-color: var(--background-dark);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Centratura del Titolo */
+.card h1 {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
