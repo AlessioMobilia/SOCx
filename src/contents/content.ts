@@ -136,6 +136,15 @@ document.addEventListener("mouseup", () => {
   const selection = window.getSelection();
   if(selection ==null){
     oldselection = null;
+    if (currentButton) {
+      currentButton.remove();
+      currentButton = null;
+    }
+  
+    if (currentMagicButton) {
+      currentMagicButton.remove();
+      currentMagicButton = null;
+    }
     return;
   }
     
@@ -277,6 +286,6 @@ const createTooltip = (text: string, button: HTMLButtonElement) => {
     allowHTML: true,
     content: t,
   });
-  
+
   tooltipInstance.show();
 };
