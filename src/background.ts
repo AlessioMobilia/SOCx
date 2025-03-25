@@ -207,25 +207,35 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
   console.log(info.menuItemId);
 
-
-
-
   if (info.menuItemId === "MagicIOC") {
-    const result = await chrome.storage.sync.get(["selectedServices"]);
-    const selectedServices = result.selectedServices;
-    if (selectedServices && selectedServices[type]) {
-      selectedServices[type].forEach((service: string) => {
-        const serviceConfig = servicesConfig.services[service];
-        if (serviceConfig && serviceConfig.supportedTypes.includes(type)) {
-          const url = serviceConfig.url(type, ioc);
-          if (url) {
-            chrome.tabs.create({ url });
+    chrome.storage.local.get(["selectedServices"]).then(result=>{
+      
+      console.log("selectedServices");
+      console.log(result);
+      var selectedServices = null;
+      if(!result.selectedServices){
+        selectedServices = defaultServices;
+      }else{
+        selectedServices = result.selectedServices;
+      }
+      
+      if (selectedServices && selectedServices[type]) {
+        selectedServices[type].forEach((service: string) => {
+          const serviceConfig = servicesConfig.services[service];
+          if (serviceConfig && serviceConfig.supportedTypes.includes(type)) {
+            const url = serviceConfig.url(type, ioc);
+            if (url) {
+              chrome.tabs.create({ url });
+            }
           }
-        }
-      });
-    } else {
-      showNotification("Errore", "Nessun servizio selezionato per questo tipo di IOC.");
-    }
+        });
+      } else {
+        showNotification("Errore", "Nessun servizio selezionato per questo tipo di IOC.");
+      }
+
+    });
+
+    
   } else {
     const [serviceType, service] = info.menuItemId.toString().split("_");
     const serviceConfig = servicesConfig.services[service];
@@ -245,7 +255,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 
 
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener( (request, sender, sendResponse) => {
   console.log("listening");
   console.log(request.action);
   if (request.action === "checkBulkIOCs") {
@@ -264,30 +274,45 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     const ioc = extractIOCs(request.IOC)[0];
     const type = identifyIOC(ioc);
 
-    if (!(await saveIOC(type, ioc))) {
+    saveIOC(type, ioc).then(result =>{if(!result){
       showNotification("Errore", "Impossibile salvare l'IOC.");
       return;
-    }
+      }
+    })
+      
     
     console.log(type);
     console.log("messaggio arrivato");
     console.log(request);
-    const result = await chrome.storage.sync.get(["selectedServices"]);
-    const selectedServices = result.selectedServices;
-    if (selectedServices && selectedServices[type]) {
-      selectedServices[type].forEach((service: string) => {
-        const serviceConfig = servicesConfig.services[service];
-        if (serviceConfig && serviceConfig.supportedTypes.includes(type)) {
-          const url = serviceConfig.url(type, ioc);
-          if (url) {
-            chrome.tabs.create({ url });
+    var selectedServices = [];
+    
+    chrome.storage.local.get(["selectedServices"]).then(result =>{
+      var selectedServices = null;
+      if(!result.selectedServices){
+        selectedServices = defaultServices;
+      }else{
+        selectedServices = result.selectedServices;
+      }
+      
+      console.log(selectedServices);
+      console.log(selectedServices[type]);
+      if (selectedServices && selectedServices[type]) {
+        selectedServices[type].forEach((service: string) => {
+          const serviceConfig = servicesConfig.services[service];
+          if (serviceConfig && serviceConfig.supportedTypes.includes(type)) {
+            const url = serviceConfig.url(type, ioc);
+            if (url) {
+              chrome.tabs.create({ url });
+            }
           }
-        }
-      });
-    } else {
-      showNotification("Errore", "Nessun servizio selezionato per questo tipo di IOC.");
-    }
-    return true
+        });
+      } else {
+        showNotification("Errore", "Nessun servizio selezionato per questo tipo di IOC.");
+      }
+    
+    });
+    
+    return true;
   }
 })
 
@@ -295,7 +320,7 @@ const checkBulkIOCs = async (iocList: string[], services: string[]): Promise<{ [
   const results: { [key: string]: any } = {};
 
   // Verifica la presenza delle chiavi API per i servizi selezionati
-  const apiKeys = await chrome.storage.sync.get(["virusTotalApiKey", "abuseIPDBApiKey"]);
+  const apiKeys = await chrome.storage.local.get(["virusTotalApiKey", "abuseIPDBApiKey"]);
   
   for (const service of services) {
     if (service === "VirusTotal" && !apiKeys.virusTotalApiKey) {
@@ -336,3 +361,12 @@ const checkIOC = async (ioc: string, type: string, services: string[]): Promise<
 }
 
 
+  const defaultServices = <{ [key: string]: string[] }>({
+    IP: ["VirusTotal", "AbuseIPDB"],
+    Dominio: ["VirusTotal"],
+    URL: ["VirusTotal"],
+    Hash: ["VirusTotal"],
+    Email: ["VirusTotal"],
+    ASN: ["BGPToolkit"],
+    MAC: ["MACVendors"],
+  });

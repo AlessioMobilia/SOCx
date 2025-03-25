@@ -23,7 +23,7 @@ const BulkCheck = () => {
         setTextareaValue(loadedIOCs.join("\n"));
       }
     });
-    chrome.storage.sync.get(["isDarkMode"], (result) => {
+    chrome.storage.local.get(["isDarkMode"], (result) => {
       if (result.isDarkMode !== undefined) {
         setIsDarkMode(result.isDarkMode);
       }

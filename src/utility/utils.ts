@@ -115,7 +115,7 @@ export const showNotification = (title: string, message: string, type: "basic" =
     type,
     title,
     message,
-    iconUrl: chrome.runtime.getURL("/public/icon.png"),
+    iconUrl: chrome.runtime.getURL("/assets/icon.png"),
   })
 }
 

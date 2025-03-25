@@ -32,7 +32,7 @@ const Options = () => {
 
   // Salva automaticamente le impostazioni
   useEffect(() => {
-    chrome.storage.sync.set({ virusTotalApiKey, abuseIPDBApiKey, selectedServices, isDarkMode });
+    chrome.storage.local.set({ virusTotalApiKey, abuseIPDBApiKey, selectedServices, isDarkMode });
   }, [virusTotalApiKey, abuseIPDBApiKey, selectedServices, isDarkMode]);
 
   // Applica il colore di sfondo al body

@@ -5,7 +5,7 @@ export const checkVirusTotal = async (ioc: string, type: string): Promise<any> =
   if (!supportedTypes.includes(type.toLowerCase())) {
     throw new Error(`Tipo di IOC non supportato per VirusTotal: ${type}`);
   }
-  const apiKey = await chrome.storage.sync.get(["virusTotalApiKey"]);
+  const apiKey = await chrome.storage.local.get(["virusTotalApiKey"]);
   if (!apiKey.virusTotalApiKey) {
     throw new Error("API key di VirusTotal non trovata.");
   }
@@ -81,7 +81,7 @@ export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> =
   // Funzione per verificare un IP su AbuseIPDB
 export const checkAbuseIPDB = async (ioc: string): Promise<any> => {
   // Ottieni la chiave API da chrome.storage.sync
-  const apiKey = await chrome.storage.sync.get(["abuseIPDBApiKey"]);
+  const apiKey = await chrome.storage.local.get(["abuseIPDBApiKey"]);
   
   // Verifica se la chiave API è stata trovata
   if (!apiKey.abuseIPDBApiKey) {

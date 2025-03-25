@@ -92,9 +92,9 @@ const createMagicButton = (IOC: string): HTMLButtonElement => {
   button.style.backgroundColor = "#FFC107";
 
   // Gestisci il clic sul pulsante
-  button.addEventListener("click", async (event) => {
+  button.addEventListener("click", (event) => {
     
-    await RequestIOCInfo(IOC);
+    RequestIOCInfo(IOC).then();
     
   });
 
