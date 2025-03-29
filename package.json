@@ -63,8 +63,7 @@
       "notifications",
       "tabs",
       "sidePanel",
-      "clipboardWrite",
-      "scripting"
+      "clipboardWrite"
     ],
     "web_accessible_resources": [
       {

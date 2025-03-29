@@ -375,7 +375,7 @@ if (creationDateMatch) {
 // Estrai l'emittente (Registrar)
 const registrarMatch = whois.match(/Registrar:\s*(.+)/i);
 if (registrarMatch) {
-  keyInfo["Registrar"] = "\t\t"+formatValue(registrarMatch[1]);
+  keyInfo["Registrar"] = "\t"+formatValue(registrarMatch[1]);
 }
 
 // Estrai lo stato del dominio
