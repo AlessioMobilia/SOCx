@@ -17,6 +17,14 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Creazione del menu contestuale
 chrome.runtime.onInstalled.addListener(() => {
+
+  chrome.storage.local.get(["isDarkMode"], (result) => {
+    if (result.isDarkMode !== undefined)
+    {
+      chrome.storage.local.set({ isDarkMode: false });
+    }
+  });
+
   chrome.sidePanel.setOptions({ enabled: true });
 
   // Menu principale
@@ -114,7 +122,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const refangedText = refang(ioc);
       refangedIOCs = refangedIOCs + refangedText + "\n";
     });
-    console.log(refangedIOCs);
     copyToClipboard(refangedIOCs, tab.id);
     return;
   }
@@ -126,22 +133,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const defangedText = defang(ioc);
       defangedIOCs = defangedIOCs + defangedText + "\n";
     });
-    console.log(defangedIOCs);
     copyToClipboard(defangedIOCs, tab.id);
     return;
   }
 
   if (info.menuItemId === "copyCVE") {
-    console.log("CVE menu");
     const CVEs = formatCVEs(txt, false);
-    console.log(CVEs);
     copyToClipboard(CVEs, tab.id);
     return;
   }
 
   if (info.menuItemId === "copyCVECSV") {
     const CVEs = formatCVEs(txt, true);
-    console.log(CVEs);
     copyToClipboard(CVEs, tab.id);
     return;
   }
@@ -153,7 +156,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   
       // Costruisci l'URL di CyberChef con l'input in Base64
       const cyberChefUrl = `https://gchq.github.io/CyberChef/#input=${base64Text}`;
-      console.log(cyberChefUrl);
   
       // Apri una nuova scheda con l'URL di CyberChef
       chrome.tabs.create({ url: cyberChefUrl }, (tab) => {
@@ -205,13 +207,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     return;
   }
-  console.log(info.menuItemId);
 
   if (info.menuItemId === "MagicIOC") {
     chrome.storage.local.get(["selectedServices"]).then(result=>{
       
-      console.log("selectedServices");
-      console.log(result);
+
       var selectedServices = null;
       if(!result.selectedServices){
         selectedServices = defaultServices;
@@ -256,12 +256,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 
 chrome.runtime.onMessage.addListener( (request, sender, sendResponse) => {
-  console.log("listening");
-  console.log(request.action);
+
   if (request.action === "checkBulkIOCs") {
     const { iocList, services } = request
-    console.log("messaggio arrivato");
-    console.log(request);
+
     // Avvia il processo asincrono
     checkBulkIOCs(iocList, services)
       .then((results) => sendResponse({ results })) // Invia la risposta
@@ -280,10 +278,7 @@ chrome.runtime.onMessage.addListener( (request, sender, sendResponse) => {
       }
     })
       
-    
-    console.log(type);
-    console.log("messaggio arrivato");
-    console.log(request);
+
     var selectedServices = [];
     
     chrome.storage.local.get(["selectedServices"]).then(result =>{
@@ -294,8 +289,6 @@ chrome.runtime.onMessage.addListener( (request, sender, sendResponse) => {
         selectedServices = result.selectedServices;
       }
       
-      console.log(selectedServices);
-      console.log(selectedServices[type]);
       if (selectedServices && selectedServices[type]) {
         selectedServices[type].forEach((service: string) => {
           const serviceConfig = servicesConfig.services[service];
@@ -348,15 +341,13 @@ const checkBulkIOCs = async (iocList: string[], services: string[]): Promise<{ [
 const checkIOC = async (ioc: string, type: string, services: string[]): Promise<any> => {
   const result: { [key: string]: any } = {}
   for (const service of services) {
-    console.log("supported type vt")
     if (service === "VirusTotal" && servicesConfig.services["VirusTotal"].supportedTypes.includes(type)) {
       result.VirusTotal = await checkVirusTotal(ioc, type)
     } else if (service === "AbuseIPDB" && type==="IP") {
       result.AbuseIPDB = await checkAbuseIPDB(ioc)
     }
   }
-  console.log("checkIOC")
-  console.log(result)
+
   return result || "";
 }
 
@@ -366,7 +357,7 @@ const checkIOC = async (ioc: string, type: string, services: string[]): Promise<
     Dominio: ["VirusTotal"],
     URL: ["VirusTotal"],
     Hash: ["VirusTotal"],
-    Email: ["VirusTotal"],
+    Email: ["HaveIBeenPwned"],
     ASN: ["BGPToolkit"],
     MAC: ["MACVendors"],
   });

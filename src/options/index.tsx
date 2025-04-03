@@ -22,7 +22,7 @@ const Options = () => {
 
   // Carica le impostazioni salvate all'avvio
   useEffect(() => {
-    chrome.storage.sync.get(["virusTotalApiKey", "abuseIPDBApiKey", "selectedServices", "isDarkMode"], (result) => {
+    chrome.storage.local.get(["virusTotalApiKey", "abuseIPDBApiKey", "selectedServices", "isDarkMode"], (result) => {
       if (result.virusTotalApiKey) setVirusTotalApiKey(result.virusTotalApiKey);
       if (result.abuseIPDBApiKey) setAbuseIPDBApiKey(result.abuseIPDBApiKey);
       if (result.selectedServices) setSelectedServices(result.selectedServices);

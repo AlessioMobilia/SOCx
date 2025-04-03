@@ -15,14 +15,10 @@ const Popup = () => {
   // Carica lo storico degli IOC e la preferenza della dark mode
   useEffect(() => {
     chrome.storage.local.get(["iocHistory"], (result) => {
-      if (result.iocHistory) {
-        setIocHistory(result.iocHistory);
-      }
+      setIocHistory(result.iocHistory ?? []); // Usa [] se iocHistory è null o undefined
     });
-    chrome.storage.sync.get(["isDarkMode"], (result) => {
-      if (result.isDarkMode !== undefined) {
-        setIsDarkMode(result.isDarkMode);
-      }
+    chrome.storage.local.get(["isDarkMode"], (result) => {
+        setIsDarkMode(result.isDarkMode ?? false);
     });
     chrome.windows.getCurrent({ populate: false }, (window) => {
       if (window.id !== undefined) {
@@ -33,7 +29,7 @@ const Popup = () => {
 
   // Salva la preferenza della dark mode
   useEffect(() => {
-    chrome.storage.sync.set({ isDarkMode });
+    chrome.storage.local.set({ isDarkMode });
   }, [isDarkMode]);
 
   // Applica il colore di sfondo al body

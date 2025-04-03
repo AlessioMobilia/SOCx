@@ -11,7 +11,7 @@ export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
   all_frames: true
 };
-console.log("Content script caricato!");
+
 
 // Ascolta i messaggi dal background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -52,7 +52,6 @@ const createButton = (IOC: string): HTMLButtonElement => {
   button.addEventListener("click", async (event) => {
     try {
       const response = await GetIOCInfo(IOC);
-      console.log("Dati IOC:", response.results);
       const data = response.results[Object.keys(response.results)[0]];
       const info = identifyIOC(IOC) === "IP" ? <string>formatAbuseIPDBData(data?.AbuseIPDB) : <string>formatVirusTotalData(data?.VirusTotal);
       if (!(await saveIOC(identifyIOC(IOC), IOC))) {
@@ -105,7 +104,6 @@ const GetIOCInfo = (IOC: string): Promise<any> => {
   return new Promise((resolve, reject) => {
     const iocList = [IOC];
     const selectedServices = [identifyIOC(IOC) === "IP" ? "AbuseIPDB" : "VirusTotal"];
-    console.log(selectedServices);
     chrome.runtime.sendMessage(
       { action: "checkBulkIOCs", iocList, services: selectedServices },
       (response) => {
@@ -153,8 +151,6 @@ document.addEventListener("mouseup", () => {
   const IOCs = extractIOCs(selection?.toString().trim());
   if(IOCs==null) return;
   const selectedText = IOCs[0];
-  console.log(selectedText);
-  console.log(identifyIOC(selectedText));
 
   // Rimuovi il pulsante esistente se c'è
   if (currentButton) {
@@ -214,8 +210,6 @@ document.addEventListener("mouseup", () => {
         // Rimuovi il div temporaneo
         document.body.removeChild(div);
   
-        // Debug: verifica le coordinate calcolate
-        console.log('rect:', rect);
       }
   
       // Crea e posiziona il pulsante vicino al testo selezionato
@@ -235,7 +229,6 @@ document.addEventListener("mouseup", () => {
       // Creazione e posizionamento del MagicButton
       const IOC = extractIOCs(selectedText)[0];
       const Magicbutton = createMagicButton(IOC);
-      console.log(IOC);
       if(Magicbutton){
         document.body.appendChild(Magicbutton);
         Magicbutton.style.position = 'absolute';
@@ -277,9 +270,6 @@ const createTooltip = (text: string, button: HTMLButtonElement) => {
   // Crea il contenuto HTML
   const t = `<div>${modifiedText}</div>`;
 
-  // Log per debug
-  console.log(text);
-  console.log(t);
 
   // Crea il tooltip con Tippy.js
   const tooltipInstance = tippy(button, {

@@ -80,7 +80,7 @@ export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> =
 
   // Funzione per verificare un IP su AbuseIPDB
 export const checkAbuseIPDB = async (ioc: string): Promise<any> => {
-  // Ottieni la chiave API da chrome.storage.sync
+  // Ottieni la chiave API da chrome.storage.local
   const apiKey = await chrome.storage.local.get(["abuseIPDBApiKey"]);
   
   // Verifica se la chiave API è stata trovata

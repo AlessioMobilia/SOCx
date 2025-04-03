@@ -18,7 +18,7 @@ const SidePanel = () => {
         setNote(result.note);
       }
     });
-    chrome.storage.sync.get(["isDarkMode"], (result) => {
+    chrome.storage.local.get(["isDarkMode"], (result) => {
       if (result.isDarkMode !== undefined) {
         setIsDarkMode(result.isDarkMode);
       }

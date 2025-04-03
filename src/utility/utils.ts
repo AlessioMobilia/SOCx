@@ -143,7 +143,6 @@ export const saveIOC = async (type: string, text: string): Promise<boolean> => {
       return true; // L'IOC è già presente, ma consideriamo l'operazione comunque valida
     }
   } catch (error) {
-    console.error("Errore nel salvataggio dell'IOC:", error);
     return false;
   }
 };
@@ -153,11 +152,8 @@ export const saveIOC = async (type: string, text: string): Promise<boolean> => {
 export const copyToClipboard = (text: string, tabId: number): void => {
   chrome.tabs.sendMessage(tabId, { action: "copyToClipboard", text }, (response) => {
     if (response?.success) {
-      console.log("IOC copiato nella clipboard:", text);
       showNotification("Fatto", "IOC copiati nella clipboard");
-    } else {
-      console.error("Errore durante la copia nella clipboard:", response?.error);
-    }
+    } 
   });
 };
 
@@ -183,9 +179,8 @@ export const extractIOCs = (text: string, refanged: boolean = true): string[] =>
   );
 
   // Trova tutte le corrispondenze con la regex combinata
-  console.log(asnRegex.test(text));
   const matches = text.match(combinedRegex);
-  console.log(matches);
+
 
   // Mappa gli IOC trovati e applica il refanging
   if (refanged && matches!=null) {

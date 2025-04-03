@@ -40,7 +40,7 @@ const BulkCheck = () => {
 
   // Salva la preferenza della dark mode
   useEffect(() => {
-    chrome.storage.sync.set({ isDarkMode });
+    chrome.storage.local.set({ isDarkMode });
   }, [isDarkMode]);
 
   // Applica il colore di sfondo al body
@@ -75,12 +75,10 @@ const BulkCheck = () => {
     setIsLoading(true);
     setMessage("Controllo bulk in corso...");
     try {
-      console.log(iocList)
       const response = await chrome.runtime.sendMessage({ action: "checkBulkIOCs", iocList, services: selectedServices });
       setResults(response.results);
       setMessage("Controllo completato!");
     } catch (error) {
-      console.error("Errore durante il controllo bulk:", error);
       setMessage("Errore durante il controllo bulk.");
     } finally {
       setIsLoading(false);

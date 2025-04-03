@@ -21,7 +21,7 @@ const BulkCheck = () => {
       }
     });
 
-    chrome.storage.sync.get(["isDarkMode"], (result) => {
+    chrome.storage.local.get(["isDarkMode"], (result) => {
       if (result.isDarkMode !== undefined) {
         setIsDarkMode(result.isDarkMode);
       }
@@ -35,7 +35,7 @@ const BulkCheck = () => {
 
   // Salva la preferenza della dark mode
   useEffect(() => {
-    chrome.storage.sync.set({ isDarkMode });
+    chrome.storage.local.set({ isDarkMode });
   }, [isDarkMode]);
 
   // Applica il colore di sfondo al body
@@ -74,7 +74,6 @@ const BulkCheck = () => {
       setResults(response.results);
       setMessage("Controllo completato!");
     } catch (error) {
-      console.error("Errore durante il controllo bulk:", error);
       setMessage("Errore durante il controllo bulk.");
     } finally {
       setIsLoading(false);
