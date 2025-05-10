@@ -5,19 +5,12 @@ import OptionsUI from "./OptionsUI";
 import "./options.css";
 import "../utility/config.css";
 import "../utility/colors.css";
+import { defaultServices } from "../utility/defaultServices";
 
 const Options = () => {
   const [virusTotalApiKey, setVirusTotalApiKey] = useState("");
   const [abuseIPDBApiKey, setAbuseIPDBApiKey] = useState("");
-  const [selectedServices, setSelectedServices] = useState<{ [key: string]: string[] }>({
-    IP: ["VirusTotal", "AbuseIPDB"],
-    Dominio: ["VirusTotal"],
-    URL: ["VirusTotal"],
-    Hash: ["VirusTotal"],
-    Email: ["VirusTotal"],
-    ASN: ["BGPToolkit"],
-    MAC: ["MACVendors"],
-  });
+  const [selectedServices, setSelectedServices] = useState<{ [key: string]: string[] }>(defaultServices);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   // Carica le impostazioni salvate all'avvio

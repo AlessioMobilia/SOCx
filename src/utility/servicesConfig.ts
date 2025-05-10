@@ -102,17 +102,6 @@ export const servicesConfig = {
       supportedTypes: ["Email"],
       url: (type: string, text: string) => `https://hunter.io/email-verifier/${text}`,
     },
-    ViewDNS: {
-      title: "Verifica su ViewDNS.info",
-      supportedTypes: ["Dominio","IP"],
-      url: (type: string, text: string) => {
-        switch (type) {
-          case "IP": return `https://viewdns.info/iphistory/?domain=${text}`;
-          case "Dominio": return `https://viewdns.info/reverseip/?host=${text}&t=1`;
-          default: return null;
-        }
-      },
-    },
     Shodan: {
       title: "Verifica su Shodan",
       supportedTypes: ["IP"],
@@ -173,15 +162,65 @@ export const servicesConfig = {
       title: "Verifica su BGP Toolkit",
       supportedTypes: ["ASN"],
       url: (type: string, text: string) => `https://bgp.he.net/${text}`,
+    },  
+    Tria_ge: {
+      title: "Verifica su Tria.ge",
+      supportedTypes: ["Hash", "URL"],
+      url: (type: string, text: string) => {
+        switch (type) {
+          case "Hash": return `https://tria.ge/s?q=${text}`;
+          case "URL": return `https://tria.ge/s?q=${encodeURIComponent(text)}`;
+          default: return null;
+        }
+      },
+    },
+
+    ThreatFox: {
+      title: "Verifica su ThreatFox",
+      supportedTypes: ["IP", "Hash", "URL", "Dominio"],
+      url: (type: string, text: string) => {
+        switch (type) {
+          case "IP":
+          case "Hash":
+          case "URL":
+          case "Dominio":
+            return `https://threatfox.abuse.ch/browse.php?search=ioc%3A+${encodeURIComponent(text)}`;
+          default: return null;
+        }
+      },
+    },
+
+    ViewDNS: {
+      title: "Verifica su ViewDNS.info",
+      supportedTypes: ["Dominio", "IP", "ASN"],
+      url: (type: string, text: string) => {
+        switch (type) {
+          case "IP": return `https://viewdns.info/reversedns/?ip=${text}`;
+          case "Dominio": return `https://viewdns.info/whois/?domain=${text}`;
+          case "ASN": return `https://viewdns.info/asnlookup/?asn=${text.replace(/^AS/i, "")}`;
+          default: return null;
+        }
+      },
     },
   },
   availableServices: {
-    IP: ["VirusTotal", "AbuseIPDB", "Censys", "IPQualityScore", "IPinfo", "AlienVault", "IBMXForce", "MxToolbox", "Pulsedive", "Spur", "PassiveDNS", "Shodan", "GreyNoise", "ViewDNS"],
-    Dominio: ["VirusTotal", "Censys", "AlienVault", "IBMXForce", "MxToolbox", "Pulsedive", "SecurityTrails", "ViewDNS", "Robtex"],
-    URL: ["VirusTotal", "IBMXForce", "UrlScan", "PhishTank"],
-    Hash: ["VirusTotal", "MalwareBazaar", "Pulsedive", "AlienVault"],
-    Email: [ "Hunter", "HaveIBeenPwned"],
-    ASN: ["BGPToolkit"],
+    IP: [
+      "VirusTotal", "AbuseIPDB", "Censys", "IPQualityScore", "IPinfo", "AlienVault",
+      "IBMXForce", "MxToolbox", "Pulsedive", "Spur", "PassiveDNS", "Shodan",
+      "GreyNoise", "ViewDNS", "ThreatFox"
+    ],
+    Dominio: [
+      "VirusTotal", "Censys", "AlienVault", "IBMXForce", "MxToolbox", "Pulsedive",
+      "SecurityTrails", "ViewDNS", "Robtex", "ThreatFox"
+    ],
+    URL: [
+      "VirusTotal", "IBMXForce", "UrlScan", "PhishTank", "Tria_ge", "ThreatFox"
+    ],
+    Hash: [
+      "VirusTotal", "MalwareBazaar", "Pulsedive", "AlienVault", "Tria_ge", "ThreatFox"
+    ],
+    Email: ["Hunter", "HaveIBeenPwned"],
+    ASN: ["BGPToolkit", "ViewDNS"],
     MAC: ["MACVendors", "WiresharkOUI"],
   },
 };

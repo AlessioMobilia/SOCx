@@ -55,13 +55,15 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "file:///*"
     ],
     "permissions": [
       "contextMenus",
       "storage",
       "notifications",
-      "clipboardWrite"
+      "clipboardWrite",
+      "file:///*"
     ],
     "web_accessible_resources": [
       {
