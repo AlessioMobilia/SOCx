@@ -1,15 +1,16 @@
-import React from "react";
-import "bootstrap/dist/css/bootstrap.min.css";
-import { Container, Button, Form } from "react-bootstrap";
+import React from "react"
+import "bootstrap/dist/css/bootstrap.min.css"
+import { Container, Button, Form } from "react-bootstrap"
+import { MdDownload, MdDelete, MdBuild, MdBugReport } from "react-icons/md"
 
 interface SidePanelUIProps {
-  note: string;
-  isDarkMode: boolean;
-  onTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  onSaveTxt: () => void;
-  onClearNote: () => void;
-  onRefang: () => void;
-  onDefang: () => void;
+  note: string
+  isDarkMode: boolean
+  onTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  onSaveTxt: () => void
+  onClearNote: () => void
+  onRefang: () => void
+  onDefang: () => void
 }
 
 const SidePanelUI: React.FC<SidePanelUIProps> = ({
@@ -19,41 +20,45 @@ const SidePanelUI: React.FC<SidePanelUIProps> = ({
   onSaveTxt,
   onClearNote,
   onRefang,
-  onDefang,
-}) => (
-  <Container
-    fluid
-    className={`p-3 ${isDarkMode ? "bg-dark text-white" : "bg-light text-dark"}`}
-  >
-    <Form.Group className="mb-3">
-      <Form.Control
-        as="textarea"
-        value={note}
-        onChange={onTextChange}
-        placeholder="Scrivi qui..."
-        style={{ height: "400px" }}
-        className={isDarkMode ? "bg-dark text-white" : "bg-light text-dark"}
-      />
-    </Form.Group>
+  onDefang
+}) => {
+  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
 
-    <div className="d-grid gap-2 mb-3">
-      <Button variant="secondary btn-sm" onClick={onRefang}>
-        Refang IOC
-      </Button>
-      <Button variant="secondary btn-sm" onClick={onDefang}>
-        Defang IOC
-      </Button>
-    </div>
+  return (
+    <Container fluid className={`p-3 ${themeClass}`}>
+      <h6 className="text-center mb-3">📝 Blocco Note IOC</h6>
 
-    <div className="d-grid gap-2">
-      <Button variant="success btn-sm" onClick={onSaveTxt}>
-        Salva come TXT
-      </Button>
-      <Button variant="danger btn-sm" onClick={onClearNote}>
-        Elimina tutto
-      </Button>
-    </div>
-  </Container>
-);
+      <Form.Group className="mb-3">
+        <Form.Control
+          as="textarea"
+          value={note}
+          onChange={onTextChange}
+          placeholder="Scrivi qui..."
+          rows={16}
+          className={`form-control ${themeClass}`}
+          aria-label="Textarea per note"
+        />
+      </Form.Group>
 
-export default SidePanelUI;
+      <div className="d-grid gap-2 mb-3">
+        <Button variant="outline-secondary" size="sm" onClick={onRefang}>
+          <MdBuild className="me-1" /> Refang
+        </Button>
+        <Button variant="outline-secondary" size="sm" onClick={onDefang}>
+          <MdBugReport className="me-1" /> Defang
+        </Button>
+      </div>
+
+      <div className="d-grid gap-2">
+        <Button variant="outline-success" size="sm" onClick={onSaveTxt}>
+          <MdDownload className="me-1" /> Salva come TXT
+        </Button>
+        <Button variant="outline-danger" size="sm" onClick={onClearNote}>
+          <MdDelete className="me-1" /> Elimina tutto
+        </Button>
+      </div>
+    </Container>
+  )
+}
+
+export default SidePanelUI

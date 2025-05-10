@@ -1,21 +1,33 @@
-import React, { useEffect, useState } from "react";
-import { Container, Button, Form, Card, Spinner, Badge } from "react-bootstrap";
-import { parseAndFormatResults } from "../utility/utils";
-import "bootstrap/dist/css/bootstrap.min.css";
+import React, { useEffect, useState } from "react"
+import {
+  Container,
+  Button,
+  Form,
+  Card,
+  Spinner,
+  Badge,
+  Row,
+  Col,
+  Alert
+} from "react-bootstrap"
+import { parseAndFormatResults } from "../utility/utils"
+import "bootstrap/dist/css/bootstrap.min.css"
 
 interface BulkCheckUIProps {
-  textareaValue: string;
-  onTextAreaChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  selectedServices: string[];
-  onServiceToggle: (service: string, checked: boolean) => void;
-  onCheckBulk: () => void;
-  onClearList: () => void;
-  isLoading: boolean;
-  message: string;
-  results: { [key: string]: any };
-  isDarkMode: boolean;
+  textareaValue: string
+  onTextAreaChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
+  selectedServices: string[]
+  onServiceToggle: (service: string, checked: boolean) => void
+  onCheckBulk: () => void
+  onClearList: () => void
+  isLoading: boolean
+  message: string
+  results: { [key: string]: any }
+  isDarkMode: boolean
+  onExport: (format: "csv" | "xlsx") => void
 }
+
 
 const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   textareaValue,
@@ -29,121 +41,211 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   message,
   results,
   isDarkMode,
+  onExport 
 }) => {
-  const [vtCount, setVtCount] = useState<number>(0);
-  const [abuseCount, setAbuseCount] = useState<number>(0);
+  const [vtCount, setVtCount] = useState<number>(0)
+  const [abuseCount, setAbuseCount] = useState<number>(0)
 
-  // Funzione per ottenere la data corrente in formato YYYY-MM-DD
-  const getTodayDate = (): string => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  };
-
-  // Carica i contatori giornalieri
   useEffect(() => {
     const loadCounters = async () => {
-      const today = getTodayDate();
-      const vtKey = `VT_${today}`;
-      const abuseKey = `Abuse_${today}`;
-      const counters = await chrome.storage.local.get([vtKey, abuseKey]);
-      setVtCount(counters[vtKey] || 0);
-      setAbuseCount(counters[abuseKey] || 0);
-    };
-    loadCounters();
-  }, []);
+      const today = new Date().toISOString().split("T")[0]
+      const keys = await chrome.storage.local.get([
+        `VT_${today}`,
+        `Abuse_${today}`
+      ])
+      setVtCount(keys[`VT_${today}`] || 0)
+      setAbuseCount(keys[`Abuse_${today}`] || 0)
+    }
+    loadCounters()
+  }, [])
 
-  return (
-    <Container fluid className={`p-3 container ${isDarkMode ? "bg-dark text-white" : "bg-light text-dark"}`}>
-      <h1>Controllo Bulk IOC</h1>
+  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
 
-      {/* Area di testo per gli IOC */}
-      <Form.Group className="mb-3">
-        <Form.Control
-          as="textarea"
-          rows={5}
-          placeholder="Incolla gli IOC qui (separati da righe o virgole)..."
-          value={textareaValue}
-          onChange={onTextAreaChange}
-          className={isDarkMode ? "bg-dark text-white" : "bg-light text-dark"}
-        />
-      </Form.Group>
+  const getRiskLevel = (result: any): "low" | "medium" | "high" => {
+  const vt = result?.VirusTotal;
+  const abuse = result?.AbuseIPDB;
 
-      {/* Input per caricare file */}
-      <Form.Group className="mb-3">
-        <Form.Label>Carica file (.txt)</Form.Label>
-        <Form.Control
-          type="file"
-          accept=".txt"
-          onChange={onFileUpload}
-          className={isDarkMode ? "bg-dark text-white" : "bg-light text-dark"}
-        />
-      </Form.Group>
+  let vtMalicious = vt?.data?.attributes?.last_analysis_stats?.malicious || 0;
+  let vtSuspicious = vt?.data?.attributes?.last_analysis_stats?.suspicious || 0;
+  let abuseScore = abuse?.data?.abuseConfidenceScore || 0;
 
-      {/* Checkbox per i servizi */}
-      <Form.Group className="mb-3">
-        <h3>Servizi selezionati</h3>
-        <Form.Check
-          type="checkbox"
-          label="VirusTotal"
-          checked={selectedServices.includes("VirusTotal")}
-          onChange={(e) => onServiceToggle("VirusTotal", e.target.checked)}
-          className={isDarkMode ? "text-white" : "text-dark"}
-        />
-        <Form.Check
-          type="checkbox"
-          label="AbuseIPDB"
-          checked={selectedServices.includes("AbuseIPDB")}
-          onChange={(e) => onServiceToggle("AbuseIPDB", e.target.checked)}
-          className={isDarkMode ? "text-white" : "text-dark"}
-        />
-      </Form.Group>
+  const totalScore = vtMalicious + vtSuspicious + abuseScore;
 
-      {/* Pulsanti per avviare il controllo e cancellare la lista */}
-      <div className="d-grid gap-2 mb-4">
-        <Button
-          variant="primary"
-          onClick={onCheckBulk}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Spinner as="span" size="sm" animation="border" role="status" aria-hidden="true" />
-              <span className="ms-2">Controllo in corso...</span>
-            </>
-          ) : (
-            "Avvia Controllo"
-          )}
-        </Button>
-        <Button variant="outline-danger" onClick={onClearList}>
-          Cancella Lista
-        </Button>
-      </div>
-
-      {/* Messaggio di stato */}
-      {message && <p className={`text-center ${isLoading ? "text-muted" : ""}`}>{message}</p>}
-
-      {/* Contatori giornalieri */}
-      <Card className={`mb-4 ${isDarkMode ? "bg-secondary text-white" : "bg-light text-dark"}`}>
-        <Card.Body>
-          <h2>Contatori Giornalieri</h2>
-          <p>Chiamate VirusTotal oggi: <Badge bg="info">{vtCount}</Badge></p>
-          <p>Chiamate AbuseIPDB oggi: <Badge bg="danger">{abuseCount}</Badge></p>
-        </Card.Body>
-      </Card>
-
-      {/* Risultati */}
-      <h2>Risultati</h2>
-      {results &&
-        Object.entries(results).map(([ioc, result]) => (
-          <Card key={ioc} className={`mb-3 ${isDarkMode ? "bg-secondary text-white" : "bg-light text-dark"}`}>
-            <Card.Body>
-              <Card.Title>{ioc}</Card.Title>
-              <pre>{parseAndFormatResults(result)}</pre>
-            </Card.Body>
-          </Card>
-        ))}
-    </Container>
-  );
+  if (totalScore >= 40) return "high";
+  if (totalScore >= 10) return "medium";
+  return "low";
 };
 
-export default BulkCheckUI;
+const getRiskClass = (risk: "low" | "medium" | "high") => {
+  switch (risk) {
+    case "low":
+      return "border-success bg-success-subtle text-dark";
+    case "medium":
+      return "border-warning bg-warning-subtle text-dark";
+    case "high":
+      return "border-danger bg-danger-subtle text-dark";
+    default:
+      return "";
+  }
+};
+
+
+
+  return (
+    <Container fluid className={`p-4 min-vh-100 ${themeClass}`}>
+      <h1 className="mb-4">🔍 Controllo Bulk IOC</h1>
+
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>📋 Inserisci gli IOC</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={6}
+              placeholder="Incolla qui IP, domini, hash, email, URL..."
+              value={textareaValue}
+              onChange={onTextAreaChange}
+              className={themeClass}
+            />
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>📁 Carica File .txt</Form.Label>
+            <Form.Control
+              type="file"
+              accept=".txt"
+              onChange={onFileUpload}
+              className={themeClass}
+            />
+          </Form.Group>
+
+          <Form.Group className="mt-4">
+            <Form.Label>🛠️ Seleziona Servizi</Form.Label>
+            <div className="d-flex gap-3">
+              {["VirusTotal", "AbuseIPDB"].map((service) => (
+                <Form.Check
+                  key={service}
+                  type="checkbox"
+                  label={service}
+                  checked={selectedServices.includes(service)}
+                  onChange={(e) =>
+                    onServiceToggle(service, e.target.checked)
+                  }
+                  className={isDarkMode ? "text-white" : "text-dark"}
+                />
+              ))}
+            </div>
+          </Form.Group>
+
+          <div className="mt-4 d-grid gap-2">
+            <Button
+              variant="success"
+              onClick={onCheckBulk}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Spinner
+                    as="span"
+                    size="sm"
+                    animation="border"
+                    role="status"
+                    aria-hidden="true"
+                  />
+                  <span className="ms-2">Analisi in corso...</span>
+                </>
+              ) : (
+                "🔍 Avvia Controllo"
+              )}
+            </Button>
+            <Button variant="outline-danger" onClick={onClearList}>
+              🗑️ Cancella Lista
+            </Button>
+            <Button
+              variant="outline-primary"
+              onClick={() => onExport("csv")}
+              disabled={Object.keys(results).length === 0}
+            >
+              📤 Esporta CSV
+            </Button>
+            <Button
+              variant="outline-success"
+              onClick={() => onExport("xlsx")}
+              disabled={Object.keys(results).length === 0}
+            >
+              📘 Esporta Excel (.xlsx)
+            </Button>
+
+          </div>
+        </Col>
+      </Row>
+
+      {message && (
+        <Alert
+          variant={isLoading ? "info" : "success"}
+          className="text-center"
+        >
+          {message}
+        </Alert>
+      )}
+
+      <Row className="mb-4">
+        <Col>
+          <Card className={themeClass}>
+            <Card.Body>
+              <h5>📊 Contatori Giornalieri</h5>
+              <p>
+                VirusTotal: <Badge bg="info">{vtCount}</Badge>
+              </p>
+              <p>
+                AbuseIPDB: <Badge bg="danger">{abuseCount}</Badge>
+              </p>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
+      {results && Object.keys(results).length > 0 && (
+        <>
+          <h2>📦 Risultati</h2>
+          <Row>
+            {Object.entries(results).map(([ioc, result]) => {
+              const riskLevel = getRiskLevel(result);
+              const riskClass = getRiskClass(riskLevel);
+
+              return (
+                <Col md={6} key={ioc}>
+                  <Card className={`mb-3 shadow-sm border ${riskClass}`}>
+                    <Card.Header>
+                      <strong>{ioc}</strong>{" "}
+                      <Badge
+                        bg={
+                          riskLevel === "high"
+                            ? "danger"
+                            : riskLevel === "medium"
+                            ? "warning"
+                            : "success"
+                        }
+                        className="ms-2"
+                      >
+                        {riskLevel.toUpperCase()}
+                      </Badge>
+                    </Card.Header>
+                    <Card.Body>
+                      <pre className="small">
+                        {parseAndFormatResults(result)}
+                      </pre>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              );
+            })}
+          </Row>
+        </>
+      )}
+    </Container>
+  )
+}
+
+export default BulkCheckUI

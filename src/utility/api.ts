@@ -42,14 +42,25 @@ export const fetchAPIVT = async (url: string, apiKey: string): Promise<any> => {
   });
 
   if (!response.ok) {
-    throw new Error(`Errore nella richiesta API: ${response.statusText}`);
+    // Prova a ottenere il body della risposta per dettagli
+    let errorDetails = "";
+    try {
+      const errorJson = await response.json();
+      errorDetails = JSON.stringify(errorJson, null, 2);
+    } catch (e) {
+      errorDetails = await response.text();
+    }
+
+    throw new Error(
+      `Errore API (${response.status}): ${response.statusText}\nDettagli:\n${errorDetails}`
+    );
   }
 
-  // Incrementa il contatore giornaliero per VirusTotal
   await incrementDailyCounter("VT");
-
   return response.json();
 };
+
+
 
 // Funzione per eseguire richieste API a AbuseIPDB
 export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> => {

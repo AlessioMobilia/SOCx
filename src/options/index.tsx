@@ -44,6 +44,46 @@ const Options = () => {
     setSelectedServices(updatedServices);
   };
 
+
+  const handleTestKeys = async () => {
+  const results: string[] = []
+
+  const testFetch = async (
+    label: string,
+    url: string,
+    headers: HeadersInit
+  ) => {
+    try {
+      const res = await fetch(url, { headers })
+      results.push(
+        `✅ ${label}: ${res.ok ? "OK" : `Errore (${res.status})`}`
+      )
+    } catch (err) {
+      results.push(`❌ ${label}: Errore di rete`)
+    }
+  }
+
+  if (virusTotalApiKey) {
+    await testFetch("VirusTotal", "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8", {
+      "x-apikey": virusTotalApiKey
+    })
+  } else {
+    results.push("⚠️ VirusTotal: Chiave non inserita")
+  }
+
+  if (abuseIPDBApiKey) {
+    await testFetch("AbuseIPDB", "https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8", {
+      Accept: "application/json",
+      Key: abuseIPDBApiKey
+    })
+  } else {
+    results.push("⚠️ AbuseIPDB: Chiave non inserita")
+  }
+
+  alert(results.join("\n"))
+}
+
+
   return (
     <OptionsUI
       isDarkMode={isDarkMode}
@@ -54,6 +94,7 @@ const Options = () => {
       onServiceChange={handleServiceChange}
       onVirusTotalApiKeyChange={setVirusTotalApiKey}
       onAbuseIPDBApiKeyChange={setAbuseIPDBApiKey}
+      onTestKeys={handleTestKeys}
     />
   );
 };

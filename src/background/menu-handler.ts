@@ -13,17 +13,18 @@ export async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab
   const ioc = iocList?.[0];
   const type = identifyIOC(ioc);
 
-  if (!ioc || !type) return showNotification("Errore", "IOC non valido.");
-  if (type === "IP" && isPrivateIP(ioc)) return showNotification("Privato", "IP privato, nessuna analisi.");
-
-  const copyOps = {
+   const copyOps = {
     "refangIOC": () => copyToClipboard(iocList.map(refang).join("\n"), tab.id),
     "defangIOC": () => copyToClipboard(iocList.map(defang).join("\n"), tab.id),
     "copyCVE": () => copyToClipboard(formatCVEs(selection, false), tab.id),
     "copyCVECSV": () => copyToClipboard(formatCVEs(selection, true), tab.id)
   };
 
+  console.log("Menu clicked:", info.menuItemId, selection, tab.id);
   if (info.menuItemId in copyOps) return copyOps[info.menuItemId]();
+
+  if (!ioc || !type) return showNotification("Errore", "IOC non valido.");
+  if (type === "IP" && isPrivateIP(ioc)) return showNotification("Privato", "IP privato, nessuna analisi.");
 
   if (info.menuItemId === "CyberChef") {
     const base64 = btoa(unescape(encodeURIComponent(selection))).replaceAll("=", "");

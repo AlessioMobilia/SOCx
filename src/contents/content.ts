@@ -1,4 +1,5 @@
 import type { PlasmoCSConfig } from "plasmo";
+import { fetchSpurData, formatSpurData } from "../utility/utils"
 import {
   extractIOCs,
   identifyIOC,
@@ -117,17 +118,42 @@ if (rect.width === 0 && rect.height === 0) return;
     try {
       const response = await getIOCInfo(ioc);
       const data = response.results[Object.keys(response.results)[0]];
-      const info = type === "IP"
-        ? formatAbuseIPDBData(data?.AbuseIPDB)
-        : formatVirusTotalData(data?.VirusTotal);
+      let info = "";
+
+      if (type === "IP") {
+        const abuseInfo = formatAbuseIPDBData(data?.AbuseIPDB) ?? "";
+        let spurInfo = "";
+
+        try {
+          const { spurApiKey } = await chrome.storage.local.get(["spurApiKey"]);
+          if (spurApiKey) {
+            try {
+              const spurData = await fetchSpurData(ioc);
+              spurInfo = formatSpurData(spurData);
+            } catch (spurError) {
+              console.warn("Errore nel recupero Spur:", spurError);
+            }
+          } else {
+            console.info("Chiave API Spur non presente, non verrà usato Spur.");
+          }
+        } catch (e) {
+          console.warn("Errore Spur non gestito:", e);
+        }
+
+        info = [abuseInfo, spurInfo].filter(Boolean).join("\n\n");
+      } else {
+        info = formatVirusTotalData(data?.VirusTotal);
+      }
+
+      createTooltip(info, button);
+      navigator.clipboard.writeText(info);
+
 
       if (!(await saveIOC(type, ioc))) {
         showNotification("Errore", "Impossibile salvare l'IOC.");
         return;
       }
 
-      createTooltip(info, button);
-      navigator.clipboard.writeText(info);
     } catch (err) {
       console.error("Errore durante il recupero dei dati IOC:", err);
     }

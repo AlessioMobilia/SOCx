@@ -1,5 +1,7 @@
 // src/utils.ts
 
+import * as XLSX from "xlsx"
+
 // Defang e Refang
 export const defang = (text: string): string => {
   return text
@@ -196,129 +198,68 @@ export const extractIOCs = (text: string, refanged: boolean = true): string[] =>
 
 
 
-/**
-* Formatta i dati di AbuseIPDB in un testo leggibile.
-* @param abuseData Dati di AbuseIPDB.
-* @returns Stringa formattata.
-*/
-/**
-* Formatta i dati di AbuseIPDB in un testo leggibile.
-* @param abuseData Dati di AbuseIPDB.
-* @returns Stringa formattata.
-*/
 export const formatAbuseIPDBData = (abuseData: any): string => {
-if (!abuseData?.data) return "";
+  const d = abuseData?.data
+  if (!d) return ""
 
-const {
-  ipAddress,
-  abuseConfidenceScore,
-  totalReports,
-  isp,
-  countryCode,
-  domain,
-  lastReportedAt,
-} = abuseData.data;
-
-// Gestisci correttamente i valori falsy
-const formatValue = (value: any, defaultValue: string = "N/A") => {
-  if (value === 0 || value === false) return value.toString(); // Mostra "0" o "false" invece di "N/A"
-  return value || defaultValue;
-};
-
-return `
+  return `
 Informazioni IP (AbuseIPDB):
-- IP:\t\t\t${formatValue(ipAddress)}
-- Punteggio di Abuso:\t${formatValue(abuseConfidenceScore)}%
-- Segnalazioni Totali:\t${formatValue(totalReports)}
-- ISP:\t\t\t${formatValue(isp)}
-- Paese:\t\t${formatValue(countryCode)}
-- Dominio:\t\t${formatValue(domain)}
-- Ultima Segnalazione:\t${formatValue(lastReportedAt)}
-`.trim();
-};
+- IP:\t\t\t${formatValue(d.ipAddress)}
+- Punteggio di Abuso:\t${formatValue(d.abuseConfidenceScore)}%
+- Segnalazioni Totali:\t${formatValue(d.totalReports)}
+- ISP:\t\t\t${formatValue(d.isp)}
+- Paese:\t\t${formatValue(d.countryCode)}
+- Dominio:\t\t${formatValue(d.domain)}
+- Ultima Segnalazione:\t${formatValue(d.lastReportedAt)}
+  `.trim()
+}
 
-/**
-* Formatta i dati di VirusTotal in un testo leggibile.
-* @param vtData Dati di VirusTotal.
-* @returns Stringa formattata.
-*/
-/**
-* Formatta i dati di VirusTotal in un testo leggibile.
-* @param vtData Dati di VirusTotal.
-* @returns Stringa formattata.
-*/
-/**
-* Formatta i dati di VirusTotal in un testo leggibile.
-* @param vtData Dati di VirusTotal.
-* @returns Stringa formattata.
-*/
-/**
-* Formatta i dati di VirusTotal in un testo leggibile.
-* @param vtData Dati di VirusTotal.
-* @returns Stringa formattata.
-*/
+
 export const formatVirusTotalData = (vtData: any): string => {
-if (!vtData?.data) return "";
+  const d = vtData?.data
+  if (!d || !d.attributes) return ""
 
-const {
-  id,
-  attributes: {
-    last_analysis_stats,
-    categories,
-    whois,
-    last_https_certificate,
-  } = {},
-} = vtData.data;
+  const attr = d.attributes
+  const stats = attr.last_analysis_stats ?? {}
+  const cert = attr.last_https_certificate ?? {}
+  const whois = attr.whois ?? ""
 
-// Funzione per gestire valori 0 e false
-const formatValue = (value: any, defaultValue: string = "N/A") => {
-  if (value === 0 || value === false) return value; // Mostra 0 o false come valori validi
-  return value || defaultValue; // Usa defaultValue solo se il valore è null/undefined
-};
+  const categories = attr.categories
+    ? `Categorie:\t\t${Object.values(attr.categories).join(", ")}`
+    : "Nessuna categoria disponibile."
 
-// Formatta le statistiche di analisi
-const analysisStats = last_analysis_stats
-  ? `
-Analisi Vendor:
-- Malevoli:\t\t${formatValue(last_analysis_stats.malicious)}
-- Sospetti:\t\t${formatValue(last_analysis_stats.suspicious)}
-- Non rilevati:\t\t${formatValue(last_analysis_stats.undetected)}
-- Sicuri:\t\t${formatValue(last_analysis_stats.harmless)}
-`.trim()
-  : "Nessuna analisi disponibile.";
-
-// Formatta le categorie
-const formattedCategories = categories
-  ? `Categorie:\t\t${Object.values(categories).join(", ")}`
-  : "Nessuna categoria disponibile.";
-
-// Formatta il certificato HTTPS
-const certInfo = last_https_certificate
-  ? `
+  const certSection = cert.validity || cert.issuer?.CN
+    ? `
 Certificato HTTPS:
-- Valido fino:\t\t${formatValue(last_https_certificate.validity?.not_after)}
-- Emittente:\t\t${formatValue(last_https_certificate.issuer?.CN)}
-`.trim()
-  : "Nessun certificato HTTPS disponibile.";
+- Valido fino:\t\t${formatValue(cert.validity?.not_after)}
+- Emittente:\t\t${formatValue(cert.issuer?.CN)}
+    `.trim()
+    : "Nessun certificato HTTPS disponibile."
 
-// Formatta il whois con le informazioni chiave
-const whoisInfo = whois
-  ? `Informazioni Whois:\n${extractKeyWhoisInfo(whois)}`
-  : "";
+  const whoisSection = whois
+    ? `\n\nInformazioni Whois:\n${extractKeyWhoisInfo(whois)}`
+    : "\n\nInformazioni Whois:\nNessuna informazione disponibile."
 
-// Costruisci il risultato finale
-const result = `
+  return `
 Informazioni Dominio/IP (VirusTotal):
-- IOC:\t\t\t${formatValue(id)}
-${analysisStats}
-${formattedCategories}
-${certInfo}
-${whoisInfo}
-`.trim();
+- IOC:\t\t\t${formatValue(d.id)}
+Analisi Vendor:
+- Malevoli:\t\t${formatValue(stats.malicious)}
+- Sospetti:\t\t${formatValue(stats.suspicious)}
+- Non rilevati:\t\t${formatValue(stats.undetected)}
+- Sicuri:\t\t${formatValue(stats.harmless)}
+${categories}
+${certSection}
+${whoisSection}
+  `.trim()
+}
 
-return result;
-};
 
+
+const formatValue = (value: any, defaultValue: string = "N/A"): string => {
+  if (value === 0 || value === false) return value.toString()
+  return value || defaultValue
+}
 
 
 
@@ -329,15 +270,61 @@ return result;
 * @returns Stringa formattata.
 */
 export const parseAndFormatResults = (data: any): string => {
-const abuseIPDBText = formatAbuseIPDBData(data?.AbuseIPDB);
-const virusTotalText = formatVirusTotalData(data?.VirusTotal);
+  const abuse = data?.AbuseIPDB?.data;
+  const vt = data?.VirusTotal?.data?.attributes;
+  const whoisText = vt?.whois || "";
 
-return `
-${abuseIPDBText}
+  const lines: string[] = [];
 
-${virusTotalText}
-`.trim();
+  // =======================
+  // 🛡️ AbuseIPDB Section
+  // =======================
+  if (abuse) {
+    lines.push("Informazioni AbuseIPDB:");
+    lines.push(`- Punteggio di Abuso:\t${abuse.abuseConfidenceScore ?? "N/A"}`);
+    lines.push(`- Totale Segnalazioni:\t${abuse.totalReports ?? "N/A"}`);
+    lines.push(`- Paese:\t\t${abuse.countryCode ?? "N/A"}`);
+    lines.push(`- ISP:\t\t\t${abuse.isp ?? "N/A"}`);
+    lines.push(""); // blank line
+  }
+
+  // =======================
+  // 🔍 VirusTotal Section
+  // =======================
+  if (vt) {
+    const stats = vt.last_analysis_stats ?? {};
+    lines.push("Informazioni VirusTotal:");
+    lines.push(`- IOC:\t\t\t${data?.VirusTotal?.data?.id ?? "N/A"}`);
+    lines.push(`- Malevoli:\t\t${stats.malicious ?? 0}`);
+    lines.push(`- Sospetti:\t\t${stats.suspicious ?? 0}`);
+    lines.push(`- Sicuri:\t\t${stats.harmless ?? 0}`);
+    lines.push(`- Non rilevati:\t\t${stats.undetected ?? 0}`);
+    lines.push(""); // blank line
+
+    // WHOIS chiave: usa stesse funzioni dei CSV
+    const creation = extractSingleFromWhois(whoisText, /Created:\s*(.+)/gi, "earliest") ??
+                     extractSingleFromWhois(whoisText, /Creation Date:\s*(.+)/gi, "earliest") ??
+                     extractSingleFromWhois(whoisText, /Registered On:\s*(.+)/gi, "earliest");
+
+    const expiry = extractSingleFromWhois(whoisText, /Expiry Date:\s*(.+)/gi, "earliest") ??
+                   extractSingleFromWhois(whoisText, /Expire Date:\s*(.+)/gi, "earliest") ??
+                   extractSingleFromWhois(whoisText, /Expires On:\s*(.+)/gi, "earliest");
+
+    const registrar = extractSingleFromWhois(whoisText, /Registrar(?: Name)?:\s*(.+)/gi, "first") ??
+                      extractSingleFromWhois(whoisText, /Sponsoring Registrar:\s*(.+)/gi, "first");
+
+    const org = extractBestOrganization(whoisText);
+
+    lines.push("Informazioni Whois:");
+    lines.push(`- Data di Creazione:\t${creation ?? "N/A"}`);
+    lines.push(`- Data di Scadenza:\t${expiry ?? "N/A"}`);
+    lines.push(`- Registrar:\t\t${registrar ?? "N/A"}`);
+    lines.push(`- Organizzazione:\t${org ?? "N/A"}`);
+  }
+
+  return lines.join("\n").trim();
 };
+
 
 
 /**
@@ -351,39 +338,46 @@ ${virusTotalText}
 * @returns Stringa formattata con le informazioni chiave.
 */
 const extractKeyWhoisInfo = (whois: string): string => {
-if (!whois) return "";
+  if (!whois) return "Nessuna informazione disponibile.";
 
-const keyInfo: { [key: string]: string } = {};
+  const extractMultiple = (regex: RegExp): string[] => {
+    const matches = [...whois.matchAll(regex)];
+    return matches.map((m) => m[1].trim());
+  };
 
-// Funzione per gestire valori 0 e false
-const formatValue = (value: any, defaultValue: string = "\t\t\tN/A") => {
-  if (value === 0 || value === false) return value; // Mostra 0 o false come valori validi
-  return value || defaultValue; // Usa defaultValue solo se il valore è null/undefined
+  const dedup = (arr: string[]) =>
+    Array.from(new Set(arr.map((s) => s.trim())));
+
+  const lines: string[] = [];
+
+  const creationDates = dedup(extractMultiple(/Created:\s*(.+)/gi));
+  const expireDates = dedup(extractMultiple(/Expire Date:\s*(.+)/gi));
+  const orgs = dedup(extractMultiple(/Organization:\s*(.+)/gi));
+  const statuses = dedup(extractMultiple(/Status:\s*(.+)/gi));
+
+  const section = [
+    { label: "Data di Creazione", values: creationDates },
+    { label: "Data di Scadenza", values: expireDates },
+    { label: "Organizzazione", values: orgs },
+    { label: "Stato", values: statuses }
+  ];
+
+  section.forEach(({ label, values }) => {
+    if (values.length > 0) {
+      lines.push(`${label}:`);
+      values.forEach((v) => lines.push(`  - ${v}`));
+    }
+  });
+
+  return lines.length > 0
+    ? lines.join("\n")
+    : "Nessuna informazione chiave trovata nel record Whois.";
 };
 
-// Estrai la data di creazione
-const creationDateMatch = whois.match(/Creation Date:\s*(.+)/i);
-if (creationDateMatch) {
-  keyInfo["Data di Creazione"] = formatValue(creationDateMatch[1]);
-}
 
-// Estrai l'emittente (Registrar)
-const registrarMatch = whois.match(/Registrar:\s*(.+)/i);
-if (registrarMatch) {
-  keyInfo["Registrar"] = "\t"+formatValue(registrarMatch[1]);
-}
 
-// Estrai lo stato del dominio
-const domainStatusMatch = whois.match(/Domain Status:\s*(.+)/i);
-if (domainStatusMatch) {
-  keyInfo["Stato del Dominio"] = formatValue(domainStatusMatch[1]);
-}
 
-// Formatta le informazioni chiave
-return Object.entries(keyInfo)
-  .map(([key, value]) => `${key}:\t${value}`)
-  .join("\n");
-};
+
 
 /**
  * Estrae tutte le CVE da un testo.
@@ -420,3 +414,317 @@ export const formatCVEs = (text: string, asCSV: boolean): string => {
     return cves.join("\n");
   }
 };
+
+
+export const convertResultsToCSV = (results: { [key: string]: any }): string => {
+  const rows = [["IOC", "Servizio", "Tipo", "Valore"]];
+
+  for (const [ioc, result] of Object.entries(results)) {
+    for (const [service, data] of Object.entries(result)) {
+      if (typeof data === "object" && data !== null && "error" in data) {
+        rows.push([ioc, service, "Errore", (data as any).error]);
+        continue;
+      }
+
+      if (
+        service === "VirusTotal" &&
+        typeof data === "object" &&
+        data !== null &&
+        "data" in data &&
+        "attributes" in (data as any).data
+      ) {
+        const stats = (data as any).data.attributes.last_analysis_stats;
+        if (stats) {
+          rows.push([ioc, service, "Malicious", stats.malicious?.toString() ?? "0"]);
+          rows.push([ioc, service, "Suspicious", stats.suspicious?.toString() ?? "0"]);
+          rows.push([ioc, service, "Harmless", stats.harmless?.toString() ?? "0"]);
+        }
+      }
+
+      if (
+        service === "AbuseIPDB" &&
+        typeof data === "object" &&
+        data !== null &&
+        "data" in data
+      ) {
+        const abuseScore = (data as any).data.abuseConfidenceScore;
+        rows.push([ioc, service, "Abuse Score", abuseScore?.toString() ?? "N/A"]);
+      }
+    }
+  }
+
+  // Convert to CSV format (quoted cells)
+  return rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+};
+
+
+export const exportResultsByEngine = (results: { [key: string]: any }) => {
+  const vtRows = [
+    [
+      "IOC",
+      "Malicious",
+      "Suspicious",
+      "Harmless",
+      "Undetected",
+      "WHOIS Creation Date",
+      "WHOIS Expiry Date",
+      "Registrar",
+      "Organization"
+    ]
+  ];
+
+
+  const abuseRows = [
+    ["IOC", "Abuse Score", "Total Reports", "Country", "ISP"]
+  ];
+
+  for (const [ioc, result] of Object.entries(results)) {
+    const vt = result?.VirusTotal?.data?.attributes;
+    if (vt) {
+      const stats = vt.last_analysis_stats || {};
+      const whoisText = result?.VirusTotal?.data?.attributes?.whois || "";
+      const creationDate =
+        extractSingleFromWhois(whoisText, /Created:\s*(.+)/gi, "earliest") ??
+        extractSingleFromWhois(whoisText, /Creation Date:\s*(.+)/gi, "earliest") ??
+        extractSingleFromWhois(whoisText, /Registered On:\s*(.+)/gi, "earliest");
+
+
+      const expiryDate =
+        extractSingleFromWhois(whoisText, /Expiry Date:\s*(.+)/gi, "earliest") ??
+        extractSingleFromWhois(whoisText, /Expire Date:\s*(.+)/gi, "earliest") ??
+        extractSingleFromWhois(whoisText, /Expires On:\s*(.+)/gi, "earliest");
+
+
+      const registrar =
+        extractSingleFromWhois(whoisText, /Registrar(?: Name)?:\s*(.+)/gi, "first") ??
+        extractSingleFromWhois(whoisText, /Sponsoring Registrar:\s*(.+)/gi, "first");
+
+
+      const organization = extractBestOrganization(whoisText);
+
+
+
+
+
+      vtRows.push([
+        ioc,
+        stats.malicious?.toString() ?? "0",
+        stats.suspicious?.toString() ?? "0",
+        stats.harmless?.toString() ?? "0",
+        stats.undetected?.toString() ?? "0",
+        creationDate ?? "N/A",
+        expiryDate ?? "N/A",
+        registrar ?? "N/A",
+        organization ?? "N/A"
+      ]);
+
+    }
+
+    const abuse = result?.AbuseIPDB?.data;
+    if (abuse) {
+      abuseRows.push([
+        ioc,
+        abuse.abuseConfidenceScore?.toString() ?? "0",
+        abuse.totalReports?.toString() ?? "0",
+        abuse.countryCode ?? "N/A",
+        abuse.isp ?? "N/A"
+      ]);
+    }
+  }
+
+  if (vtRows.length > 1) downloadCSV(vtRows, "VirusTotal_IOC_Results");
+  if (abuseRows.length > 1) downloadCSV(abuseRows, "AbuseIPDB_IOC_Results");
+};
+
+// Estrae un singolo campo da testo WHOIS
+export const extractSingleFromWhois = (
+  whois: string,
+  regex: RegExp,
+  strategy: "first" | "earliest" = "first"
+): string | null => {
+  const matches = [...whois.matchAll(regex)]
+    .map((m) => (m[1] ? m[1].trim() : null))
+    .filter((v): v is string => !!v);
+
+  if (matches.length === 0) return null;
+
+  if (strategy === "earliest") {
+    const validDates = matches
+      .map((d) => new Date(d))
+      .filter((d) => !isNaN(d.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    return validDates.length > 0 ? validDates[0].toISOString().split("T")[0] : null;
+  }
+
+  return matches[0];
+};
+
+export const extractBestOrganization = (whois: string): string => {
+  const matches = [...whois.matchAll(/Organization:\s*(.+)/gi)]
+    .map((m) => (m[1] ? m[1].trim() : null))
+    .filter((v): v is string => !!v);
+
+  const preferred = matches.find(
+    (org) =>
+      !/registrar|markmonitor|limited|llc/i.test(org) &&
+      !org.toLowerCase().includes("privacy")
+  );
+
+  return preferred ?? matches[0] ?? "N/A";
+};
+
+
+
+const downloadCSV = (rows: string[][], filename: string) => {
+  const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = new Date().toISOString().split("T")[0];
+  a.href = url;
+  a.download = `${filename}_${date}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+
+
+export const exportResultsToExcel = (results: { [key: string]: any }) => {
+  const vtSheetData: (string | number)[][] = [
+    [
+      "IOC",
+      "Malicious",
+      "Suspicious",
+      "Harmless",
+      "Undetected",
+      "WHOIS Creation Date",
+      "WHOIS Expiry Date",
+      "Registrar",
+      "Organization"
+    ]
+  ]
+
+  const abuseSheetData: (string | number)[][] = [
+    ["IOC", "Abuse Score", "Total Reports", "Country", "ISP"]
+  ]
+
+  const vtStyles: any[] = []
+  const abuseStyles: any[] = []
+
+  for (const [ioc, result] of Object.entries(results)) {
+    // VirusTotal
+    const vt = result?.VirusTotal?.data?.attributes
+    const whoisText = vt?.whois || ""
+
+    const stats = vt?.last_analysis_stats || {}
+    const creationDate =
+      extractSingleFromWhois(whoisText, /Created:\s*(.+)/gi, "earliest") ??
+      extractSingleFromWhois(whoisText, /Creation Date:\s*(.+)/gi, "earliest")
+    const expiryDate =
+      extractSingleFromWhois(whoisText, /Expiry Date:\s*(.+)/gi, "earliest") ??
+      extractSingleFromWhois(whoisText, /Expire Date:\s*(.+)/gi, "earliest")
+    const registrar =
+      extractSingleFromWhois(whoisText, /Registrar(?: Name)?:\s*(.+)/gi, "first")
+    const organization = extractBestOrganization(whoisText)
+
+    const vtRow = [
+      ioc,
+      stats.malicious ?? 0,
+      stats.suspicious ?? 0,
+      stats.harmless ?? 0,
+      stats.undetected ?? 0,
+      creationDate ?? "N/A",
+      expiryDate ?? "N/A",
+      registrar ?? "N/A",
+      organization ?? "N/A"
+    ]
+
+    vtSheetData.push(vtRow)
+
+    // AbuseIPDB
+    const abuse = result?.AbuseIPDB?.data
+    if (abuse) {
+      abuseSheetData.push([
+        ioc,
+        abuse.abuseConfidenceScore ?? 0,
+        abuse.totalReports ?? 0,
+        abuse.countryCode ?? "N/A",
+        abuse.isp ?? "N/A"
+      ])
+    }
+  }
+
+  const workbook = XLSX.utils.book_new()
+  const vtSheet = XLSX.utils.aoa_to_sheet(vtSheetData)
+  const abuseSheet = XLSX.utils.aoa_to_sheet(abuseSheetData)
+
+  // Applica lo stile solo a campi di rischio (colori basati su valori)
+  applyConditionalFormatting(vtSheet, vtSheetData, [1, 2]) // malicious/suspicious
+  applyConditionalFormatting(abuseSheet, abuseSheetData, [1]) // abuse score
+
+  XLSX.utils.book_append_sheet(workbook, vtSheet, "VirusTotal")
+  XLSX.utils.book_append_sheet(workbook, abuseSheet, "AbuseIPDB")
+
+  XLSX.writeFile(workbook, `SOCx_IOC_Report_${new Date().toISOString().split("T")[0]}.xlsx`)
+}
+
+const applyConditionalFormatting = (sheet: XLSX.WorkSheet, data: any[][], columns: number[]) => {
+  const getColor = (value: number): string => {
+    if (value >= 30) return "#f8d7da" // High: red
+    if (value >= 10) return "#fff3cd" // Medium: yellow
+    return "#d4edda" // Low: green
+  }
+
+  for (let row = 1; row < data.length; row++) {
+    for (const col of columns) {
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+      const value = Number(data[row][col])
+      const cell = sheet[cellAddress]
+      if (cell && !isNaN(value)) {
+        cell.s = {
+          fill: { fgColor: { rgb: getColor(value).replace("#", "") } }
+        }
+      }
+    }
+  }
+}
+
+
+export const fetchSpurData = async (ip: string): Promise<any> => {
+  const apiKey = await chrome.storage.local.get(["spurApiKey"]);
+  if (!apiKey.spurApiKey) {
+    throw new Error("Chiave API di Spur non trovata.");
+  }
+
+  const response = await fetch(`https://api.spur.us/v2/context/${ip}`, {
+    headers: {
+      "Token": apiKey.spurApiKey
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Errore nella richiesta API Spur: ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+
+export const formatSpurData = (data: any): string => {
+  if (!data) return "Nessuna informazione da Spur.";
+
+  const infrastructure = data.infrastructure || "N/A";
+  const risks = data.risks ? data.risks.join(", ") : "Nessuno";
+  const proxies = data.client?.proxies ? data.client.proxies.join(", ") : "Nessuno";
+  const services = data.services ? data.services.join(", ") : "Nessuno";
+
+  return `
+Informazioni Spur:
+- Infrastruttura: ${infrastructure}
+- Rischi: ${risks}
+- Proxies: ${proxies}
+- Servizi: ${services}
+  `.trim();
+};
+

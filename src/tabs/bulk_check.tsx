@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import BulkCheckUI from "./BulkCheckUI";
 import { extractIOCs } from "../utility/utils";
 import "./bulk_check.css";
+import { exportResultsByEngine, exportResultsToExcel} from "../utility/utils"; 
 
 const BulkCheck = () => {
   const [textareaValue, setTextareaValue] = useState<string>("");
@@ -109,6 +110,18 @@ const BulkCheck = () => {
     setIsDarkMode((prev) => !prev);
   };
 
+
+
+const handleExport = (format: "csv" | "xlsx") => {
+  if (format === "csv") {
+    exportResultsByEngine(results)
+  } else if (format === "xlsx") {
+    exportResultsToExcel(results)
+  }
+}
+
+
+
   return (
     <BulkCheckUI
       textareaValue={textareaValue}
@@ -122,6 +135,8 @@ const BulkCheck = () => {
       message={message}
       results={results}
       isDarkMode={isDarkMode}
+      onExport={handleExport}
+      
     />
   );
 };
