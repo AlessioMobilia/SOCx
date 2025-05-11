@@ -1,116 +1,107 @@
-# SOCx - Simple OSINT Centralized eXtension
+# 🚀 SOCx – Simple OSINT Centralized eXtension
 
-**SOCx** è l'estensione essenziale per professionisti e appassionati di **OSINT** (Open-Source Intelligence). Progettata per semplificare e centralizzare il processo di analisi, SOCx ti permette di verificare **Indicator of Compromise (IOC)** in modo rapido ed efficiente, direttamente dal tuo browser. Con l'integrazione di servizi leader come **VirusTotal**, **AbuseIPDB**, **Censys**, **Shodan**, **AlienVault**, **MxToolbox** e molti altri, SOCx offre uno strumento completo per la raccolta e l'analisi delle informazioni.
+**SOCx** è l'estensione essenziale per analisti di sicurezza, investigatori digitali e appassionati di **OSINT (Open-Source Intelligence)**. Progettata per velocizzare e centralizzare la verifica di **IOC (Indicators of Compromise)**, SOCx ti consente di eseguire controlli approfonditi direttamente dal browser in pochi clic.
 
-Supporta **IP**, **domini**, **URL**, **hash**, **email** e altro ancora, garantendo una gestione semplificata e una **privacy totale**: nessun dato viene raccolto o condiviso.
+Con l'integrazione di servizi leader come **VirusTotal**, **AbuseIPDB**, **Censys**, **Shodan**, **AlienVault**, **MxToolbox** e molti altri, SOCx offre una soluzione potente, comoda e totalmente **privacy-first**.
 
-🌐 **Pagina ufficiale**: [http://socx.alessiomobilia.com/](http://socx.alessiomobilia.com/)
-
----
-
-## Caratteristiche principali
-
-- **Verifica rapida di IOC**: Analizza IP, domini, URL, hash, email e altro direttamente dal browser.
-- **Integrazione con servizi leader**: Accesso immediato a **VirusTotal**, **AbuseIPDB**, **Censys**, **Shodan**, **AlienVault**, **MxToolbox** e molti altri.
-- **Privacy garantita**: Nessun dato viene raccolto o condiviso.
-- **Interfaccia intuitiva**: Facile da usare, progettata per ottimizzare il flusso di lavoro OSINT.
+🔗 **Sito ufficiale**: [socx.alessiomobilia.com](http://socx.alessiomobilia.com/)
 
 ---
 
-## Servizi supportati
+## ✨ Funzionalità principali
 
-SOCx supporta una vasta gamma di servizi per la verifica di diversi tipi di IOC. Ecco un elenco completo:
+* 🔍 **Controllo istantaneo degli IOC**
+  Analizza rapidamente IP, domini, URL, hash, email, ASN, MAC address e altro.
 
-### IP
+* 🌐 **Integrazione con oltre 20 servizi OSINT**
+  Supporto per i servizi più usati nel settore della threat intelligence.
 
-- **VirusTotal**
-- **AbuseIPDB**
-- **Censys**
-- **IPQualityScore**
-- **IPinfo**
-- **AlienVault**
-- **IBMXForce**
-- **MxToolbox**
-- **Pulsedive**
-- **Spur**
-- **PassiveDNS**
-- **Shodan**
-- **GreyNoise**
-- **ViewDNS**
+* 🛡️ **Privacy totale**
+  Nessun dato viene tracciato, salvato o condiviso. Tutto avviene in locale.
 
-### Dominio
-
-- **VirusTotal**
-- **Censys**
-- **AlienVault**
-- **IBMXForce**
-- **MxToolbox**
-- **Pulsedive**
-- **SecurityTrails**
-- **ViewDNS**
-- **Robtex**
-
-### URL
-
-- **VirusTotal**
-- **IBMXForce**
-- **UrlScan**
-- **PhishTank**
-
-### Hash
-
-- **VirusTotal**
-- **MalwareBazaar**
-- **Pulsedive**
-- **AlienVault**
-
-### Email
-
-- **Hunter**
-- **HaveIBeenPwned**
-
-### ASN
-
-- **BGPToolkit**
-
-### MAC
-
-- **MACVendors**
-- **WiresharkOUI**
+* 🧠 **Interfaccia pulita e intuitiva**
+  Progettata per essere leggera e immediata. Nessun fronzolo, solo OSINT.
 
 ---
 
-## Come iniziare
+## 🔌 Servizi supportati
 
-1. **Installa l'estensione**: Scarica SOCx dallo [Chrome Web Store](#).
-2. **Apri l'estensione**: Clicca sull'icona di SOCx nella barra degli strumenti del browser.
-3. **Inserisci l'IOC**: Digita l'IP, dominio, URL, hash o email che desideri analizzare.
-4. **Seleziona il servizio**: Scegli uno dei servizi supportati per eseguire l'analisi.
-5. **Visualizza i risultati**: Tutte le informazioni saranno disponibili direttamente nel tuo browser.
+*Consulta la lista completa nel README originale o nella documentazione.*
 
 ---
 
-## Contribuire
+## 🧪 Come si usa
 
-Se desideri contribuire al progetto, segui questi passaggi:
-
-1. **Fai un fork** del repository.
-2. **Crea un nuovo branch** per le tue modifiche.
-3. **Esegui i commit** delle tue modifiche.
-4. **Invia una Pull Request**.
-
----
-
-## Licenza
-
-Questo progetto è rilasciato sotto la licenza **[MIT](LICENSE)**.
+1. **Installa l’estensione** dal [Chrome Web Store](#)
+2. **Clicca sull’icona SOCx** nella toolbar del browser
+3. **Inserisci un IOC** (IP, dominio, hash, ecc.)
+4. **Seleziona i motori da interrogare**
+5. **Visualizza i risultati** o esporta in CSV/Excel
 
 ---
 
-## Contatti
+## 🛠️ Come compilare l’estensione (modalità sviluppo)
 
-Hai domande o suggerimenti? Contattaci all'indirizzo **info@alessiomobilia.com** o apri una **issue** su GitHub.
+Hai bisogno di testare o modificare SOCx localmente? Ecco come fare:
+
+### Requisiti
+
+* Node.js (consigliata versione 18+)
+* npm o yarn
+
+### Installazione
+
+```bash
+git clone https://github.com/AlessioMobilia/socx.git
+cd socx
+npm install
+```
+
+### Avvio in modalità sviluppo
+
+```bash
+npm run dev
+```
+
+1. Apri **Chrome** e vai su `chrome://extensions`
+2. Attiva la **Modalità sviluppatore**
+3. Clicca su **"Carica estensione non pacchettizzata"**
+4. Seleziona la cartella `.plasmo` generata da Plasmo (`socx/.plasmo`)
+
+### Build finale (per produzione)
+
+```bash
+npm run build
+```
+
+La versione compilata sarà disponibile nella cartella `build/`.
 
 ---
 
-Ottimizza il tuo flusso di lavoro OSINT con **SOCx**: veloce, sicuro, centralizzato. 🚀
+## 🤝 Contribuire
+
+SOCx è un progetto open-source: contributi, idee e miglioramenti sono benvenuti!
+
+1. Forka il repository
+2. Crea un branch per la tua feature/fix
+3. Fai i commit delle modifiche
+4. Invia una Pull Request
+
+---
+
+## 📄 Licenza
+
+Distribuito con licenza **[MIT](LICENSE)**.
+
+---
+
+## 💬 Contatti
+
+📧 [info@alessiomobilia.com](mailto:info@alessiomobilia.com)
+🐛 Apri una issue su GitHub
+
+---
+
+### 🔐 SOCx: il tuo alleato OSINT nel browser — Sicuro, efficiente, gratuito.
+
+---
