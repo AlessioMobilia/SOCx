@@ -1,7 +1,19 @@
 import React, { useState } from "react"
-import { Card, Table, Form, Button, InputGroup } from "react-bootstrap"
-import { MdDarkMode, MdLightMode, MdVisibility, MdVisibilityOff } from "react-icons/md"
+import {
+  Card,
+  Table,
+  Form,
+  Button,
+  InputGroup
+} from "react-bootstrap"
+import {
+  MdDarkMode,
+  MdLightMode,
+  MdVisibility,
+  MdVisibilityOff
+} from "react-icons/md"
 import { servicesConfig } from "../utility/servicesConfig"
+import { supportedIOCTypes, type IOCType, type CustomService } from "../utility/iocTypes"
 import "bootstrap/dist/css/bootstrap.min.css"
 
 interface OptionsUIProps {
@@ -9,11 +21,14 @@ interface OptionsUIProps {
   virusTotalApiKey: string
   abuseIPDBApiKey: string
   selectedServices: { [key: string]: string[] }
+  customServices: CustomService[]
   onDarkModeToggle: () => void
   onServiceChange: (type: string, service: string) => void
   onVirusTotalApiKeyChange: (val: string) => void
   onAbuseIPDBApiKeyChange: (val: string) => void
   onTestKeys: () => void
+  onAddCustomService: (s: CustomService) => void
+  onRemoveCustomService: (index: number) => void
 }
 
 const OptionsUI: React.FC<OptionsUIProps> = ({
@@ -21,13 +36,20 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   virusTotalApiKey,
   abuseIPDBApiKey,
   selectedServices,
+  customServices,
   onDarkModeToggle,
   onServiceChange,
   onVirusTotalApiKeyChange,
   onAbuseIPDBApiKeyChange,
-  onTestKeys
+  onTestKeys,
+  onAddCustomService,
+  onRemoveCustomService
 }) => {
   const [showKeys, setShowKeys] = useState(false)
+  const [newType, setNewType] = useState<IOCType>("IP")
+  const [newName, setNewName] = useState("")
+  const [newURL, setNewURL] = useState("")
+
   const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
   const tableVariant = isDarkMode ? "dark" : "light"
   const inputType = showKeys ? "text" : "password"
@@ -48,7 +70,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           </Button>
         </div>
 
-        {/* Sezione API Key */}
+        {/* API Key */}
         <Card.Title>🔑 Chiavi API</Card.Title>
         <Form>
           <Form.Group className="mb-3">
@@ -94,7 +116,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           </Button>
         </Form>
 
-        {/* Sezione Servizi */}
+        {/* Servizi Standard */}
         <hr />
         <Card.Title>🔍 Servizi abilitati per "MAGIC IOC"</Card.Title>
         <Table striped bordered hover responsive variant={tableVariant}>
@@ -120,6 +142,86 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                       className="mb-1"
                     />
                   ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+
+        {/* Aggiungi Servizi Personalizzati */}
+        <hr />
+        <Card.Title>➕ Aggiungi servizio personalizzato</Card.Title>
+        <Form className="mb-3">
+          <Form.Group className="mb-2">
+            <Form.Label>Tipo IOC</Form.Label>
+            <Form.Select value={newType} onChange={(e) => setNewType(e.target.value as IOCType)}>
+              {supportedIOCTypes.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+
+          <Form.Group className="mb-2">
+            <Form.Label>Nome servizio</Form.Label>
+            <Form.Control
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Es: Shodan"
+            />
+          </Form.Group>
+
+          <Form.Group className="mb-2">
+            <Form.Label>URL con <code>{'{ioc}'}</code></Form.Label>
+            <Form.Control
+              type="text"
+              value={newURL}
+              onChange={(e) => setNewURL(e.target.value)}
+              placeholder="https://example.com/lookup/{ioc}"
+            />
+          </Form.Group>
+
+          <Button
+            variant="success"
+            onClick={() => {
+              if (newName && newURL.includes("{ioc}")) {
+                onAddCustomService({ type: newType, name: newName, url: newURL })
+                setNewName("")
+                setNewURL("")
+              } else {
+                alert("Inserisci un nome valido e un URL che contenga {ioc}")
+              }
+            }}
+          >
+            ➕ Aggiungi servizio
+          </Button>
+        </Form>
+
+        {/* Lista Servizi Personalizzati */}
+        <Card.Title>⚙️ Servizi personalizzati configurati</Card.Title>
+        <Table striped bordered hover responsive variant={tableVariant}>
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Nome</th>
+              <th>URL</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            {customServices.map((service, index) => (
+              <tr key={index}>
+                <td>{service.type}</td>
+                <td>{service.name}</td>
+                <td style={{ wordBreak: "break-word" }}>{service.url}</td>
+                <td>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => onRemoveCustomService(index)}
+                  >
+                    Rimuovi
+                  </Button>
                 </td>
               </tr>
             ))}

@@ -1,6 +1,32 @@
 /* src/utility/config.css */
 @import url("./colors.css");
 
+/* Stili Globali */
+body.dark-mode {
+  background-color: var(--bs-dark) !important;
+  color: var(--bs-body-color) !important;
+}
+
+body.light-mode {
+  background-color: var(--bs-light) !important;
+  color: var(--bs-body-color) !important;
+}
+
+/* Stili per le textbox */
+.dark-input {
+  background-color: var(--input-bg-dark) !important;
+  color: var(--input-text-dark) !important;
+  border-color: var(--input-bg-dark) !important;
+}
+
+.light-input {
+  background-color: var(--input-bg-light) !important;
+  color: var(--input-text-light) !important;
+  border-color: var(--input-bg-light) !important;
+}
+
+
+
 /* Font */
 :root {
   --font-primary: "Arial, sans-serif";
@@ -11,28 +37,103 @@
   --font-size-xlarge: 18px;
 }
 
-/* Colori dei Pulsanti */
+/* Pulsanti */
 :root {
-  --button-primary-light: var(--button-primary-light);
-  --button-primary-dark: var(--button-primary-dark);
-  --button-secondary-light: var(--button-secondary-light);
-  --button-secondary-dark: var(--button-secondary-dark);
-  --button-text-light: #fff;
-  --button-text-dark: #000;
+  --button-primary-light: #0d6efd;
+  --button-primary-dark: #3399ff;
+
+  --button-secondary-light: #6c757d;
+  --button-secondary-dark: #adb5bd;
+
+  --button-text-light: #ffffff;
+  --button-text-dark: #000000;
 }
 
-/* Colori di Testo */
+/* Colori di testo */
 :root {
+  --text-light: #f8f9fa;
+  --text-dark: #212529;
+
   --text-primary-light: var(--text-light);
   --text-primary-dark: var(--text-dark);
-  --text-secondary-light: var(--secondary-text-color);
-  --text-secondary-dark: var(--secondary-text-color);
+  --text-secondary-light: #ced4da;
+  --text-secondary-dark: #adb5bd;
 }
 
-/* Colori delle Textbox */
+/* Input */
 :root {
-  --input-bg-light: var(--input-bg-light);
-  --input-bg-dark: var(--input-bg-dark);
-  --input-text-light: var(--input-text-light);
-  --input-text-dark: var(--input-text-dark);
+  --input-bg-light: #ffffff;
+  --input-bg-dark: #343a40;
+
+  --input-text-light: #000000;
+  --input-text-dark: #ffffff;
+}
+
+/* Bordi e sfondi */
+:root {
+  --border-light: #dee2e6;
+  --border-dark: #495057;
+
+  --background-light: #ffffff;
+  --background-dark: #212529;
+}
+
+
+/* Stili del TextArea */
+.text-area {
+  width: 100%;
+  height: 75vh;
+  padding: 8px auto;
+  font-size: var(--font-size-medium);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  resize: none;
+  background-color: var(--background-light);
+  color: var(--text-primary-light);
+}
+
+.dark-mode .text-area {
+  border-color: var(--border-dark);
+  background-color: var(--background-dark);
+  color: var(--text-primary-dark);
+}
+
+/* Stili dei Pulsanti */
+.button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 16px;
+  border: 1px solid var(--border-light); /* Aggiungi il bordo */
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--font-size-medium);
+  font-family: var(--font-primary);
+}
+
+.primary-button {
+  background-color: var(--button-primary-light);
+  color: var(--button-text-light);
+}
+
+.dark-mode .primary-button {
+  background-color: var(--button-primary-dark);
+  border-color: var(--border-dark); /* Bordo per la dark mode */
+}
+
+.secondary-button {
+  background-color: var(--button-secondary-light);
+  color: var(--button-text-dark);
+}
+
+.dark-mode .secondary-button {
+  background-color: var(--button-secondary-dark);
+  color: var(--button-text-light);
+  border-color: var(--border-dark); /* Bordo per la dark mode */
+}
+
+/* Contenitore per i pulsanti Refang e Defang */
+.button-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
 }

@@ -1,6 +1,7 @@
 import "bootstrap/dist/css/bootstrap.min.css"
-import { Container, Button, ListGroup } from "react-bootstrap"
 import React from "react"
+import { Container, Button, ListGroup } from "react-bootstrap"
+import { MdPlaylistAddCheck, MdNote, MdDelete } from "react-icons/md"
 
 interface PopupUIProps {
   isDarkMode: boolean
@@ -17,37 +18,34 @@ const PopupUI: React.FC<PopupUIProps> = ({
   onOpenSidePanelClick,
   onClearHistory
 }) => {
-  // Ordina per data decrescente e prendi solo i 10 più recenti
+  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
   const recentHistory = [...iocHistory]
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 10)
 
   return (
-    <Container
-      fluid
-      className={`p-3 ${isDarkMode ? "bg-dark text-white" : "bg-light text-dark"}`}
-    >
-      <h1 className="h4 mb-3 text-center">Estensione IOC</h1>
+    <Container fluid className={`p-3 ${themeClass}`}>
+      <h5 className="text-center mb-3">🛡️ Estensione IOC</h5>
 
       <div className="d-grid gap-2 mb-3">
-        <Button variant="primary btn-sm" onClick={onBulkCheckClick}>
-          Controllo Bulk IOC
+        <Button variant="success" size="sm" onClick={onBulkCheckClick}>
+          <MdPlaylistAddCheck className="me-1" /> Controllo Bulk
         </Button>
-        <Button variant="secondary btn-sm" onClick={onOpenSidePanelClick}>
-          Apri Blocco Note
+        <Button variant="secondary" size="sm" onClick={onOpenSidePanelClick}>
+          <MdNote className="me-1" /> Apri Blocco Note
         </Button>
       </div>
 
-      <h2 className="h6 mb-2 text-center">Ultimi 10 IOC</h2>
+      <h6 className="text-center mb-2">📋 Ultimi 10 IOC</h6>
 
       {recentHistory.length === 0 ? (
-        <p className="text-muted text-center small">Nessun IOC trovato.</p>
+        <p className="text-muted text-center small">Nessun IOC registrato.</p>
       ) : (
-        <ListGroup variant="flush" style={{ maxHeight: "240px", overflowY: "auto" }}>
-          {recentHistory.map((entry, index) => (
+        <ListGroup variant="flush" className="small" style={{ maxHeight: 200, overflowY: "auto" }}>
+          {recentHistory.map((entry, idx) => (
             <ListGroup.Item
-              key={index}
-              className={`py-1 px-2 small ${isDarkMode ? "bg-dark text-white" : "bg-light text-dark"} border-0`}
+              key={idx}
+              className={`py-1 px-2 border-0 ${themeClass}`}
             >
               <span className="text-truncate d-block">{entry.text}</span>
             </ListGroup.Item>
@@ -57,8 +55,8 @@ const PopupUI: React.FC<PopupUIProps> = ({
 
       {recentHistory.length > 0 && (
         <div className="d-grid gap-2 mt-3">
-          <Button variant="danger btn-sm" onClick={onClearHistory}>
-            Cancella Cronologia IOC
+          <Button variant="outline-danger" size="sm" onClick={onClearHistory}>
+            <MdDelete className="me-1" /> Cancella Cronologia
           </Button>
         </div>
       )}

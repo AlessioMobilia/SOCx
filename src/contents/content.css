@@ -1,11 +1,136 @@
-/* content.css */
-.notMalicious_tooltip {
-    color: rgb(0, 0, 0);
-    background-color: rgb(25, 204, 76);
-  }
-  
-.malicious_tooltip {
-    color: rgb(255, 255, 255);
-    background-color: rgb(194, 27, 27);
+.SOCx-tooltip {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: normal;
 }
 
+.ioc-tooltip-wrapper {
+  max-width: 380px;
+  word-wrap: break-word;
+}
+
+.ioc-tooltip-content {
+  margin-top: 6px;
+}
+
+.ioc-badge {
+  font-weight: bold;
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-align: center;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.ioc-badge--malicious {
+  background-color: #ffe6e6;
+  color: #c00;
+  border: 1px solid #c00;
+}
+
+.ioc-badge--benign {
+  background-color: #e6ffe6;
+  color: #2d8a34;
+  border: 1px solid #2d8a34;
+}
+
+.ioc-badge--suspicious {
+  background-color: #fff6e6;
+  color: #c88a00;
+  border: 1px solid #c88a00;
+}
+
+.ioc-malicious {
+  color: #c00;
+  font-weight: bold;
+}
+
+.ioc-suspicious {
+  color: #c88a00;
+  font-weight: bold;
+}
+
+.ioc-benign {
+  color: #2d8a34;
+  font-weight: bold;
+}
+
+.ioc-unknown {
+  color: #666;
+}
+
+
+/* Tooltip Light */
+.tippy-box[data-theme~='socx-light'] {
+  background-color: #fff;
+  color: #111;
+  border: 1px solid #ccc;
+}
+
+/* Tooltip Dark */
+.tippy-box[data-theme~='socx-dark'] {
+  background-color: #1e1e1e;
+  color: #f0f0f0;
+  border: 1px solid #444;
+}
+
+.SOCx-tooltip {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Tooltip content structure */
+.ioc-tooltip-wrapper {
+  max-width: 380px;
+  word-wrap: break-word;
+}
+.ioc-tooltip-content {
+  margin-top: 6px;
+}
+
+/* Badge */
+.ioc-badge {
+  font-weight: bold;
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-align: center;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.ioc-badge--malicious {
+  background-color: #ffe6e6;
+  color: #c00;
+  border: 1px solid #c00;
+}
+.ioc-badge--benign {
+  background-color: #e6ffe6;
+  color: #2d8a34;
+  border: 1px solid #2d8a34;
+}
+.ioc-badge--suspicious {
+  background-color: #fff6e6;
+  color: #c88a00;
+  border: 1px solid #c88a00;
+}
+
+/* Inline severity highlights */
+.ioc-malicious {
+  color: #c00;
+  font-weight: bold;
+}
+.ioc-suspicious {
+  color: #c88a00;
+  font-weight: bold;
+}
+.ioc-benign {
+  color: #2d8a34;
+  font-weight: bold;
+}
+.ioc-unknown {
+  color: #666;
+}

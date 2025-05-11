@@ -32,7 +32,7 @@ export const checkVirusTotal = async (ioc: string, type: string): Promise<any> =
 
 
 // Funzione per eseguire richieste API a VirusTotal
-export const fetchAPIVT = async (url: string, apiKey: string): Promise<any> => {
+export const fetchAPIVT = async (url: string, apiKey: string): Promise<any | null> => {
   const response = await fetch(url, {
     method: "GET",
     headers: {
@@ -42,7 +42,13 @@ export const fetchAPIVT = async (url: string, apiKey: string): Promise<any> => {
   });
 
   if (!response.ok) {
-    // Prova a ottenere il body della risposta per dettagli
+    // Gestione 404 specifica: hash non trovato su VirusTotal
+    if (response.status === 404) {
+      console.warn("Hash non trovato su VirusTotal.");
+      return null;
+    }
+
+    // Altri errori: lancia eccezione con dettagli
     let errorDetails = "";
     try {
       const errorJson = await response.json();

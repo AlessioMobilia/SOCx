@@ -1,109 +1,41 @@
-/* src/popup/popup.css */
 @import url("../utility/config.css");
 
-/* Stili Globali */
-body.dark-mode {
-  background-color: var(--bs-dark) !important;
-  color: var(--bs-body-color) !important;
-}
-
-body.light-mode {
-  background-color: var(--bs-light) !important;
-  color: var(--bs-body-color) !important;
-}
-
 body {
-  min-width:300px;
+  min-width: 300px;
+  margin: 0;
 }
 
-/* Stili del Container */
+/* Container */
 .container {
-  padding: 16px !important;
-  width: 10000px;
-  font-family: var(--font-primary);
-  background-color: transparent;
-  max-height: 90vh; /* Altezza massima */
-  overflow-y: auto; /* Scroll interno */
-}
-
-/* Stili del Titolo */
-.title {
-  font-size: var(--font-size-xlarge);
-  margin-bottom: 16px;
-  text-align: center; /* Titoli centrati */
-}
-
-/* Override per i Bottoni di Bootstrap */
-.custom-button {
-  width: 100% !important;
-  padding: 8px !important;
-  margin-bottom: 8px !important;
-  border: 1px solid var(--border-light) !important;
-  border-radius: 4px !important;
-  font-size: var(--font-size-medium) !important;
-  font-family: var(--font-primary) !important;
-}
-
-.custom-primary-button {
-  background-color: var(--button-primary-light) !important;
-  color: var(--button-text-light) !important;
-}
-
-.dark-mode .custom-primary-button {
-  background-color: var(--button-primary-dark) !important;
-  border-color: var(--border-dark) !important;
-}
-
-.custom-secondary-button {
-  background-color: var(--button-secondary-light) !important;
-  color: var(--button-text-dark) !important;
-}
-
-.dark-mode .custom-secondary-button {
-  background-color: var(--button-secondary-dark) !important;
-  color: var(--button-text-light) !important;
-  border-color: var(--border-dark) !important;
-}
-
-/* Stili per la Cronologia IOC */
-.ioc-history {
-  max-height: 400px; /* Altezza massima con scroll */
+  padding: 1rem;
+  max-height: 90vh;
   overflow-y: auto;
-  margin-bottom: 16px; /* Spaziatura inferiore */
 }
 
-.ioc-entry {
-  padding: 12px; /* Maggiore spazio interno */
-  margin-bottom: 8px;
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  background-color: var(--background-light);
-  color: var(--text-primary-light);
+
+/* Lista IOC */
+.list-group-item {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid transparent;
 }
 
-.dark-mode .ioc-entry {
-  border-color: var(--border-dark);
-  background-color: var(--background-dark);
-  color: var(--text-primary-dark);
+.list-group-item:last-child {
+  border-bottom: none;
 }
 
-.ioc-text {
-  font-size: var(--font-size-large);
-  font-weight: bold;
-  margin-bottom: 4px;
+.dark-mode .list-group-item {
+  background-color: transparent;
+  color: #ffffff;
 }
 
-.ioc-meta {
-  font-size: var(--font-size-small);
+.light-mode .list-group-item {
+  background-color: transparent;
+  color: #212529;
 }
 
-/* Override per il Pulsante di Cancellazione */
-.custom-clear-button {
-  background-color: var(--button-secondary-light) !important;
-  color: var(--button-text-dark) !important;
-}
-
-.dark-mode .custom-clear-button {
-  background-color: var(--button-secondary-dark) !important;
-  color: var(--button-text-light) !important;
+.text-truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

@@ -1,87 +1,114 @@
-import type { PlasmoCSConfig } from "plasmo";
-import "./content.css"; // Importa il file CSS
+import type { PlasmoCSConfig } from "plasmo"
+import "bootstrap/dist/css/bootstrap.min.css"
+import { showBootstrapToast } from "../utility/utils"
 
-
-// Configurazione per il contenuto dello script
 export const config: PlasmoCSConfig = {
   matches: ["https://www.abuseipdb.com/check/*"],
-  all_frames: true,
-};
-
-// Funzione per estrarre e formattare le informazioni dal div
-function extractAndFormatInfo() {
-  const targetDiv = document.querySelector('.col-md-6 .well');
-  if (!targetDiv) return null;
-
-  // Estrai i dati dall'HTML
-  const ip = targetDiv.querySelector('h3 > b ')?.textContent?.trim(); // IP
-  const reports = targetDiv.querySelector('p > b')?.textContent?.trim(); // Numero di segnalazioni
-  const confidence = targetDiv.querySelector('.progress-bar > span')?.textContent?.trim(); // Confidence
-  const isp = targetDiv.querySelector('table tr:first-child td')?.textContent?.trim(); // ISP
-  const usageType = targetDiv.querySelector('table tr:nth-child(2) td')?.textContent?.trim(); // Usage Type
-  const asn = targetDiv.querySelector('table tr:nth-child(3) td')?.textContent?.trim(); // ASN
-  const domain = targetDiv.querySelector('table tr:nth-child(4) td')?.textContent?.trim(); // Domain
-  const country = targetDiv.querySelector('table tr:nth-child(5) td')?.textContent?.trim(); // Country
-  const city = targetDiv.querySelector('table tr:nth-child(6) td')?.textContent?.trim(); // City
-
-  // Formatta i dati in una stringa
-  const formattedInfo = `
-IP:\t\t\t${ip}
-Segnalazioni AbuseIPDB:\t${reports}
-Confidenza:\t\t${confidence}
-ISP:\t\t\t${isp}
-Usage Type:\t\t${usageType}
-ASN:\t\t\t${asn}
-Dominio:\t\t${domain}
-Paese:\t\t\t${country}
-Città:\t\t\t${city}
-  `.trim();
-
-  return formattedInfo;
+  all_frames: true
 }
 
-// Funzione per copiare il testo nella clipboard
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text)
-    .then(() => {
-      alert('Informazioni copiate nella clipboard!');
-    })
-    .catch((err) => {
-      console.error('Errore durante la copia nella clipboard:', err);
-      alert('Errore durante la copia nella clipboard.');
-    });
+// Estrai e formatta le informazioni
+function extractAndFormatInfo(): string | null {
+  const container = document.querySelector(".col-md-6 .well");
+  if (!container) return null;
+
+  const getText = (selector: string): string =>
+    container.querySelector(selector)?.textContent?.trim() || "N/D";
+
+  const ip = getText("h3 > b");
+  const reportCount = getText("p > b");
+  const confidence = getText(".progress-bar > span");
+
+  const rows = container.querySelectorAll("table tr");
+  const tableInfo: Record<string, string> = {};
+
+  rows.forEach((row) => {
+    const th = row.querySelector("th")?.textContent?.trim();
+    const td = row.querySelector("td")?.textContent?.trim();
+    if (th && td) tableInfo[th] = td;
+  });
+
+  const isp = tableInfo["ISP"] || "N/D";
+  const usage = tableInfo["Usage Type"] || "N/D";
+  const asn = tableInfo["ASN"] || "N/D";
+  const hostname = tableInfo["Hostname(s)"] || "N/D";
+  const domain = tableInfo["Domain Name"] || "N/D";
+  const country = tableInfo["Country"] || "N/D";
+  const city = tableInfo["City"] || "N/D";
+
+  let extraText = container.querySelector("div[style*='display: flex'] p")?.textContent?.trim() ?? "";
+  extraText = extraText.replace(/\s+/g, " ").trim(); // rimuove spazi doppi e newline inutili
+
+  return `
+Informazioni IP (AbuseIPDB):
+${extraText ? `${extraText}\n\n` : ""}IP:               ${ip}
+Reports:          ${reportCount}
+Abuse Confidence: ${confidence}
+ISP:              ${isp}
+Usage:            ${usage}
+ASN:              ${asn}
+Hostnames:        ${hostname}
+Domain:           ${domain}
+Country:          ${country}
+City:             ${city}`.trim();
 }
 
-// Funzione principale che verrà eseguita quando la pagina è caricata
-console.log("Script eseguito");
 
-const targetDiv = document.querySelector('.col-md-6 .well');
-if (targetDiv) {
-// Crea un nuovo pulsante
-const newButton = document.createElement('button');
-newButton.textContent = 'Copia Informazioni';
-newButton.style.marginTop = '10px';
-newButton.style.width = '100%';
-newButton.style.backgroundColor = "#007bff";
-newButton.style.color = "#fff";
-newButton.id="IOBAbuseButton";
-newButton.style.padding = "5px 10px";
-newButton.style.border = "none";
-newButton.style.borderRadius = "4px";
-newButton.style.cursor = "pointer";
-newButton.style.zIndex = "1000";
 
-// Aggiungi un gestore di eventi al pulsante
-newButton.addEventListener('click', () => {
-    const formattedInfo = extractAndFormatInfo();
-    if (formattedInfo) {
-    copyToClipboard(formattedInfo);
+// Crea il pulsante con stile Bootstrap
+function createCopyButton() {
+  const container = document.querySelector(".col-md-6 .well")
+  if (!container || document.getElementById("IOCAbuseButton")) return
+
+  const button = document.createElement("button")
+  button.id = "IOBAbuseButton"
+  button.textContent = "📋 Copia informazioni AbuseIPDB"
+
+  Object.assign(button.style, {
+    marginTop: "16px",
+    width: "100%",
+    padding: "10px 14px",
+    backgroundColor: "#0d6efd",
+    color: "#fff",
+    border: "1px solid rgb(51, 109, 196)",
+    borderRadius: "6px",
+    fontSize: "15px",
+    fontWeight: "600",
+    cursor: "pointer",
+  })
+
+  button.addEventListener("click", () => {
+    const info = extractAndFormatInfo()
+    if (info) {
+      navigator.clipboard
+        .writeText(info)
+        .then(() => showBootstrapToast("✔️ Copied to clipboard"))
+        .catch((err) => {
+          console.error("Clipboard error:", err)
+          showBootstrapToast("❌ Copy failed", "danger")
+        })
     } else {
-    alert('Errore: Impossibile estrarre le informazioni.');
+      showBootstrapToast("❌ No information found", "warning")
     }
-});
+  })
 
-// Aggiungi il pulsante al div target
-targetDiv.appendChild(newButton);
+  container.appendChild(button)
 }
 
+// Attesa dinamica del contenuto
+function waitForContent() {
+  const maxAttempts = 20
+  let attempts = 0
+
+  const interval = setInterval(() => {
+    const container = document.querySelector(".col-md-6 .well")
+    if (container) {
+      clearInterval(interval)
+      createCopyButton()
+    } else if (++attempts >= maxAttempts) {
+      clearInterval(interval)
+    }
+  }, 500)
+}
+
+waitForContent()

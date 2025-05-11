@@ -101,7 +101,7 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
             <Form.Label>📋 Inserisci gli IOC</Form.Label>
             <Form.Control
               as="textarea"
-              rows={6}
+              rows={15}
               placeholder="Incolla qui IP, domini, hash, email, URL..."
               value={textareaValue}
               onChange={onTextAreaChange}
@@ -176,6 +176,36 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
             >
               📘 Esporta Excel (.xlsx)
             </Button>
+
+            <Button
+              variant="outline-secondary"
+              onClick={() => {
+                const formatted = Object.entries(results)
+                  .filter(([_, result]) => {
+                    const content = parseAndFormatResults(result).trim()
+                    return content && content !== "-"
+                  })
+                  .map(([ioc, result]) => {
+                    const content = parseAndFormatResults(result).trim()
+                    return `=== ${ioc} ===\n\n${content}\n-------------------\n\n`
+                  })
+                  .join("\n\n");
+
+                if (formatted) {
+                  navigator.clipboard
+                    .writeText(formatted)
+                    .then(() => alert("IOC formattati copiati negli appunti!"))
+                    .catch(() => alert("Errore durante la copia negli appunti."));
+                } else {
+                  alert("Nessun risultato formattato disponibile da copiare.");
+                }
+              }}
+              disabled={Object.keys(results).length === 0}
+            >
+              📋 Copia IOC formattati
+            </Button>
+
+
 
           </div>
         </Col>

@@ -1,29 +1,6 @@
 /* src/sidepanel/sidepanel.css */
 @import url("../utility/config.css");
 
-/* Stili Globali */
-body.dark-mode {
-  background-color: var(--bs-dark) !important;
-  color: var(--bs-body-color) !important;
-}
-
-body.light-mode {
-  background-color: var(--bs-light) !important;
-  color: var(--bs-body-color) !important;
-}
-
-/* Stili per le textbox */
-.dark-input {
-  background-color: var(--input-bg-dark) !important;
-  color: var(--input-text-dark) !important;
-  border-color: var(--input-bg-dark) !important;
-}
-
-.light-input {
-  background-color: var(--input-bg-light) !important;
-  color: var(--input-text-light) !important;
-  border-color: var(--input-bg-light) !important;
-}
 
 .container{
   max-width: 1000px;

@@ -1,16 +1,6 @@
 /* src/sidepanel/sidepanel.css */
 @import url("../utility/config.css");
 
-/* Stili Globali */
-body.dark-mode {
-  background-color: var(--bs-dark) !important;
-  color: var(--bs-body-color) !important;
-}
-
-body.light-mode {
-  background-color: var(--bs-light) !important;
-  color: var(--bs-body-color) !important;
-}
 
 /* Stili del Container */
 .container {
@@ -22,61 +12,3 @@ body.light-mode {
   width: 90%;
 }
 
-/* Stili del TextArea */
-.text-area {
-  width: 100%;
-  height: 75vh;
-  padding: 8px auto;
-  font-size: var(--font-size-medium);
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  resize: none;
-  background-color: var(--background-light);
-  color: var(--text-primary-light);
-}
-
-.dark-mode .text-area {
-  border-color: var(--border-dark);
-  background-color: var(--background-dark);
-  color: var(--text-primary-dark);
-}
-
-/* Stili dei Pulsanti */
-.button {
-  width: 100%;
-  padding: 8px;
-  margin-top: 16px;
-  border: 1px solid var(--border-light); /* Aggiungi il bordo */
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: var(--font-size-medium);
-  font-family: var(--font-primary);
-}
-
-.primary-button {
-  background-color: var(--button-primary-light);
-  color: var(--button-text-light);
-}
-
-.dark-mode .primary-button {
-  background-color: var(--button-primary-dark);
-  border-color: var(--border-dark); /* Bordo per la dark mode */
-}
-
-.secondary-button {
-  background-color: var(--button-secondary-light);
-  color: var(--button-text-dark);
-}
-
-.dark-mode .secondary-button {
-  background-color: var(--button-secondary-dark);
-  color: var(--button-text-light);
-  border-color: var(--border-dark); /* Bordo per la dark mode */
-}
-
-/* Contenitore per i pulsanti Refang e Defang */
-.button-group {
-  display: flex;
-  gap: 8px;
-  margin-top: 16px;
-}
