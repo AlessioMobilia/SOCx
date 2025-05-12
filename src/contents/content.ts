@@ -155,7 +155,9 @@ async function handleSelection() {
     const button = createButton(ioc, async () => {
       try {
         const response = await getIOCInfo(ioc)
+        console.log("Dati IOC:", response)
         const data = response.results?.[Object.keys(response.results)[0]]
+        
         let info = ""
 
         if (type === "IP") {
@@ -251,6 +253,8 @@ setTimeout(() => repositionButtons(), 0)
 
 function getIOCInfo(ioc: string): Promise<any> {
   const selectedServices = [identifyIOC(ioc) === "IP" ? "AbuseIPDB" : "VirusTotal"];
+  console.log("Selected services:", selectedServices);
+  console.log("IOC:", ioc);
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
       { action: "checkBulkIOCs", iocList: [ioc], services: selectedServices },

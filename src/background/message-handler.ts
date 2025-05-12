@@ -3,55 +3,52 @@ import { servicesConfig } from "../utility/servicesConfig";
 import { checkVirusTotal, checkAbuseIPDB } from "../utility/api";
 import { defaultServices } from "../utility/defaultServices";
 
-export async function handleMessages(request, sender, sendResponse) {
-
-
+export function handleMessages(request, sender, sendResponse) {
   if (request.action === "checkBulkIOCs") {
     const { iocList, services } = request;
-    const results = await checkBulk(iocList, services);
-    sendResponse({ results });
+    checkBulk(iocList, services).then((results) => {
+      sendResponse({ results });
+    });
+    return true; // Necessario perché sendResponse è asincrono
+  }
+
+  if (request.action === "MagicIOCRequest") {
+    const ioc = extractIOCs(request.IOC)?.[0];
+    const type = identifyIOC(ioc);
+
+    if (!ioc || !type) {
+      showNotification("Errore", "IOC non valido.");
+      return;
+    }
+
+    saveIOC(type, ioc).then(() => {
+      chrome.storage.local.get(["selectedServices", "customServices"]).then((config) => {
+        const selected = config.selectedServices || defaultServices;
+        const customServices = config.customServices || [];
+
+        if (selected[type]) {
+          selected[type].forEach(service => {
+            const sConf = servicesConfig.services[service];
+            if (sConf?.supportedTypes.includes(type)) {
+              chrome.tabs.create({ url: sConf.url(type, ioc) });
+            }
+          });
+        }
+
+        const customForType = customServices.filter((s) => s.type === type);
+        customForType.forEach((service) => {
+          if (service.url.includes("{ioc}")) {
+            const finalUrl = service.url.replace("{ioc}", encodeURIComponent(ioc));
+            chrome.tabs.create({ url: finalUrl });
+          }
+        });
+      });
+    });
+
     return true;
   }
-
-if (request.action === "MagicIOCRequest") {
-  const ioc = extractIOCs(request.IOC)?.[0];
-  const type = identifyIOC(ioc);
-
-  if (!ioc || !type) {
-    showNotification("Errore", "IOC non valido.");
-    return;
-  }
-
-  await saveIOC(type, ioc);
-
-  const config = await chrome.storage.local.get(["selectedServices", "customServices"]);
-  const selected = config.selectedServices || defaultServices;
-  const customServices = config.customServices || [];
-
-  // Apri servizi predefiniti
-  if (selected[type]) {
-    selected[type].forEach(service => {
-      const sConf = servicesConfig.services[service];
-      if (sConf?.supportedTypes.includes(type)) {
-        chrome.tabs.create({ url: sConf.url(type, ioc) });
-      }
-    });
-  }
-
-  // Apri servizi personalizzati
-  const customForType = customServices.filter((s) => s.type === type);
-  customForType.forEach((service) => {
-    if (service.url.includes("{ioc}")) {
-      const finalUrl = service.url.replace("{ioc}", encodeURIComponent(ioc));
-      chrome.tabs.create({ url: finalUrl });
-    }
-  });
-
-  return true;
 }
 
-
-}
 
 async function checkBulk(iocList: string[], services: string[]) {
   const results = {};
