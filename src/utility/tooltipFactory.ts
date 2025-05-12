@@ -5,33 +5,36 @@ export const createTooltip = (text: string, button: HTMLButtonElement) => {
 
   let threatStatus = "unknown";
 
-  formatted = formatted.replace(/Punteggio di Abuso:\s*(\d+)\%/g, (match, val) => {
+  // Highlight "Abuse Score"
+  formatted = formatted.replace(/Abuse Score:\s*(\d+)\%/g, (match, val) => {
     const score = parseInt(val);
     const cssClass = score === 0 ? "ioc-benign" : "ioc-malicious";
-    threatStatus = score === 0 ? "benigno" : "malevolo";
+    threatStatus = score === 0 ? "benign" : "malicious";
     return `<span class="${cssClass}">${match}</span>`;
   });
 
-  formatted = formatted.replace(/Malevoli:\s*(\d+)/g, (match, val) => {
+  // Highlight "Malicious"
+  formatted = formatted.replace(/Malicious:\s*(\d+)/g, (match, val) => {
     const detections = parseInt(val);
     let cssClass = "ioc-unknown";
     if (detections > 5) {
       cssClass = "ioc-malicious";
-      threatStatus = "malevolo";
+      threatStatus = "malicious";
     } else if (detections > 0) {
       cssClass = "ioc-suspicious";
-      threatStatus = "sospetto";
+      threatStatus = "suspicious";
     } else {
       cssClass = "ioc-benign";
-      threatStatus = "benigno";
+      threatStatus = "benign";
     }
     return `<span class="${cssClass}">${match}</span>`;
   });
 
+  // Status badge HTML
   const statusBadge = {
-    malevolo: `<div class="ioc-badge ioc-badge--malicious">⚠️ IOC Malevolo</div>`,
-    benigno: `<div class="ioc-badge ioc-badge--benign">✅ IOC Non malevolo</div>`,
-    sospetto: `<div class="ioc-badge ioc-badge--suspicious">❓ IOC Sospetto</div>`,
+    malicious: `<div class="ioc-badge ioc-badge--malicious">⚠️ Malicious IOC</div>`,
+    benign: `<div class="ioc-badge ioc-badge--benign">✅ Non-malicious IOC</div>`,
+    suspicious: `<div class="ioc-badge ioc-badge--suspicious">❓ Suspicious IOC</div>`,
     unknown: ``
   }[threatStatus];
 

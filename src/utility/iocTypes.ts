@@ -1,9 +1,9 @@
 // src/utility/iocTypes.ts
 
-// Lista dei tipi di IOC supportati
+// List of supported IOC types
 export const supportedIOCTypes = [
   "IP",
-  "Dominio",
+  "Domain",
   "URL",
   "Hash",
   "Email",
@@ -11,12 +11,12 @@ export const supportedIOCTypes = [
   "MAC"
 ] as const
 
-// Tipo letterale per singolo IOC
+// Literal type for a single IOC
 export type IOCType = (typeof supportedIOCTypes)[number]
 
-// Struttura dei servizi personalizzati salvabili dall’utente
+// Structure of user-defined custom services
 export type CustomService = {
   type: IOCType
   name: string
-  url: string // Deve contenere {ioc}
+  url: string // Must include {ioc}
 }

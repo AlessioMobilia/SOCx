@@ -10,13 +10,13 @@ export const setupContextMenus = () => {
   const baseMenus = [
     { id: "MagicIOC", title: "MAGIC IOC" },
     { id: "AddToBulkCheck", title: "Bulk Check" },
-    { id: "CyberChef", title: "Apri in CyberChef" },
-    { id: "getIOC", title: "Estrai IOC" },
+    { id: "CyberChef", title: "Open in CyberChef" },
+    { id: "getIOC", title: "Extract IOC" },
     { id: "refangIOC", title: "Refang IOC", parentId: "getIOC" },
     { id: "defangIOC", title: "Defang IOC", parentId: "getIOC" },
-    { id: "CVE", title: "Estrai CVE" },
-    { id: "copyCVE", title: "Estrai le CVE", parentId: "CVE" },
-    { id: "copyCVECSV", title: "Estrai le CVE in formato CSV", parentId: "CVE" }
+    { id: "CVE", title: "Extract CVE" },
+    { id: "copyCVE", title: "Copy CVEs", parentId: "CVE" },
+    { id: "copyCVECSV", title: "Copy CVEs as CSV", parentId: "CVE" }
   ];
 
   baseMenus.forEach(item => {
@@ -29,7 +29,7 @@ export const setupContextMenus = () => {
   Object.entries(servicesConfig.availableServices).forEach(([type, services]) => {
     chrome.contextMenus.create({
       id: type,
-      title: `Verifica ${type}`,
+      title: `Check ${type}`,
       contexts: ["selection"]
     });
 

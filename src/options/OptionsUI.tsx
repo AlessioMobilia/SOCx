@@ -59,19 +59,19 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
       <Card.Body>
         {/* Header */}
         <div className="d-flex justify-content-between align-items-center mb-4">
-          <Card.Title className="mb-0">⚙️ Impostazioni Estensione</Card.Title>
+          <Card.Title className="mb-0">⚙️ Extension Settings</Card.Title>
           <Button
             variant={isDarkMode ? "light" : "dark"}
             size="sm"
             onClick={onDarkModeToggle}
-            title="Cambia Tema"
+            title="Toggle Theme"
           >
             {isDarkMode ? <MdLightMode /> : <MdDarkMode />}
           </Button>
         </div>
 
-        {/* API Key */}
-        <Card.Title>🔑 Chiavi API</Card.Title>
+        {/* API Keys */}
+        <Card.Title>🔑 API Keys</Card.Title>
         <Form>
           <Form.Group className="mb-3">
             <Form.Label>VirusTotal</Form.Label>
@@ -80,7 +80,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                 type={inputType}
                 value={virusTotalApiKey}
                 onChange={(e) => onVirusTotalApiKeyChange(e.target.value)}
-                placeholder="Inserisci la chiave API di VirusTotal"
+                placeholder="Enter your VirusTotal API key"
                 className={themeClass}
               />
               <Button
@@ -99,7 +99,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                 type={inputType}
                 value={abuseIPDBApiKey}
                 onChange={(e) => onAbuseIPDBApiKeyChange(e.target.value)}
-                placeholder="Inserisci la chiave API di AbuseIPDB"
+                placeholder="Enter your AbuseIPDB API key"
                 className={themeClass}
               />
               <Button
@@ -112,18 +112,18 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           </Form.Group>
 
           <Button variant="outline-primary" onClick={onTestKeys}>
-            🧪 Testa Chiavi API
+            🧪 Test API Keys
           </Button>
         </Form>
 
-        {/* Servizi Standard */}
+        {/* Standard Services */}
         <hr />
-        <Card.Title>🔍 Servizi abilitati per "MAGIC IOC"</Card.Title>
+        <Card.Title>🔍 Enabled Services for "MAGIC IOC"</Card.Title>
         <Table striped bordered hover responsive variant={tableVariant}>
           <thead>
             <tr>
-              <th>Tipo IOC</th>
-              <th>Motori di Ricerca</th>
+              <th>IOC Type</th>
+              <th>Search Engines</th>
             </tr>
           </thead>
           <tbody>
@@ -148,12 +148,12 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           </tbody>
         </Table>
 
-        {/* Aggiungi Servizi Personalizzati */}
+        {/* Add Custom Service */}
         <hr />
-        <Card.Title>➕ Aggiungi servizio personalizzato</Card.Title>
+        <Card.Title>➕ Add Custom Service</Card.Title>
         <Form className="mb-3">
           <Form.Group className="mb-2">
-            <Form.Label>Tipo IOC</Form.Label>
+            <Form.Label>IOC Type</Form.Label>
             <Form.Select value={newType} onChange={(e) => setNewType(e.target.value as IOCType)}>
               {supportedIOCTypes.map((type) => (
                 <option key={type} value={type}>{type}</option>
@@ -162,17 +162,17 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           </Form.Group>
 
           <Form.Group className="mb-2">
-            <Form.Label>Nome servizio</Form.Label>
+            <Form.Label>Service Name</Form.Label>
             <Form.Control
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Es: Shodan"
+              placeholder="e.g., Shodan"
             />
           </Form.Group>
 
           <Form.Group className="mb-2">
-            <Form.Label>URL con <code>{'{ioc}'}</code></Form.Label>
+            <Form.Label>URL with <code>{'{ioc}'}</code></Form.Label>
             <Form.Control
               type="text"
               value={newURL}
@@ -189,23 +189,23 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                 setNewName("")
                 setNewURL("")
               } else {
-                alert("Inserisci un nome valido e un URL che contenga {ioc}")
+                alert("Enter a valid name and a URL containing {ioc}")
               }
             }}
           >
-            ➕ Aggiungi servizio
+            ➕ Add Service
           </Button>
         </Form>
 
-        {/* Lista Servizi Personalizzati */}
-        <Card.Title>⚙️ Servizi personalizzati configurati</Card.Title>
+        {/* Custom Service List */}
+        <Card.Title>⚙️ Configured Custom Services</Card.Title>
         <Table striped bordered hover responsive variant={tableVariant}>
           <thead>
             <tr>
-              <th>Tipo</th>
-              <th>Nome</th>
+              <th>Type</th>
+              <th>Name</th>
               <th>URL</th>
-              <th>Azioni</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -220,7 +220,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                     variant="danger"
                     onClick={() => onRemoveCustomService(index)}
                   >
-                    Rimuovi
+                    Remove
                   </Button>
                 </td>
               </tr>

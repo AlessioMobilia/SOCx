@@ -1,6 +1,9 @@
-import { identifyIOC} from "../utility/utils";
+import { identifyIOC } from "../utility/utils";
 
-
+/**
+ * Creates a contextual button for a specific IOC type.
+ * It displays either the VirusTotal or AbuseIPDB icon depending on the type.
+ */
 export function createButton(ioc: string, onClick: () => void): HTMLButtonElement {
   const button = document.createElement("button");
   const type = identifyIOC(ioc);
@@ -21,6 +24,10 @@ export function createButton(ioc: string, onClick: () => void): HTMLButtonElemen
   return button;
 }
 
+/**
+ * Creates the "Magic" IOC button that triggers the full analysis flow.
+ * It uses a generic extension icon and a yellow background.
+ */
 export function createMagicButton(ioc: string, onClick: () => void): HTMLButtonElement {
   const button = document.createElement("button");
   button.style.background = `url(${chrome.runtime.getURL("/assets/icon.png")})`;

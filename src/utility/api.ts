@@ -1,20 +1,20 @@
 // src/utility/api.ts
 
 export const checkVirusTotal = async (ioc: string, type: string): Promise<any> => {
-  const supportedTypes = ["ip", "dominio", "url", "hash"];
+  const supportedTypes = ["ip", "domain", "url", "hash"];
   if (!supportedTypes.includes(type.toLowerCase())) {
-    throw new Error(`Tipo di IOC non supportato per VirusTotal: ${type}`);
+    throw new Error(`Unsupported IOC type for VirusTotal: ${type}`);
   }
   const apiKey = await chrome.storage.local.get(["virusTotalApiKey"]);
   if (!apiKey.virusTotalApiKey) {
-    throw new Error("API key di VirusTotal non trovata.");
+    throw new Error("VirusTotal API key not found.");
   }
   let url: string;
   switch (type.toLowerCase()) {
     case "ip":
       url = `https://www.virustotal.com/api/v3/ip_addresses/${encodeURIComponent(ioc)}`;
       break;
-    case "dominio":
+    case "domain":
       url = `https://www.virustotal.com/api/v3/domains/${encodeURIComponent(ioc)}`;
       break;
     case "url":
@@ -24,14 +24,12 @@ export const checkVirusTotal = async (ioc: string, type: string): Promise<any> =
       url = `https://www.virustotal.com/api/v3/files/${encodeURIComponent(ioc)}`;
       break;
     default:
-      throw new Error(`Tipo di IOC non supportato per VirusTotal: ${type}`);
+      throw new Error(`Unsupported IOC type for VirusTotal: ${type}`);
   }
   return fetchAPIVT(url, apiKey.virusTotalApiKey);
 };
 
-
-
-// Funzione per eseguire richieste API a VirusTotal
+// Function to make API requests to VirusTotal
 export const fetchAPIVT = async (url: string, apiKey: string): Promise<any | null> => {
   const response = await fetch(url, {
     method: "GET",
@@ -42,13 +40,13 @@ export const fetchAPIVT = async (url: string, apiKey: string): Promise<any | nul
   });
 
   if (!response.ok) {
-    // Gestione 404 specifica: hash non trovato su VirusTotal
+    // Specific 404 handling: hash not found on VirusTotal
     if (response.status === 404) {
-      console.warn("Hash non trovato su VirusTotal.");
+      console.warn("Hash not found on VirusTotal.");
       return null;
     }
 
-    // Altri errori: lancia eccezione con dettagli
+    // Other errors: throw an exception with details
     let errorDetails = "";
     try {
       const errorJson = await response.json();
@@ -58,7 +56,7 @@ export const fetchAPIVT = async (url: string, apiKey: string): Promise<any | nul
     }
 
     throw new Error(
-      `Errore API (${response.status}): ${response.statusText}\nDettagli:\n${errorDetails}`
+      `API Error (${response.status}): ${response.statusText}\nDetails:\n${errorDetails}`
     );
   }
 
@@ -66,9 +64,7 @@ export const fetchAPIVT = async (url: string, apiKey: string): Promise<any | nul
   return response.json();
 };
 
-
-
-// Funzione per eseguire richieste API a AbuseIPDB
+// Function to make API requests to AbuseIPDB
 export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> => {
   try {
     const response = await fetch(url, {
@@ -80,51 +76,44 @@ export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> =
     });
 
     if (!response.ok) {
-      throw new Error(`Errore nella richiesta API: ${response.statusText}`);
+      throw new Error(`API Request Error: ${response.statusText}`);
     }
 
-    // Incrementa il contatore giornaliero per AbuseIPDB
+    // Increment the daily counter for AbuseIPDB
     await incrementDailyCounter("Abuse");
 
     return response.json();
   } catch (error) {
-    console.error("Errore durante la richiesta API:", error);
+    console.error("Error during API request:", error);
     throw error;
   }
 };
 
-
-
-  // Funzione per verificare un IP su AbuseIPDB
+// Function to check an IP on AbuseIPDB
 export const checkAbuseIPDB = async (ioc: string): Promise<any> => {
-  // Ottieni la chiave API da chrome.storage.local
+  // Get the API key from chrome.storage.local
   const apiKey = await chrome.storage.local.get(["abuseIPDBApiKey"]);
-  
-  // Verifica se la chiave API è stata trovata
+
+  // Check if the API key is found
   if (!apiKey.abuseIPDBApiKey) {
-    throw new Error("Chiave API di AbuseIPDB non trovata.");
+    throw new Error("AbuseIPDB API key not found.");
   }
 
-  // Costruisci l'URL per la richiesta API
+  // Build the URL for the API request
   const url = `https://api.abuseipdb.com/api/v2/check?ipAddress=${ioc}`;
-  console.log("URL della richiesta:", url);
+  console.log("Request URL:", url);
 
-  // Esegui la richiesta API utilizzando fetchAPI
+  // Execute the API request using fetchAPI
   return fetchAPIAbuse(url, apiKey.abuseIPDBApiKey);
 };
 
-
-
-
-
-
-// Ottieni la data corrente in formato YYYY-MM-DD
+// Get the current date in YYYY-MM-DD format
 const getTodayDate = (): string => {
   const today = new Date();
   return today.toISOString().split("T")[0];
 };
 
-// Funzione per incrementare il contatore giornaliero
+// Function to increment the daily counter
 const incrementDailyCounter = async (apiName: string) => {
   const today = getTodayDate();
   const key = `${apiName}_${today}`;
@@ -135,7 +124,7 @@ const incrementDailyCounter = async (apiName: string) => {
   await chrome.storage.local.set({ [key]: currentCount + 1 });
 };
 
-// Funzione per ottenere i contatori giornalieri
+// Function to get the daily counters
 const getDailyCounters = async (): Promise<{ [key: string]: number }> => {
   const today = getTodayDate();
   const keys = [`VT_${today}`, `Abuse_${today}`];
@@ -143,5 +132,3 @@ const getDailyCounters = async (): Promise<{ [key: string]: number }> => {
   const counters = await chrome.storage.local.get(keys);
   return counters;
 };
-
-  

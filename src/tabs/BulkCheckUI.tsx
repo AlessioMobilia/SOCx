@@ -28,7 +28,6 @@ interface BulkCheckUIProps {
   onExport: (format: "csv" | "xlsx") => void
 }
 
-
 const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   textareaValue,
   onTextAreaChange,
@@ -62,47 +61,45 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
 
   const getRiskLevel = (result: any): "low" | "medium" | "high" => {
-  const vt = result?.VirusTotal;
-  const abuse = result?.AbuseIPDB;
+    const vt = result?.VirusTotal;
+    const abuse = result?.AbuseIPDB;
 
-  let vtMalicious = vt?.data?.attributes?.last_analysis_stats?.malicious || 0;
-  let vtSuspicious = vt?.data?.attributes?.last_analysis_stats?.suspicious || 0;
-  let abuseScore = abuse?.data?.abuseConfidenceScore || 0;
+    let vtMalicious = vt?.data?.attributes?.last_analysis_stats?.malicious || 0;
+    let vtSuspicious = vt?.data?.attributes?.last_analysis_stats?.suspicious || 0;
+    let abuseScore = abuse?.data?.abuseConfidenceScore || 0;
 
-  const totalScore = vtMalicious + vtSuspicious + abuseScore;
+    const totalScore = vtMalicious + vtSuspicious + abuseScore;
 
-  if (totalScore >= 40) return "high";
-  if (totalScore >= 10) return "medium";
-  return "low";
-};
+    if (totalScore >= 40) return "high";
+    if (totalScore >= 10) return "medium";
+    return "low";
+  };
 
-const getRiskClass = (risk: "low" | "medium" | "high") => {
-  switch (risk) {
-    case "low":
-      return "border-success bg-success-subtle text-dark";
-    case "medium":
-      return "border-warning bg-warning-subtle text-dark";
-    case "high":
-      return "border-danger bg-danger-subtle text-dark";
-    default:
-      return "";
-  }
-};
-
-
+  const getRiskClass = (risk: "low" | "medium" | "high") => {
+    switch (risk) {
+      case "low":
+        return "border-success bg-success-subtle text-dark";
+      case "medium":
+        return "border-warning bg-warning-subtle text-dark";
+      case "high":
+        return "border-danger bg-danger-subtle text-dark";
+      default:
+        return "";
+    }
+  };
 
   return (
     <Container fluid className={`p-4 min-vh-100 ${themeClass}`}>
-      <h1 className="mb-4">🔍 Controllo Bulk IOC</h1>
+      <h1 className="mb-4">🔍 Bulk IOC Check</h1>
 
       <Row className="mb-3">
         <Col md={6}>
           <Form.Group>
-            <Form.Label>📋 Inserisci gli IOC</Form.Label>
+            <Form.Label>📋 Enter IOCs</Form.Label>
             <Form.Control
               as="textarea"
               rows={15}
-              placeholder="Incolla qui IP, domini, hash, email, URL..."
+              placeholder="Paste IPs, domains, hashes, emails, URLs..."
               value={textareaValue}
               onChange={onTextAreaChange}
               className={themeClass}
@@ -111,7 +108,7 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
         </Col>
         <Col md={6}>
           <Form.Group>
-            <Form.Label>📁 Carica File .txt</Form.Label>
+            <Form.Label>📁 Upload .txt File</Form.Label>
             <Form.Control
               type="file"
               accept=".txt"
@@ -121,7 +118,7 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
           </Form.Group>
 
           <Form.Group className="mt-4">
-            <Form.Label>🛠️ Seleziona Servizi</Form.Label>
+            <Form.Label>🛠️ Select Services</Form.Label>
             <div className="d-flex gap-3">
               {["VirusTotal", "AbuseIPDB"].map((service) => (
                 <Form.Check
@@ -153,28 +150,28 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
                     role="status"
                     aria-hidden="true"
                   />
-                  <span className="ms-2">Analisi in corso...</span>
+                  <span className="ms-2">Analysis in progress...</span>
                 </>
               ) : (
-                "🔍 Avvia Controllo"
+                "🔍 Start Check"
               )}
             </Button>
             <Button variant="outline-danger" onClick={onClearList}>
-              🗑️ Cancella Lista
+              🗑️ Clear List
             </Button>
             <Button
               variant="outline-primary"
               onClick={() => onExport("csv")}
               disabled={Object.keys(results).length === 0}
             >
-              📤 Esporta CSV
+              📤 Export CSV
             </Button>
             <Button
               variant="outline-success"
               onClick={() => onExport("xlsx")}
               disabled={Object.keys(results).length === 0}
             >
-              📘 Esporta Excel (.xlsx)
+              📘 Export Excel (.xlsx)
             </Button>
 
             <Button
@@ -194,19 +191,16 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
                 if (formatted) {
                   navigator.clipboard
                     .writeText(formatted)
-                    .then(() => alert("IOC formattati copiati negli appunti!"))
-                    .catch(() => alert("Errore durante la copia negli appunti."));
+                    .then(() => alert("Formatted IOCs copied to clipboard!"))
+                    .catch(() => alert("Error copying to clipboard."));
                 } else {
-                  alert("Nessun risultato formattato disponibile da copiare.");
+                  alert("No formatted results available to copy.");
                 }
               }}
               disabled={Object.keys(results).length === 0}
             >
-              📋 Copia IOC formattati
+              📋 Copy Formatted IOCs
             </Button>
-
-
-
           </div>
         </Col>
       </Row>
@@ -224,7 +218,7 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
         <Col>
           <Card className={themeClass}>
             <Card.Body>
-              <h5>📊 Contatori Giornalieri</h5>
+              <h5>📊 Daily Counters</h5>
               <p>
                 VirusTotal: <Badge bg="info">{vtCount}</Badge>
               </p>
@@ -238,7 +232,7 @@ const getRiskClass = (risk: "low" | "medium" | "high") => {
 
       {results && Object.keys(results).length > 0 && (
         <>
-          <h2>📦 Risultati</h2>
+          <h2>📦 Results</h2>
           <Row>
             {Object.entries(results).map(([ioc, result]) => {
               const riskLevel = getRiskLevel(result);

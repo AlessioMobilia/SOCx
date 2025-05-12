@@ -26,17 +26,17 @@ const SidePanelUI: React.FC<SidePanelUIProps> = ({
 
   return (
     <Container fluid className={`p-3 ${themeClass}`}>
-      <h6 className="text-center mb-3">📝 Blocco Note IOC</h6>
+      <h6 className="text-center mb-3">📝 IOC Notepad</h6>
 
       <Form.Group className="mb-3">
         <Form.Control
           as="textarea"
           value={note}
           onChange={onTextChange}
-          placeholder="Scrivi qui..."
+          placeholder="Write here..."
           rows={16}
           className={`form-control ${themeClass}`}
-          aria-label="Textarea per note"
+          aria-label="Textarea for notes"
         />
       </Form.Group>
 
@@ -51,10 +51,10 @@ const SidePanelUI: React.FC<SidePanelUIProps> = ({
 
       <div className="d-grid gap-2">
         <Button variant="outline-success" size="sm" onClick={onSaveTxt}>
-          <MdDownload className="me-1" /> Salva come TXT
+          <MdDownload className="me-1" /> Save as TXT
         </Button>
         <Button variant="outline-danger" size="sm" onClick={onClearNote}>
-          <MdDelete className="me-1" /> Elimina tutto
+          <MdDelete className="me-1" /> Clear All
         </Button>
       </div>
     </Container>

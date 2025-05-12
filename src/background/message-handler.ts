@@ -9,7 +9,7 @@ export function handleMessages(request, sender, sendResponse) {
     checkBulk(iocList, services).then((results) => {
       sendResponse({ results });
     });
-    return true; // Necessario perché sendResponse è asincrono
+    return true; // Required because sendResponse is async
   }
 
   if (request.action === "MagicIOCRequest") {
@@ -17,7 +17,7 @@ export function handleMessages(request, sender, sendResponse) {
     const type = identifyIOC(ioc);
 
     if (!ioc || !type) {
-      showNotification("Errore", "IOC non valido.");
+      showNotification("Error", "Invalid IOC.");
       return;
     }
 
@@ -49,18 +49,17 @@ export function handleMessages(request, sender, sendResponse) {
   }
 }
 
-
 async function checkBulk(iocList: string[], services: string[]) {
   const results = {};
   const keys = await chrome.storage.local.get(["virusTotalApiKey", "abuseIPDBApiKey"]);
 
   for (const service of services) {
     if (service === "VirusTotal" && !keys.virusTotalApiKey) {
-      showNotification("Errore", "Chiave API VirusTotal mancante.");
+      showNotification("Error", "Missing VirusTotal API key.");
       return {};
     }
     if (service === "AbuseIPDB" && !keys.abuseIPDBApiKey) {
-      showNotification("Errore", "Chiave API AbuseIPDB mancante.");
+      showNotification("Error", "Missing AbuseIPDB API key.");
       return {};
     }
   }
@@ -68,13 +67,13 @@ async function checkBulk(iocList: string[], services: string[]) {
   for (const ioc of iocList) {
     const type = identifyIOC(ioc);
     interface IOCServiceResult {
-        VirusTotal?: any
-        AbuseIPDB?: any
-        [key: string]: any
+      VirusTotal?: any;
+      AbuseIPDB?: any;
+      [key: string]: any;
     }
 
     const result: IOCServiceResult = {};
-    
+
     if (type) {
       if (services.includes("VirusTotal") && type !== "MAC") {
         result.VirusTotal = await checkVirusTotal(ioc, type);
@@ -88,5 +87,3 @@ async function checkBulk(iocList: string[], services: string[]) {
 
   return results;
 }
-
-

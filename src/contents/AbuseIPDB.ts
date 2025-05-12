@@ -7,13 +7,13 @@ export const config: PlasmoCSConfig = {
   all_frames: true
 }
 
-// Estrai e formatta le informazioni
+// Extract and format information from the page
 function extractAndFormatInfo(): string | null {
   const container = document.querySelector(".col-md-6 .well");
   if (!container) return null;
 
   const getText = (selector: string): string =>
-    container.querySelector(selector)?.textContent?.trim() || "N/D";
+    container.querySelector(selector)?.textContent?.trim() || "N/A";
 
   const ip = getText("h3 > b");
   const reportCount = getText("p > b");
@@ -28,19 +28,19 @@ function extractAndFormatInfo(): string | null {
     if (th && td) tableInfo[th] = td;
   });
 
-  const isp = tableInfo["ISP"] || "N/D";
-  const usage = tableInfo["Usage Type"] || "N/D";
-  const asn = tableInfo["ASN"] || "N/D";
-  const hostname = tableInfo["Hostname(s)"] || "N/D";
-  const domain = tableInfo["Domain Name"] || "N/D";
-  const country = tableInfo["Country"] || "N/D";
-  const city = tableInfo["City"] || "N/D";
+  const isp = tableInfo["ISP"] || "N/A";
+  const usage = tableInfo["Usage Type"] || "N/A";
+  const asn = tableInfo["ASN"] || "N/A";
+  const hostname = tableInfo["Hostname(s)"] || "N/A";
+  const domain = tableInfo["Domain Name"] || "N/A";
+  const country = tableInfo["Country"] || "N/A";
+  const city = tableInfo["City"] || "N/A";
 
   let extraText = container.querySelector("div[style*='display: flex'] p")?.textContent?.trim() ?? "";
-  extraText = extraText.replace(/\s+/g, " ").trim(); // rimuove spazi doppi e newline inutili
+  extraText = extraText.replace(/\s+/g, " ").trim(); // clean up extra whitespace and newlines
 
   return `
-Informazioni IP (AbuseIPDB):
+IP Information (AbuseIPDB):
 ${extraText ? `${extraText}\n\n` : ""}IP:               ${ip}
 Reports:          ${reportCount}
 Abuse Confidence: ${confidence}
@@ -53,16 +53,14 @@ Country:          ${country}
 City:             ${city}`.trim();
 }
 
-
-
-// Crea il pulsante con stile Bootstrap
+// Create the Bootstrap-styled copy button
 function createCopyButton() {
   const container = document.querySelector(".col-md-6 .well")
   if (!container || document.getElementById("IOCAbuseButton")) return
 
   const button = document.createElement("button")
-  button.id = "IOBAbuseButton"
-  button.textContent = "📋 Copia informazioni AbuseIPDB"
+  button.id = "IOCAbuseButton"
+  button.textContent = "📋 Copy AbuseIPDB Info"
 
   Object.assign(button.style, {
     marginTop: "16px",
@@ -85,7 +83,7 @@ function createCopyButton() {
         .then(() => showBootstrapToast("✔️ Copied to clipboard"))
         .catch((err) => {
           console.error("Clipboard error:", err)
-          showBootstrapToast("❌ Copy failed", "danger")
+          showBootstrapToast("❌ Failed to copy", "danger")
         })
     } else {
       showBootstrapToast("❌ No information found", "warning")
@@ -95,7 +93,7 @@ function createCopyButton() {
   container.appendChild(button)
 }
 
-// Attesa dinamica del contenuto
+// Wait for content to dynamically load
 function waitForContent() {
   const maxAttempts = 20
   let attempts = 0

@@ -7,13 +7,13 @@ import { defaultServices } from "../utility/defaultServices";
 
 export async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab: chrome.tabs.Tab) {
   const selection = info.selectionText?.trim();
-  if (!selection) return showNotification("Errore", "Nessun testo selezionato.");
+  if (!selection) return showNotification("Error", "No text selected.");
 
   const iocList = extractIOCs(selection);
   const ioc = iocList?.[0];
   const type = identifyIOC(ioc);
 
-   const copyOps = {
+  const copyOps = {
     "refangIOC": () => copyToClipboard(iocList.map(refang).join("\n"), tab.id),
     "defangIOC": () => copyToClipboard(iocList.map(defang).join("\n"), tab.id),
     "copyCVE": () => copyToClipboard(formatCVEs(selection, false), tab.id),
@@ -23,8 +23,8 @@ export async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab
   console.log("Menu clicked:", info.menuItemId, selection, tab.id);
   if (info.menuItemId in copyOps) return copyOps[info.menuItemId]();
 
-  if (!ioc || !type) return showNotification("Errore", "IOC non valido.");
-  if (type === "IP" && isPrivateIP(ioc)) return showNotification("Privato", "IP privato, nessuna analisi.");
+  if (!ioc || !type) return showNotification("Error", "Invalid IOC.");
+  if (type === "IP" && isPrivateIP(ioc)) return showNotification("Private", "Private IP, skipping analysis.");
 
   if (info.menuItemId === "CyberChef") {
     const base64 = btoa(unescape(encodeURIComponent(selection))).replaceAll("=", "");
@@ -45,7 +45,7 @@ export async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab
     const settings = await chrome.storage.local.get("selectedServices");
     const selected = settings.selectedServices || defaultServices;
 
-    if (!selected[type]) return showNotification("Errore", "Nessun servizio selezionato.");
+    if (!selected[type]) return showNotification("Error", "No service selected.");
 
     selected[type].forEach(service => {
       const config = servicesConfig.services[service];
@@ -62,6 +62,6 @@ export async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab
   if (config?.supportedTypes.includes(type)) {
     chrome.tabs.create({ url: config.url(type, ioc) });
   } else {
-    showNotification("Errore", "Servizio o tipo non valido.");
+    showNotification("Error", "Invalid service or type.");
   }
 }

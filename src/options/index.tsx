@@ -16,7 +16,7 @@ const Options = () => {
   const [customServices, setCustomServices] = useState<CustomService[]>([])
   const [isDarkMode, setIsDarkMode] = useState(true)
 
-  // Caricamento iniziale da storage
+  // Initial loading from storage
   useEffect(() => {
     chrome.storage.local.get(
       ["virusTotalApiKey", "abuseIPDBApiKey", "selectedServices", "isDarkMode", "customServices"],
@@ -30,7 +30,7 @@ const Options = () => {
     )
   }, [])
 
-  // Salvataggio automatico
+  // Auto-saving
   useEffect(() => {
     chrome.storage.local.set({
       virusTotalApiKey,
@@ -41,12 +41,12 @@ const Options = () => {
     })
   }, [virusTotalApiKey, abuseIPDBApiKey, selectedServices, customServices, isDarkMode])
 
-  // Tema
+  // Theme
   useEffect(() => {
     document.body.className = isDarkMode ? "dark-mode" : "light-mode"
   }, [isDarkMode])
 
-  // Cambiamento selezione servizi standard
+  // Standard service selection change
   const handleServiceChange = (type: string, service: string) => {
     const updated = { ...selectedServices }
     if (updated[type]?.includes(service)) {
@@ -57,12 +57,12 @@ const Options = () => {
     setSelectedServices(updated)
   }
 
-  // Aggiungi servizio personalizzato
+  // Add custom service
   const handleAddCustomService = (newService: CustomService) => {
     setCustomServices((prev) => [...prev, newService])
   }
 
-  // Rimuovi servizio personalizzato
+  // Remove custom service
   const handleRemoveCustomService = (index: number) => {
     setCustomServices((prev) => prev.filter((_, i) => i !== index))
   }
@@ -79,10 +79,10 @@ const Options = () => {
       try {
         const res = await fetch(url, { headers })
         results.push(
-          `✅ ${label}: ${res.ok ? "OK" : `Errore (${res.status})`}`
+          `✅ ${label}: ${res.ok ? "OK" : `Error (${res.status})`}`
         )
       } catch (err) {
-        results.push(`❌ ${label}: Errore di rete`)
+        results.push(`❌ ${label}: Network error`)
       }
     }
 
@@ -91,7 +91,7 @@ const Options = () => {
         "x-apikey": virusTotalApiKey
       })
     } else {
-      results.push("⚠️ VirusTotal: Chiave non inserita")
+      results.push("⚠️ VirusTotal: Key not entered")
     }
 
     if (abuseIPDBApiKey) {
@@ -100,7 +100,7 @@ const Options = () => {
         Key: abuseIPDBApiKey
       })
     } else {
-      results.push("⚠️ AbuseIPDB: Chiave non inserita")
+      results.push("⚠️ AbuseIPDB: Key not entered")
     }
 
     alert(results.join("\n"))
@@ -126,7 +126,7 @@ const Options = () => {
 
 export default Options
 
-// Monta React
+// Mount React
 const root = document.getElementById("root")
 if (root) {
   createRoot(root).render(<Options />)

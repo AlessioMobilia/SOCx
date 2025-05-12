@@ -24,9 +24,9 @@ export const isAlreadyDefanged = (text: string): boolean => {
 };
 
 
-// Logica per identificare il tipo di IOC
+// Logic to identify the type of IOC
 export const identifyIOC = (text: string): string | null => {
-  // Regex per validare IP, hash, dominio, URL, email, MAC address e ASN
+  // Regex to validate IP, hash, domain, URL, email, MAC address, and ASN
   const regexIPv6 = /(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::(?:ffff(?::0{1,4}){0,1}:){0,1}(?:[0-9]{1,3}\.){3}[0-9]{1,3}|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:[0-9]{1,3}\.){3}[0-9]{1,3}/g;
   const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
   const hashRegex = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/;
@@ -36,44 +36,45 @@ export const identifyIOC = (text: string): string | null => {
   const macAddressRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
   const asnRegex = /^AS\d{1,5}(?:\.\d{1,5})?$/i;
 
-  // Controlla se l'input è un indirizzo MAC
+  // Check if the input is a MAC address
   if (macAddressRegex.test(text)) {
     return "MAC";
   }
 
-  // Controlla se l'input è un ASN
+  // Check if the input is an ASN
   if (asnRegex.test(text)) {
     return "ASN";
   }
 
-  // Controlla se l'input è un IP (IPv4 o IPv6)
+  // Check if the input is an IP (IPv4 or IPv6)
   if (ipRegex.test(text) || regexIPv6.test(text)) {
     if (isPrivateIP(text)) {
-      showNotification("Errore", text + " è un IP Privato");
+      showNotification("Error", text + " is a Private IP");
       return "Private IP";
     } else {
       return "IP";
     }
   }
 
-  // Controlla se l'input è un hash
+  // Check if the input is a hash
   if (hashRegex.test(text)) return "Hash";
 
-  // Controlla se l'input è un dominio
-  if (domainRegex.test(text)) return "Dominio";
+  // Check if the input is a domain
+  if (domainRegex.test(text)) return "Domain";
 
-  // Controlla se l'input è un URL
+  // Check if the input is a URL
   if (urlRegex.test(text)) return "URL";
 
-  // Controlla se l'input è un'email
+  // Check if the input is an email
   if (emailRegex.test(text)) return "Email";
 
-  // Se non corrisponde a nessun IoC, restituisci null
+  // If it doesn't match any IoC, return null
   return null;
 };
 
 
-// Verifica IP privato
+
+// Check if IP is private
 export const isPrivateIP = (ip: string): boolean => {
   // Controlla se è un IPv4
   const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(ip);
@@ -125,29 +126,30 @@ export const showNotification = (title: string, message: string, type: "basic" =
 
 export const saveIOC = async (type: string, text: string): Promise<boolean> => {
   try {
-    const result = await chrome.storage.local.get(["iocHistory"]); // Usa chrome.storage.local
+    const result = await chrome.storage.local.get(["iocHistory"]); // Use chrome.storage.local
     let iocHistory = result.iocHistory || [];
-    // Controlla se l'IOC è già presente
+    // Check if the IOC is already present
     const isDuplicate = iocHistory.some(
       (ioc) => ioc.text === text && ioc.type === type
     );
     if (!isDuplicate) {
-      // Aggiungi il nuovo IOC all'inizio dell'array
+      // Add the new IOC at the beginning of the array
       iocHistory.unshift({ type, text, timestamp: new Date().toISOString() });
-      // Mantieni solo gli ultimi 20 IOC
+      // Keep only the latest 20 IOCs
       if (iocHistory.length > 20) {
         iocHistory = iocHistory.slice(0, 20);
       }
-      // Salva lo storico aggiornato
-      await chrome.storage.local.set({ iocHistory }); // Usa chrome.storage.local
+      // Save the updated history
+      await chrome.storage.local.set({ iocHistory }); // Use chrome.storage.local
       return true;
     } else {
-      return true; // L'IOC è già presente, ma consideriamo l'operazione comunque valida
+      return true; // The IOC is already present, but we consider the operation valid
     }
   } catch (error) {
     return false;
   }
 };
+
 
 
 
@@ -158,9 +160,9 @@ export const copyToClipboard = (text: string, tabId?: number): void => {
       { action: "copyToClipboard", text },
       (response) => {
         if (response?.success) {
-          showNotification("Fatto", "IOC copiati nella clipboard")
+          showNotification("Done", "IOC copied to clipboard")
         } else if (response?.error) {
-          console.error("Errore dal content script:", response.error)
+          console.error("Error from content script:", response.error)
         }
       }
     )
@@ -174,11 +176,12 @@ export const copyToClipboard = (text: string, tabId?: number): void => {
       if (activeTab?.id !== undefined) {
         sendClipboardMessage(activeTab.id)
       } else {
-        console.error("Nessun tab attivo disponibile per inviare il messaggio")
+        console.error("No active tab available to send the message")
       }
     })
   }
 }
+
 
 
 
@@ -202,18 +205,17 @@ export const extractIOCs = (text: string, refanged: boolean = true): string[] =>
     'gi'
   );
 
-  // Trova tutte le corrispondenze con la regex combinata
+  // Find all matches with the combined regex
   const matches = text.match(combinedRegex);
 
-
-  // Mappa gli IOC trovati e applica il refanging
-  if (refanged && matches!=null) {
+  // Map the found IOCs and apply refanging
+  if (refanged && matches != null) {
     return matches
-      .map((ioc) => refang(ioc).trim()) // Applica il refanging e rimuove spazi
-      .filter(Boolean); // Filtra eventuali valori vuoti
-  } else if (matches!=null) {
+      .map((ioc) => refang(ioc).trim()) // Apply refanging and remove spaces
+      .filter(Boolean); // Filter out any empty values
+  } else if (matches != null) {
     return matches.filter(Boolean);
-  }else{
+  } else {
     return null;
   }
 };
@@ -221,13 +223,10 @@ export const extractIOCs = (text: string, refanged: boolean = true): string[] =>
 
 
 
-//----------------
-
-
 
 
 /**
-* Funzione principale per formattare i dati combinati di AbuseIPDB e VirusTotal.
+* Main function to format combined AbuseIPDB and VirusTotal data.
 * @param data Dati combinati.
 * @returns Stringa formattata.
 */
@@ -261,16 +260,17 @@ export const formatAbuseIPDBData = (abuseData: any): string => {
   const d = abuseData?.data;
   if (!d) return "";
 
-  return formatSection("Informazioni IP (AbuseIPDB)", {
+  return formatSection("IP Information (AbuseIPDB)", {
     "IP": d.ipAddress,
-    "Punteggio di Abuso": `${d.abuseConfidenceScore}%`,
-    "Segnalazioni Totali": d.totalReports,
+    "Abuse Score": `${d.abuseConfidenceScore}%`,
+    "Total Reports": d.totalReports,
     "ISP": d.isp,
-    "Paese": d.countryCode,
-    "Dominio": d.domain,
-    "Ultima Segnalazione": d.lastReportedAt
+    "Country": d.countryCode,
+    "Domain": d.domain,
+    "Last Reported": d.lastReportedAt
   });
 };
+
 
 
 
@@ -283,29 +283,29 @@ export const formatVirusTotalData = (vtData: any): string => {
   const cert = attr.last_https_certificate;
   const whois = attr.whois || "";
 
-  const analysis = formatSection("Analisi Vendor", {
-    "Malevoli": stats.malicious,
-    "Sospetti": stats.suspicious,
-    "Non rilevati": stats.undetected,
-    "Sicuri": stats.harmless
+  const analysis = formatSection("Vendor Analysis", {
+    "Malicious": stats.malicious,
+    "Suspicious": stats.suspicious,
+    "Undetected": stats.undetected,
+    "Harmless": stats.harmless
   });
 
   const categories = attr.categories
-    ? `Categorie:\n- ${Object.values(attr.categories).join(", ")}`
+    ? `Categories:\n- ${Object.values(attr.categories).join(", ")}`
     : "";
 
   const certInfo = cert?.validity?.not_after || cert?.issuer?.CN
-    ? formatSection("Certificato HTTPS", {
-        "Valido fino": cert.validity?.not_after,
-        "Emittente": cert.issuer?.CN
+    ? formatSection("HTTPS Certificate", {
+        "Valid Until": cert.validity?.not_after,
+        "Issuer": cert.issuer?.CN
       })
     : "";
 
   const whoisInfo = whois
-    ? `\nInformazioni Whois:\n${extractKeyWhoisInfo(whois)}`
+    ? `\nWhois Information:\n${extractKeyWhoisInfo(whois)}`
     : "";
 
-  return formatSection("Informazioni Dominio/IP (VirusTotal)", {
+  return formatSection("Domain/IP Information (VirusTotal)", {
     "IOC": d.id
   }) + `\n${analysis}\n${categories}\n${certInfo}\n${whoisInfo}`;
 };
@@ -314,18 +314,9 @@ export const formatVirusTotalData = (vtData: any): string => {
 
 
 
-/**
-* Estrae le informazioni chiave dal campo whois.
-* @param whois Testo completo del whois.
-* @returns Stringa formattata con le informazioni chiave.
-*/
-/**
-* Estrae le informazioni chiave dal campo whois.
-* @param whois Testo completo del whois.
-* @returns Stringa formattata con le informazioni chiave.
-*/
+// Extracts key information from the whois field
 const extractKeyWhoisInfo = (whois: string): string => {
-  if (!whois) return "Nessuna informazione disponibile.";
+  if (!whois) return "No information available.";
 
   const extractMultiple = (regex: RegExp): string[] => {
     const matches = [...whois.matchAll(regex)];
@@ -343,10 +334,10 @@ const extractKeyWhoisInfo = (whois: string): string => {
   const statuses = dedup(extractMultiple(/Status:\s*(.+)/gi));
 
   const section = [
-    { label: "Data di Creazione", values: creationDates },
-    { label: "Data di Scadenza", values: expireDates },
-    { label: "Organizzazione", values: orgs },
-    { label: "Stato", values: statuses }
+    { label: "Creation Date", values: creationDates },
+    { label: "Expiration Date", values: expireDates },
+    { label: "Organization", values: orgs },
+    { label: "Status", values: statuses }
   ];
 
   section.forEach(({ label, values }) => {
@@ -358,7 +349,7 @@ const extractKeyWhoisInfo = (whois: string): string => {
 
   return lines.length > 0
     ? lines.join("\n")
-    : "Nessuna informazione chiave trovata nel record Whois.";
+    : "No key information found in the Whois record.";
 };
 
 

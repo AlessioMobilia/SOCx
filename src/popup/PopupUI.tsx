@@ -25,21 +25,21 @@ const PopupUI: React.FC<PopupUIProps> = ({
 
   return (
     <Container fluid className={`p-3 ${themeClass}`}>
-      <h5 className="text-center mb-3">🛡️ Estensione IOC</h5>
+      <h5 className="text-center mb-3">🛡️ IOC Extension</h5>
 
       <div className="d-grid gap-2 mb-3">
         <Button variant="success" size="sm" onClick={onBulkCheckClick}>
-          <MdPlaylistAddCheck className="me-1" /> Controllo Bulk
+          <MdPlaylistAddCheck className="me-1" /> Bulk Check
         </Button>
         <Button variant="secondary" size="sm" onClick={onOpenSidePanelClick}>
-          <MdNote className="me-1" /> Apri Blocco Note
+          <MdNote className="me-1" /> Open Notepad
         </Button>
       </div>
 
-      <h6 className="text-center mb-2">📋 Ultimi 10 IOC</h6>
+      <h6 className="text-center mb-2">📋 Latest 10 IOCs</h6>
 
       {recentHistory.length === 0 ? (
-        <p className="text-muted text-center small">Nessun IOC registrato.</p>
+        <p className="text-muted text-center small">No IOCs recorded.</p>
       ) : (
         <ListGroup variant="flush" className="small" style={{ maxHeight: 200, overflowY: "auto" }}>
           {recentHistory.map((entry, idx) => (
@@ -56,7 +56,7 @@ const PopupUI: React.FC<PopupUIProps> = ({
       {recentHistory.length > 0 && (
         <div className="d-grid gap-2 mt-3">
           <Button variant="outline-danger" size="sm" onClick={onClearHistory}>
-            <MdDelete className="me-1" /> Cancella Cronologia
+            <MdDelete className="me-1" /> Clear History
           </Button>
         </div>
       )}
