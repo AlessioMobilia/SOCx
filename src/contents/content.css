@@ -1,4 +1,5 @@
-.SOCx-tooltip {
+/* Scoped to the extension container */
+.socx-extension-container .SOCx-tooltip {
   font-family: 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.4;
@@ -6,95 +7,17 @@
   white-space: normal;
 }
 
-.ioc-tooltip-wrapper {
+.socx-extension-container .ioc-tooltip-wrapper {
   max-width: 380px;
   word-wrap: break-word;
 }
 
-.ioc-tooltip-content {
-  margin-top: 6px;
-}
-
-.ioc-badge {
-  font-weight: bold;
-  padding: 6px 10px;
-  border-radius: 6px;
-  text-align: center;
-  margin-bottom: 6px;
-  font-size: 14px;
-}
-
-.ioc-badge--malicious {
-  background-color: #ffe6e6;
-  color: #c00;
-  border: 1px solid #c00;
-}
-
-.ioc-badge--benign {
-  background-color: #e6ffe6;
-  color: #2d8a34;
-  border: 1px solid #2d8a34;
-}
-
-.ioc-badge--suspicious {
-  background-color: #fff6e6;
-  color: #c88a00;
-  border: 1px solid #c88a00;
-}
-
-.ioc-malicious {
-  color: #c00;
-  font-weight: bold;
-}
-
-.ioc-suspicious {
-  color: #c88a00;
-  font-weight: bold;
-}
-
-.ioc-benign {
-  color: #2d8a34;
-  font-weight: bold;
-}
-
-.ioc-unknown {
-  color: #666;
-}
-
-
-/* Tooltip Light */
-.tippy-box[data-theme~='socx-light'] {
-  background-color: #fff;
-  color: #111;
-  border: 1px solid #ccc;
-}
-
-/* Tooltip Dark */
-.tippy-box[data-theme~='socx-dark'] {
-  background-color: #1e1e1e;
-  color: #f0f0f0;
-  border: 1px solid #444;
-}
-
-.SOCx-tooltip {
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.4;
-  word-break: break-word;
-  white-space: normal;
-}
-
-/* Tooltip content structure */
-.ioc-tooltip-wrapper {
-  max-width: 380px;
-  word-wrap: break-word;
-}
-.ioc-tooltip-content {
+.socx-extension-container .ioc-tooltip-content {
   margin-top: 6px;
 }
 
 /* Badge */
-.ioc-badge {
+.socx-extension-container .ioc-badge {
   font-weight: bold;
   padding: 6px 10px;
   border-radius: 6px;
@@ -102,35 +25,83 @@
   margin-bottom: 6px;
   font-size: 14px;
 }
-.ioc-badge--malicious {
+
+.socx-extension-container .ioc-badge--malicious {
   background-color: #ffe6e6;
   color: #c00;
   border: 1px solid #c00;
 }
-.ioc-badge--benign {
+
+.socx-extension-container .ioc-badge--benign {
   background-color: #e6ffe6;
   color: #2d8a34;
   border: 1px solid #2d8a34;
 }
-.ioc-badge--suspicious {
+
+.socx-extension-container .ioc-badge--suspicious {
   background-color: #fff6e6;
   color: #c88a00;
   border: 1px solid #c88a00;
 }
 
 /* Inline severity highlights */
-.ioc-malicious {
+.socx-extension-container .ioc-malicious {
   color: #c00;
   font-weight: bold;
 }
-.ioc-suspicious {
+
+.socx-extension-container .ioc-suspicious {
   color: #c88a00;
   font-weight: bold;
 }
-.ioc-benign {
+
+.socx-extension-container .ioc-benign {
   color: #2d8a34;
   font-weight: bold;
 }
-.ioc-unknown {
+
+.socx-extension-container .ioc-unknown {
   color: #666;
+}
+
+/* Tooltip Light */
+.socx-extension-container .tippy-box[data-theme~='socx-light'] {
+  background-color: #fff;
+  color: #111;
+  border: 1px solid #ccc;
+}
+
+/* Tooltip Dark */
+.socx-extension-container .tippy-box[data-theme~='socx-dark'] {
+  background-color: #1e1e1e;
+  color: #f0f0f0;
+  border: 1px solid #444;
+}
+
+/* Custom button styles */
+.socx-extension-container button {
+  margin-top: 16px;
+  width: 100%;
+  padding: 10px 14px;
+  background-color: #0d6efd;
+  color: #fff;
+  border: 1px solid rgb(51, 109, 196);
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.socx-extension-container button:hover {
+  background-color: #0056b3;
+}
+
+.socx-extension-container button:active {
+  background-color: #004085;
+}
+
+.socx-extension-container button:focus {
+  outline: none;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
 }

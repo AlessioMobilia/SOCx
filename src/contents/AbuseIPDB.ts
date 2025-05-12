@@ -1,5 +1,4 @@
 import type { PlasmoCSConfig } from "plasmo"
-import "bootstrap/dist/css/bootstrap.min.css"
 import { showBootstrapToast } from "../utility/utils"
 
 export const config: PlasmoCSConfig = {
@@ -53,7 +52,7 @@ Country:          ${country}
 City:             ${city}`.trim();
 }
 
-// Create the Bootstrap-styled copy button
+// Create the custom-styled copy button (no Bootstrap)
 function createCopyButton() {
   const container = document.querySelector(".col-md-6 .well")
   if (!container || document.getElementById("IOCAbuseButton")) return
@@ -62,18 +61,8 @@ function createCopyButton() {
   button.id = "IOCAbuseButton"
   button.textContent = "📋 Copy AbuseIPDB Info"
 
-  Object.assign(button.style, {
-    marginTop: "16px",
-    width: "100%",
-    padding: "10px 14px",
-    backgroundColor: "#0d6efd",
-    color: "#fff",
-    border: "1px solid rgb(51, 109, 196)",
-    borderRadius: "6px",
-    fontSize: "15px",
-    fontWeight: "600",
-    cursor: "pointer",
-  })
+  // Scoped button styling using the custom CSS defined above
+  button.classList.add("socx-extension-container")
 
   button.addEventListener("click", () => {
     const info = extractAndFormatInfo()
@@ -90,7 +79,11 @@ function createCopyButton() {
     }
   })
 
-  container.appendChild(button)
+  // Wrap the button in a container with the `.socx-extension-container` class
+  const extensionContainer = document.createElement("div")
+  extensionContainer.classList.add("socx-extension-container")
+  extensionContainer.appendChild(button)
+  container.appendChild(extensionContainer)
 }
 
 // Wait for content to dynamically load
