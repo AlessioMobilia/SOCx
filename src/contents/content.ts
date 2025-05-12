@@ -13,6 +13,7 @@ import { createTooltip } from "../utility/tooltipFactory"
 import "tippy.js/dist/tippy.css"
 import "./content.css"
 
+
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
   all_frames: true

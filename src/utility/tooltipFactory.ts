@@ -1,4 +1,4 @@
-import tippy from "tippy.js"
+import tippy from "tippy.js";
 
 export const createTooltip = (text: string, button: HTMLButtonElement) => {
   let formatted = text.replaceAll("\n", "<br>");
@@ -35,7 +35,7 @@ export const createTooltip = (text: string, button: HTMLButtonElement) => {
     malicious: `<div class="ioc-badge ioc-badge--malicious">⚠️ Malicious IOC</div>`,
     benign: `<div class="ioc-badge ioc-badge--benign">✅ Non-malicious IOC</div>`,
     suspicious: `<div class="ioc-badge ioc-badge--suspicious">❓ Suspicious IOC</div>`,
-    unknown: ``
+    unknown: ``,
   }[threatStatus];
 
   const contentHTML = `
@@ -45,17 +45,25 @@ export const createTooltip = (text: string, button: HTMLButtonElement) => {
     </div>
   `;
 
+  // Check system dark mode preference
   const isDarkMode = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 
+  // Apply dynamic classes based on dark or light mode
+  const tooltipTheme = isDarkMode ? 'socx-dark' : 'socx-light';
+
+  // Use tippy.js to create a tooltip
   tippy(button, {
     allowHTML: true,
     content: contentHTML,
-    theme: isDarkMode ? 'socx-dark' : 'socx-light',
+    theme: tooltipTheme,  // Uses tippy's built-in themes based on system preference
     maxWidth: 400,
-    interactive: true,
+    interactive: true,  // Ensures the tooltip stays open while hovering
     placement: 'right',
+    animation: 'fade',  // Smooth fade-in and fade-out animation
     onShow(instance) {
-      instance.popper.classList.add("SOCx-tooltip");
+      // Add the class 'socx-extension-container' to the popper element
+      instance.popper.classList.add("socx-extension-container");
+      instance.popper.classList.add("SOCx-tooltip");  // Optional for specific styling
     }
   }).show();
 };
