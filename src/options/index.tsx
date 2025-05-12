@@ -72,24 +72,65 @@ const Options = () => {
     const results: string[] = []
 
     const testFetch = async (
-      label: string,
-      url: string,
-      headers: HeadersInit
-    ) => {
-      try {
-        const res = await fetch(url, { headers })
-        results.push(
-          `✅ ${label}: ${res.ok ? "OK" : `Error (${res.status})`}`
-        )
-      } catch (err) {
-        results.push(`❌ ${label}: Network error`)
+    label: string,
+    url: string,
+    headers: HeadersInit,
+    results: string[]
+  ) => {
+    try {
+      const res = await fetch(url, { headers });
+
+      if (res.ok) {
+        results.push(`✅ ${label}: OK`);
+      } else {
+        // Handle specific HTTP status codes with better messaging
+        switch (res.status) {
+          case 400:
+            results.push(`❌ ${label}: Bad Request (400)`);
+            break;
+          case 401:
+            results.push(`❌ ${label}: Unauthorized (401)`);
+            break;
+          case 403:
+            results.push(`❌ ${label}: Forbidden (403)`);
+            break;
+          case 404:
+            results.push(`❌ ${label}: Not Found (404)`);
+            break;
+          case 500:
+            results.push(`❌ ${label}: Internal Server Error (500)`);
+            break;
+          case 502:
+            results.push(`❌ ${label}: Bad Gateway (502)`);
+            break;
+          case 503:
+            results.push(`❌ ${label}: Service Unavailable (503)`);
+            break;
+          case 504:
+            results.push(`❌ ${label}: Gateway Timeout (504)`);
+            break;
+          default:
+            results.push(`❌ ${label}: Error (${res.status})`);
+            break;
+        }
+      }
+    } catch (err) {
+      // Improved error handling for network issues or other exceptions
+      if (err instanceof TypeError) {
+        // A TypeError typically indicates a network or fetch issue
+        results.push(`❌ ${label}: Network error (TypeError)`);
+      } else {
+        // Catching other errors (e.g., unexpected issues with fetch itself)
+        results.push(`❌ ${label}: Unknown error`);
       }
     }
+  };
+
 
     if (virusTotalApiKey) {
       await testFetch("VirusTotal", "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8", {
         "x-apikey": virusTotalApiKey
-      })
+      }, results)
     } else {
       results.push("⚠️ VirusTotal: Key not entered")
     }
@@ -98,7 +139,7 @@ const Options = () => {
       await testFetch("AbuseIPDB", "https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8", {
         Accept: "application/json",
         Key: abuseIPDBApiKey
-      })
+      }, results)
     } else {
       results.push("⚠️ AbuseIPDB: Key not entered")
     }
