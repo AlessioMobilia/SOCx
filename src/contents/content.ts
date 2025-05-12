@@ -78,15 +78,59 @@ function handleSelectionChange() {
   }
 }
 
+// Helper: Estimate caret position for input/textarea
+// Helper: Estimate caret position for input/textarea
+function estimateCaretRect(inputEl) {
+  const mirrorDiv = document.createElement("div")
+  const computedStyle = getComputedStyle(inputEl)
+
+  for (const prop of computedStyle) {
+    mirrorDiv.style.setProperty(prop, computedStyle.getPropertyValue(prop))
+  }
+
+  mirrorDiv.style.position = "absolute"
+  mirrorDiv.style.visibility = "hidden"
+  mirrorDiv.style.whiteSpace = "pre-wrap"
+  mirrorDiv.style.wordWrap = "break-word"
+  mirrorDiv.style.boxSizing = computedStyle.boxSizing
+  mirrorDiv.style.padding = computedStyle.padding
+  mirrorDiv.style.border = computedStyle.border
+  mirrorDiv.style.left = "-9999px"
+
+  const text = inputEl.value.substring(0, inputEl.selectionEnd || 0)
+  mirrorDiv.textContent = text
+
+  const span = document.createElement("span")
+  span.textContent = "\u200b" // zero-width space
+  mirrorDiv.appendChild(span)
+  document.body.appendChild(mirrorDiv)
+
+  const spanRect = span.getBoundingClientRect()
+  const inputRect = inputEl.getBoundingClientRect()
+  const mirrorRect = mirrorDiv.getBoundingClientRect()
+
+  const rect = {
+    top: inputRect.top + (spanRect.top - mirrorRect.top) - inputEl.scrollTop,
+    left: inputRect.left + (spanRect.left - mirrorRect.left) - inputEl.scrollLeft,
+    width: 0,
+    height: spanRect.height || 16,
+    right: inputRect.left + (spanRect.left - mirrorRect.left) - inputEl.scrollLeft,
+    bottom: inputRect.top + (spanRect.top - mirrorRect.top) + (spanRect.height || 16) - inputEl.scrollTop,
+    x: inputRect.left + (spanRect.left - mirrorRect.left) - inputEl.scrollLeft,
+    y: inputRect.top + (spanRect.top - mirrorRect.top) - inputEl.scrollTop,
+    toJSON: () => rect
+  }
+
+  document.body.removeChild(mirrorDiv)
+  return rect
+}
+
 async function handleSelection() {
   const selection = window.getSelection()
   const selectedText = selection?.toString().trim()
   if (!selectedText || (selectedText === oldSelection && currentButton)) return
 
-  // Limit to max 2 distinct words
-  const uniqueWords = Array.from(
-    new Set(selectedText.split(/\s+/).filter((w) => w.length > 0))
-  )
+  const uniqueWords = Array.from(new Set(selectedText.split(/\s+/).filter(Boolean)))
   if (uniqueWords.length > 2) return
 
   oldSelection = selectedText
@@ -104,102 +148,65 @@ async function handleSelection() {
   currentButton?.remove()
   currentMagicButton?.remove()
 
-  const range = selection!.getRangeAt(0)
-  let rect = range.getBoundingClientRect()
+  let rect = selection.getRangeAt(0).getBoundingClientRect()
 
-  // If selected inside input/textarea
   if (rect.width === 0 && rect.height === 0) {
-    const activeElement = document.activeElement as HTMLElement
-    if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
-      const input = activeElement
-      const computedStyle = window.getComputedStyle(input)
-
-      const mirrorDiv = document.createElement("div")
-      mirrorDiv.style.position = "absolute"
-      mirrorDiv.style.visibility = "hidden"
-      mirrorDiv.style.whiteSpace = "pre-wrap"
-      mirrorDiv.style.wordWrap = "break-word"
-      mirrorDiv.style.left = "-9999px"
-
-      for (const prop of computedStyle) {
-        mirrorDiv.style.setProperty(prop, computedStyle.getPropertyValue(prop))
-      }
-
-      mirrorDiv.textContent = input.value.substring(0, input.selectionEnd || 0)
-
-      const span = document.createElement("span")
-      mirrorDiv.appendChild(span)
-      document.body.appendChild(mirrorDiv)
-
-      const spanRect = span.getBoundingClientRect()
-      const inputRect = input.getBoundingClientRect()
-
-      rect = {
-        top: inputRect.top + (spanRect.top - mirrorDiv.getBoundingClientRect().top) - input.scrollTop,
-        left: inputRect.left + (spanRect.left - mirrorDiv.getBoundingClientRect().left) - input.scrollLeft,
-        width: spanRect.width,
-        height: spanRect.height,
-        right: inputRect.left + (spanRect.left - mirrorDiv.getBoundingClientRect().left) + spanRect.width - input.scrollLeft,
-        bottom: inputRect.top + (spanRect.top - mirrorDiv.getBoundingClientRect().top) + spanRect.height - input.scrollTop,
-        toJSON: () => rect
-      } as DOMRect
-
-      document.body.removeChild(mirrorDiv)
+    const activeEl = document.activeElement
+    if (
+      activeEl instanceof HTMLInputElement ||
+      activeEl instanceof HTMLTextAreaElement ||
+      (activeEl instanceof HTMLElement && activeEl.isContentEditable)
+    ) {
+      rect = estimateCaretRect(activeEl)
     }
   }
 
-  if (rect.width === 0 && rect.height === 0) return
-
-  // Create VT/AbuseIPDB button if supported
-  if (isSupported) {
-    const button = createButton(ioc, async () => {
-      try {
-        const response = await getIOCInfo(ioc)
-        console.log("IOC data:", response)
-        const data = response.results?.[Object.keys(response.results)[0]]
-
-        let info = ""
-
-        if (type === "IP") {
-          const abuseInfo = formatAbuseIPDBData(data?.AbuseIPDB)
-          info = abuseInfo?.trim() ? abuseInfo : "⚠️ No data available from AbuseIPDB for this IP."
-        } else {
-          const vtInfo = formatVirusTotalData(data?.VirusTotal)
-          info = vtInfo?.trim() ? vtInfo : "⚠️ No information available from VirusTotal for this IOC."
-        }
-
-        await createTooltip(info, button)
-        navigator.clipboard.writeText(info)
-
-        if (!(await saveIOC(type, ioc))) {
-          showNotification("Error", "Failed to save the IOC.")
-        }
-      } catch (err) {
-        console.error("Error fetching IOC data:", err)
-        await createTooltip("❌ Error retrieving IOC information.", button)
-      }
-    })
-
-    if (button) {
-      document.body.appendChild(button)
-      button.style.position = "fixed"
-      currentButton = button
-    }
+  // Fallback se rect non valido
+  if (!rect || rect.top <= 0 || rect.left <= 0) {
+    const fallback = document.activeElement?.getBoundingClientRect()
+    if (!fallback || fallback.top <= 0 || fallback.left <= 0) return
+    rect = fallback
   }
 
-  // Always create magic button
-  const magicButton = createMagicButton(ioc, () => {
-    requestIOCInfo(ioc)
-  })
+  const button = isSupported ? createButton(ioc, async () => {
+    try {
+      const response = await getIOCInfo(ioc)
+      const data = response.results?.[Object.keys(response.results)[0]]
+      const info = type === "IP"
+        ? formatAbuseIPDBData(data?.AbuseIPDB) || "⚠️ No data from AbuseIPDB"
+        : formatVirusTotalData(data?.VirusTotal) || "⚠️ No data from VirusTotal"
 
+      await createTooltip(info, button)
+      navigator.clipboard.writeText(info)
+      if (!(await saveIOC(type, ioc))) {
+        showNotification("Error", "Failed to save the IOC")
+      }
+    } catch (err) {
+      console.error("Fetch error:", err)
+      await createTooltip("❌ Error retrieving IOC information.", button)
+    }
+  }) : null
+
+  if (button) {
+    document.body.appendChild(button)
+    button.style.position = "fixed"
+    button.style.left = `${rect.right + 5}px`
+    button.style.top = `${rect.top}px`
+    currentButton = button
+  }
+
+  const magicButton = createMagicButton(ioc, () => requestIOCInfo(ioc))
   if (magicButton) {
     document.body.appendChild(magicButton)
     magicButton.style.position = "fixed"
+    magicButton.style.left = `${rect.right + (button?.offsetWidth || 30) + 10}px`
+    magicButton.style.top = `${rect.top}px`
     currentMagicButton = magicButton
   }
-
-  repositionButtons()
 }
+
+
+
 
 // Update button positions on scroll and resize
 window.addEventListener("scroll", repositionButtons)
