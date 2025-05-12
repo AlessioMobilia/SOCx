@@ -168,7 +168,7 @@ async function handleSelection() {
           info = vtInfo?.trim() ? vtInfo : "⚠️ No information available from VirusTotal for this IOC."
         }
 
-        createTooltip(info, button)
+        await createTooltip(info, button)
         navigator.clipboard.writeText(info)
 
         if (!(await saveIOC(type, ioc))) {
@@ -176,7 +176,7 @@ async function handleSelection() {
         }
       } catch (err) {
         console.error("Error fetching IOC data:", err)
-        createTooltip("❌ Error retrieving IOC information.", button)
+        await createTooltip("❌ Error retrieving IOC information.", button)
       }
     })
 

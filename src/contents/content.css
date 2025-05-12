@@ -1,67 +1,83 @@
 @import "../utility/config.css";
 @import "../utility/colors.css";
-/* Scoped to the extension container */
+
+/* === Tooltip Wrapper Styles === */
+.socx-extension-container .SOCx-tooltip {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: normal;
+  max-width: 380px;
+  padding: 10px;
+}
+
+/* === Badge Base Style === */
 .socx-extension-container .ioc-badge {
   font-weight: 600;
   padding: 6px 12px;
-  border-radius: 4px; /* Flat design with a smaller border-radius */
+  border-radius: 4px;
   text-align: center;
-  font-size: 14px; /* Slightly reduced font size */
+  font-size: 14px;
   margin-bottom: 8px;
-  transition: background-color 0.3s ease, color 0.3s ease; /* Smooth transition */
-  box-shadow: none; /* Remove shadow for a flat look */
-  border: none; /* No border */
-  color: var(--text-light); /* Default text color for readability */
+  box-shadow: none;
+  border: none;
 }
 
-/* Malicious IOC - Red background with white text */
+/* === IOC Badge Colors (Always Visible) === */
 .socx-extension-container .ioc-badge--malicious {
-  background-color: #e57373; /* Soft red background for malicious IOC */
-  color: var(--text-light); /* Light text for contrast */
+  background-color: #d32f2f; /* Red */
+  color: #ffffff;
 }
 
-/* Benign IOC - Green background with dark text */
-.socx-extension-container .ioc-badge--benign {
-  background-color: #81c784; /* Light green background for benign IOC */
-  color: var(--text-dark); /* Dark text for readability */
-}
-
-/* Suspicious IOC - Yellow background with dark text */
 .socx-extension-container .ioc-badge--suspicious {
-  background-color: #ffeb3b; /* Yellow background for suspicious IOC */
-  color: var(--text-dark); /* Dark text for contrast */
+  background-color: #fbc02d; /* Yellow */
+  color: #000000;
 }
 
-/* Unknown IOC - Grey background with light text */
+.socx-extension-container .ioc-badge--benign {
+  background-color: #66bb6a; /* Green */
+  color: #000000;
+}
+
 .socx-extension-container .ioc-badge--unknown {
-  background-color: #9e9e9e; /* Grey background for unknown IOC */
-  color: var(--text-light); /* Light text color */
+  background-color: #9e9e9e; /* Grey */
+  color: #ffffff;
 }
 
-/* Hover and Active states */
-.socx-extension-container .ioc-badge:hover {
-  opacity: 0.85; /* Slight opacity reduction on hover for interactivity */
-  cursor: pointer; /* Pointer cursor on hover */
+/* === Severity Highlights Inline === */
+.socx-extension-container .ioc-malicious {
+  color: #d32f2f;
+  font-weight: bold;
 }
 
-.socx-extension-container .ioc-badge--malicious:hover {
-  background-color: #d32f2f; /* Slightly darker red for hover */
+.socx-extension-container .ioc-suspicious {
+  color: #f57c00;
+  font-weight: bold;
 }
 
-.socx-extension-container .ioc-badge--benign:hover {
-  background-color: #66bb6a; /* Lighter green on hover */
+.socx-extension-container .ioc-benign {
+  color: #2e7d32;
+  font-weight: bold;
 }
 
-.socx-extension-container .ioc-badge--suspicious:hover {
-  background-color: #ffca28; /* Lighter yellow on hover */
+.socx-extension-container .ioc-unknown {
+  color: #777;
+  font-weight: normal;
 }
 
-.socx-extension-container .ioc-badge--unknown:hover {
-  background-color: #757575; /* Slightly darker grey on hover */
+/* === Tippy Themes === */
+.tippy-box[data-theme~='socx-dark'] {
+  background-color: var(--background-dark);
+  color: var(--text-light);
+  border: 1px solid var(--border-dark);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
-/* Optional: Focus state for accessibility */
-.socx-extension-container .ioc-badge:focus {
-  outline: none;
-  box-shadow: 0 0 3px 2px rgba(0, 123, 255, 0.5); /* Blue focus outline for accessibility */
+.tippy-box[data-theme~='socx-light'] {
+  background-color: var(--background-light);
+  color: var(--text-dark);
+  border: 1px solid var(--border-light);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
 }
