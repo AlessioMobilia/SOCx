@@ -1,14 +1,14 @@
-import "bootstrap/dist/css/bootstrap.min.css"
-import React from "react"
-import { Container, Button, ListGroup } from "react-bootstrap"
-import { MdPlaylistAddCheck, MdNote, MdDelete } from "react-icons/md"
+import "bootstrap/dist/css/bootstrap.min.css";
+import React from "react";
+import { Container, Button, ListGroup } from "react-bootstrap";
+import { MdPlaylistAddCheck, MdNote, MdDelete, MdSettings } from "react-icons/md";
 
 interface PopupUIProps {
-  isDarkMode: boolean
-  iocHistory: { type: string; text: string; timestamp: string }[]
-  onBulkCheckClick: () => void
-  onOpenSidePanelClick: () => void
-  onClearHistory: () => void
+  isDarkMode: boolean;
+  iocHistory: { type: string; text: string; timestamp: string }[];
+  onBulkCheckClick: () => void;
+  onOpenSidePanelClick: () => void;
+  onClearHistory: () => void;
 }
 
 const PopupUI: React.FC<PopupUIProps> = ({
@@ -18,10 +18,15 @@ const PopupUI: React.FC<PopupUIProps> = ({
   onOpenSidePanelClick,
   onClearHistory
 }) => {
-  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
+  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark";
   const recentHistory = [...iocHistory]
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .slice(0, 10)
+    .slice(0, 10);
+
+  // Function to open the options/settings page of the extension
+  const openSettings = () => {
+    chrome.runtime.openOptionsPage();
+  };
 
   return (
     <Container fluid className={`p-3 ${themeClass}`}>
@@ -33,6 +38,10 @@ const PopupUI: React.FC<PopupUIProps> = ({
         </Button>
         <Button variant="secondary" size="sm" onClick={onOpenSidePanelClick}>
           <MdNote className="me-1" /> Open Notepad
+        </Button>
+        {/* New Settings Button */}
+        <Button variant="primary" size="sm" onClick={openSettings}>
+          <MdSettings className="me-1" /> Extension Settings
         </Button>
       </div>
 
@@ -61,7 +70,7 @@ const PopupUI: React.FC<PopupUIProps> = ({
         </div>
       )}
     </Container>
-  )
-}
+  );
+};
 
-export default PopupUI
+export default PopupUI;
