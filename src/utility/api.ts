@@ -115,6 +115,8 @@ const getTodayDate = (): string => {
 
 // Function to increment the daily counter
 const incrementDailyCounter = async (apiName: string) => {
+  await cleanOldCounters(apiName); // Elimina contatori vecchi
+
   const today = getTodayDate();
   const key = `${apiName}_${today}`;
 
@@ -123,6 +125,47 @@ const incrementDailyCounter = async (apiName: string) => {
 
   await chrome.storage.local.set({ [key]: currentCount + 1 });
 };
+
+
+const cleanOldCounters = async (apiName: string, daysToKeep = 2) => {
+  return new Promise<void>((resolve, reject) => {
+    chrome.storage.local.get(null, (items) => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+        return;
+      }
+
+      const now = Date.now();
+      const keysToRemove: string[] = [];
+
+      for (const key in items) {
+        if (key.startsWith(`${apiName}_`)) {
+          const dateStr = key.substring(apiName.length + 1); // avoids split
+          const keyDate = new Date(dateStr);
+          const ageMs = now - keyDate.getTime();
+
+          if (isNaN(keyDate.getTime()) || ageMs > daysToKeep * 86400000) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+
+      if (keysToRemove.length > 0) {
+        chrome.storage.local.remove(keysToRemove, () => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve();
+          }
+        });
+      } else {
+        resolve();
+      }
+    });
+  });
+};
+
+
 
 // Function to get the daily counters
 const getDailyCounters = async (): Promise<{ [key: string]: number }> => {
