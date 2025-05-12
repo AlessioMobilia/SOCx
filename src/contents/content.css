@@ -81,3 +81,29 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
 }
+
+
+.socx-extension-container {
+  margin-top: 16px; /* spazio sopra il pulsante */
+  width: 100%;
+}
+
+
+/* === Abuse Button Styles === */
+.socx-extension-container .socx-button {
+  background-color: #2e7d32;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  width: 100%; /* occupa tutta la larghezza del contenitore */
+  box-sizing: border-box;
+}
+
+.socx-extension-container .socx-button:hover {
+  background-color: #27642a;
+}

@@ -81,6 +81,7 @@ function createCopyButton() {
 
   // Wrap the button in a container with the `.socx-extension-container` class
   const extensionContainer = document.createElement("div")
+  button.classList.add("socx-button")
   extensionContainer.classList.add("socx-extension-container")
   extensionContainer.appendChild(button)
   container.appendChild(extensionContainer)
