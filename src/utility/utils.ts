@@ -643,7 +643,7 @@ export const extractBestOrganization = (whois: string): string => {
 }
 
 
-export const showBootstrapToast = (message: string, variant: string = "primary") => {
+export const showToast = (message: string, variant: string = "primary") => {
   let container = document.getElementById("socx-toast-container");
   if (!container) {
     container = document.createElement("div");
@@ -659,17 +659,14 @@ export const showBootstrapToast = (message: string, variant: string = "primary")
   }
 
   const toast = document.createElement("div");
-  toast.className = `d-flex align-items-center text-bg-${variant} border border-light rounded`;
+  toast.className = `socx-toast socx-toast--${variant}`;
   toast.setAttribute("role", "alert");
   toast.setAttribute("aria-live", "assertive");
   toast.setAttribute("aria-atomic", "true");
-  toast.style.minWidth = "250px";
-  toast.style.maxWidth = "350px";
-  toast.style.padding = "0.75rem 1rem";
 
   toast.innerHTML = `
-    <div class="flex-grow-1">${message}</div>
-    <button type="button" class="btn-close btn-close-white ms-3" aria-label="Close"></button>
+    <div class="socx-toast__message">${message}</div>
+    <button class="socx-toast__close" aria-label="Close">&times;</button>
   `;
 
   const closeBtn = toast.querySelector("button");
@@ -681,4 +678,5 @@ export const showBootstrapToast = (message: string, variant: string = "primary")
     toast.remove();
   }, 3000);
 };
+
 

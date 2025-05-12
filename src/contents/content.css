@@ -107,3 +107,71 @@
 .socx-extension-container .socx-button:hover {
   background-color: #27642a;
 }
+
+
+/* === Toast Styles === */
+.socx-toast {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 260px;
+  max-width: 360px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: #f8f9fa;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-in-out;
+  transition: opacity 0.3s ease;
+}
+
+.socx-toast__message {
+  flex-grow: 1;
+  margin-right: 10px;
+}
+
+.socx-toast__close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+.socx-toast__close:hover {
+  opacity: 1;
+}
+
+/* Variants */
+.socx-toast--primary {
+  background-color: #3b82f6; /* Softer blue */
+}
+
+.socx-toast--success {
+  background-color: #22c55e; /* Emerald green */
+}
+
+.socx-toast--danger {
+  background-color: #ef4444; /* Red */
+}
+
+.socx-toast--warning {
+  background-color: #facc15; /* Amber */
+  color: #1f2937; /* Dark gray text for contrast */
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

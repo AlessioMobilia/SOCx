@@ -1,5 +1,5 @@
 import type { PlasmoCSConfig } from "plasmo"
-import { showBootstrapToast } from "../utility/utils"
+import { showToast } from "../utility/utils"
 
 export const config: PlasmoCSConfig = {
   matches: ["https://www.abuseipdb.com/check/*"],
@@ -69,13 +69,13 @@ function createCopyButton() {
     if (info) {
       navigator.clipboard
         .writeText(info)
-        .then(() => showBootstrapToast("✔️ Copied to clipboard"))
+        .then(() => showToast("✔️ Copied to clipboard"))
         .catch((err) => {
           console.error("Clipboard error:", err)
-          showBootstrapToast("❌ Failed to copy", "danger")
+          showToast("❌ Failed to copy", "danger")
         })
     } else {
-      showBootstrapToast("❌ No information found", "warning")
+      showToast("❌ No information found", "warning")
     }
   })
 
