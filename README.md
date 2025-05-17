@@ -22,11 +22,6 @@ With integration of leading services like **VirusTotal**, **AbuseIPDB**, **Censy
 * 🧠 **Clean and intuitive interface**
   Designed to be lightweight and immediate. No frills, just OSINT.
 
----
-
-## 🔌 Supported Services
-
-*Check the full list in the original README or documentation.*
 
 ---
 
