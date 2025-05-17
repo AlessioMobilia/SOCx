@@ -232,6 +232,7 @@ export const extractIOCs = (text: string, refanged: boolean = true): string[] =>
 */
 export const parseAndFormatResults = (data: any): string => {
   const lines: string[] = [];
+  console.log("Data:", data);
 
   if (data?.AbuseIPDB?.data) {
     lines.push(formatAbuseIPDBData(data.AbuseIPDB));
@@ -260,16 +261,47 @@ export const formatAbuseIPDBData = (abuseData: any): string => {
   const d = abuseData?.data;
   if (!d) return "";
 
-  return formatSection("IP Information (AbuseIPDB)", {
-    "IP": d.ipAddress,
-    "Abuse Score": `${d.abuseConfidenceScore}%`,
-    "Total Reports": d.totalReports,
-    "ISP": d.isp,
-    "Country": d.countryCode,
-    "Domain": d.domain,
-    "Last Reported": d.lastReportedAt
-  });
+  const hostnames =
+    d.hostnames && d.hostnames.length > 0
+      ? d.hostnames.join(", ")
+      : undefined;
+
+  const isWhitelisted = d.isWhitelisted === true
+    ? "Yes"
+    : d.isWhitelisted === false
+    ? "No"
+    : "Unknown";
+
+  // Prepara i dati
+  const fields: Record<string, string | number> = {
+    "IP:": d.ipAddress,
+    "Abuse Score:": `${d.abuseConfidenceScore}%`,
+    "Total Reports:": d.totalReports,
+    "ISP:": d.isp,
+    "Country:": d.countryCode,
+    "Domain:": d.domain,
+    "Usage Type:": d.usageType,
+    "IP Version:": d.ipVersion === 6 ? "IPv6" : "IPv4",
+    "Is Tor:": d.isTor ? "Yes" : "No",
+    "Is Whitelisted:": isWhitelisted,
+    ...(hostnames ? { "Hostnames:": hostnames } : {}),
+    "Last Reported:": d.lastReportedAt ?? "N/A"
+  };
+
+  // Calcola la larghezza massima per allineare
+  const labelWidth = Math.max(...Object.keys(fields).map(k => k.length));
+
+  // Genera le righe allineate
+  const lines = Object.entries(fields).map(
+    ([label, value]) => `- ${label.padEnd(labelWidth)} ${value}`
+  );
+
+  return `IP Information (AbuseIPDB):\n${lines.join("\n")}`;
 };
+
+
+
+
 
 
 
@@ -282,75 +314,103 @@ export const formatVirusTotalData = (vtData: any): string => {
   const stats = attr.last_analysis_stats ?? {};
   const cert = attr.last_https_certificate;
   const whois = attr.whois || "";
+  const isDomain = d.type === "domain";
+  const isIp = d.type === "ip_address";
 
-  const analysis = formatSection("Vendor Analysis", {
-    "Malicious": stats.malicious,
-    "Suspicious": stats.suspicious,
-    "Undetected": stats.undetected,
-    "Harmless": stats.harmless
-  });
+  const allFields: { section: string; label: string; value: any }[] = [];
 
-  const categories = attr.categories
-    ? `Categories:\n- ${Object.values(attr.categories).join(", ")}`
-    : "";
-
-  const certInfo = cert?.validity?.not_after || cert?.issuer?.CN
-    ? formatSection("HTTPS Certificate", {
-        "Valid Until": cert.validity?.not_after,
-        "Issuer": cert.issuer?.CN
-      })
-    : "";
-
-  const whoisInfo = whois
-    ? `\nWhois Information:\n${extractKeyWhoisInfo(whois)}`
-    : "";
-
-  return formatSection("Domain/IP Information (VirusTotal)", {
-    "IOC": d.id
-  }) + `\n${analysis}\n${categories}\n${certInfo}\n${whoisInfo}`;
-};
-
-
-
-
-
-// Extracts key information from the whois field
-const extractKeyWhoisInfo = (whois: string): string => {
-  if (!whois) return "No information available.";
-
-  const extractMultiple = (regex: RegExp): string[] => {
-    const matches = [...whois.matchAll(regex)];
-    return matches.map((m) => m[1].trim());
+  // Base Info
+  const info: Record<string, any> = {
+    ...(d.id && (isDomain || isIp) && { "IOC:": d.id }),
+    ...(attr.md5 && !isDomain && !isIp && { "MD5:": attr.md5 }),
+    ...(attr.sha1 && !isDomain && !isIp && { "SHA1:": attr.sha1 }),
+    ...(attr.sha256 && { "SHA256:": attr.sha256 }),
+    ...(attr.meaningful_name && { "Name:": attr.meaningful_name }),
+    ...(attr.type_description && { "Type:": attr.type_description }),
+    ...(attr.size && { "Size:": `${attr.size} bytes` }),
+    ...(attr.tld && isDomain && { "TLD:": attr.tld }),
+    ...(attr.first_submission_date && {
+      "First Submission:": new Date(attr.first_submission_date * 1000).toISOString().split("T")[0]
+    }),
+    ...(attr.last_analysis_date && {
+      "Last Analysis:": new Date(attr.last_analysis_date * 1000).toISOString().split("T")[0]
+    }),
+    ...(attr.reputation !== undefined && { "Reputation:": attr.reputation }),
+    ...(attr.tags && attr.tags.length > 0 && { "Tags:": attr.tags.join(", ") }),
+    ...(attr.names && attr.names.length > 0 && { "File Names:": attr.names.slice(0, 5).join(", ") }),
+    ...(attr.trusted_verdict?.verdict && {
+      "Trusted Verdict:": `${attr.trusted_verdict.verdict} (${attr.trusted_verdict.organization || "Unknown"})`
+    }),
+    ...(attr.asn && { "ASN:": attr.asn }),
+    ...(attr.as_owner && { "AS Owner:": attr.as_owner }),
+    ...(attr.country && { "Country:": attr.country }),
+    ...(attr.continent && { "Continent:": attr.continent }),
+    ...(attr.network && { "Network:": attr.network }),
+    ...(attr.regional_internet_registry && { "Registry:": attr.regional_internet_registry }),
   };
 
-  const dedup = (arr: string[]) =>
-    Array.from(new Set(arr.map((s) => s.trim())));
 
-  const lines: string[] = [];
+  Object.entries(info).forEach(([label, value]) =>
+    allFields.push({ section: isDomain ? "Domain Information (VirusTotal)" : isIp ? "IP Information (VirusTotal)" : "IOC Information (VirusTotal)", label, value })
+  );
 
-  const creationDates = dedup(extractMultiple(/Created:\s*(.+)/gi));
-  const expireDates = dedup(extractMultiple(/Expire Date:\s*(.+)/gi));
-  const orgs = dedup(extractMultiple(/Organization:\s*(.+)/gi));
-  const statuses = dedup(extractMultiple(/Status:\s*(.+)/gi));
+  // Vendor stats
+  const analysis: Record<string, any> = {
+    ...(stats.malicious > 0 && { "Malicious:": stats.malicious }),
+    ...(stats.suspicious > 0 && { "Suspicious:": stats.suspicious }),
+    ...(stats.undetected >= 0 && { "Undetected:": stats.undetected }),
+    ...(stats.harmless >= 0 && { "Harmless:": stats.harmless })
+  };
+  Object.entries(analysis).forEach(([label, value]) =>
+    allFields.push({ section: "Vendor Analysis", label, value })
+  );
 
-  const section = [
-    { label: "Creation Date", values: creationDates },
-    { label: "Expiration Date", values: expireDates },
-    { label: "Organization", values: orgs },
-    { label: "Status", values: statuses }
-  ];
+  // HTTPS cert
+  const certFields: Record<string, string> = {
+    ...(cert?.validity?.not_after && { "Valid Until:": cert.validity.not_after }),
+    ...(cert?.issuer?.CN && { "Issuer:": cert.issuer.CN })
+  };
+  Object.entries(certFields).forEach(([label, value]) =>
+    allFields.push({ section: "HTTPS Certificate", label, value })
+  );
 
-  section.forEach(({ label, values }) => {
-    if (values.length > 0) {
-      lines.push(`${label}:`);
-      values.forEach((v) => lines.push(`  - ${v}`));
-    }
+  // Categories (solo come blocco separato)
+  const categoriesBlock =
+    attr.categories && Object.values(attr.categories).length > 0
+      ? `Categories:\n- ${Object.values(attr.categories).join(", ")}`
+      : "";
+
+  // Whois
+  const whoisBlock =
+    whois && extractKeyWhoisInfo(whois).trim()
+      ? `Whois Information:\n${extractKeyWhoisInfo(whois)}`
+      : "";
+
+  // 🔧 Raggruppa per sezione con label padding uniforme
+  const sections: Record<string, { label: string; value: any }[]> = {};
+  allFields.forEach(({ section, label, value }) => {
+    if (!sections[section]) sections[section] = [];
+    sections[section].push({ label, value });
   });
 
-  return lines.length > 0
-    ? lines.join("\n")
-    : "No key information found in the Whois record.";
+  const maxLabelLength = Math.max(...allFields.map(f => f.label.length));
+  const lines: string[] = [];
+
+  for (const [sectionName, fields] of Object.entries(sections)) {
+    lines.push(`${sectionName}:`);
+    lines.push(
+      ...fields.map(({ label, value }) =>
+        `- ${label.padEnd(maxLabelLength)} ${value}`
+      )
+    );
+  }
+
+  if (categoriesBlock) lines.push(categoriesBlock);
+  if (whoisBlock) lines.push(whoisBlock);
+
+  return lines.join("\n");
 };
+
 
 
 
@@ -612,21 +672,66 @@ export const extractSingleFromWhois = (
 ): string | null => {
   const matches = [...whois.matchAll(regex)]
     .map((m) => (m[1] ? m[1].trim() : null))
-    .filter((v): v is string => !!v)
+    .filter((v): v is string => !!v);
 
-  if (matches.length === 0) return null
+  if (matches.length === 0) return null;
+
+  const normalizeDate = (dateStr: string) =>
+    /^\d{4}-\d{2}-\d{2}/.test(dateStr) ? dateStr.slice(0, 10) : dateStr;
 
   if (strategy === "earliest") {
     const validDates = matches
+      .map(normalizeDate)
       .map((d) => new Date(d))
       .filter((d) => !isNaN(d.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime())
+      .sort((a, b) => a.getTime() - b.getTime());
 
-    return validDates.length > 0 ? validDates[0].toISOString().split("T")[0] : null
+    return validDates.length > 0 ? validDates[0].toISOString().split("T")[0] : null;
   }
 
-  return matches[0]
-}
+  const first = normalizeDate(matches[0]);
+  return first;
+};
+
+
+// Extracts key information from the whois field
+const extractKeyWhoisInfo = (whois: string): string => {
+  if (!whois) return "No information available.";
+
+  const extractMultiple = (regex: RegExp): string[] => {
+    const matches = [...whois.matchAll(regex)];
+    return matches.map((m) => m[1].trim());
+  };
+
+  const dedup = (arr: string[]) =>
+    Array.from(new Set(arr.map((s) => s.trim())));
+
+  const lines: string[] = [];
+
+  // ✅ Prendi solo la data di creazione più vecchia
+  const creationDate = extractSingleFromWhois(
+    whois,
+    /(?:Creation Date|Created On|Created|Domain Registration Date)[^:\w]?[:\s]*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T\s][0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|\+\d{4})?)?)/gi,
+    "earliest"
+  );
+
+  if (creationDate) {
+    lines.push("Creation Date:");
+    lines.push(`  - ${creationDate}`);
+  }
+
+  const orgs = dedup(extractMultiple(/(?:Registrant Organization|Sponsoring Organization|Organization|Org(?:Name|-name))[^:\w]?[:\s]*(.+)/gi));
+
+  if (orgs.length > 0) {
+    lines.push("Organization:");
+    orgs.forEach((o) => lines.push(`  - ${o}`));
+  }
+
+  return lines.length > 0
+    ? lines.join("\n")
+    : "No key information found in the Whois record.";
+};
+
 
 export const extractBestOrganization = (whois: string): string => {
   const matches = [...whois.matchAll(/Organization:\s*(.+)/gi)]
