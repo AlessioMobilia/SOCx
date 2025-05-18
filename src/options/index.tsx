@@ -8,45 +8,76 @@ import "../utility/config.css"
 import "../utility/colors.css"
 import { defaultServices } from "../utility/defaultServices"
 import type { CustomService } from "../utility/iocTypes"
+import { Storage } from "@plasmohq/storage"
+
+const storage = new Storage({ area: "local" })
+
+
 
 const Options = () => {
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [virusTotalApiKey, setVirusTotalApiKey] = useState("")
   const [abuseIPDBApiKey, setAbuseIPDBApiKey] = useState("")
   const [selectedServices, setSelectedServices] = useState<{ [key: string]: string[] }>(defaultServices)
   const [customServices, setCustomServices] = useState<CustomService[]>([])
   const [isDarkMode, setIsDarkMode] = useState(true)
 
-  // Initial loading from storage
-  useEffect(() => {
-    chrome.storage.local.get(
-      ["virusTotalApiKey", "abuseIPDBApiKey", "selectedServices", "isDarkMode", "customServices"],
-      (result) => {
-        if (result.virusTotalApiKey) setVirusTotalApiKey(result.virusTotalApiKey)
-        if (result.abuseIPDBApiKey) setAbuseIPDBApiKey(result.abuseIPDBApiKey)
-        if (result.selectedServices) setSelectedServices(result.selectedServices)
-        if (result.customServices) setCustomServices(result.customServices)
-        if (result.isDarkMode !== undefined) setIsDarkMode(result.isDarkMode)
-      }
-    )
-  }, [])
+  // Load from storage
+useEffect(() => {
+  const loadSettings = async () => {
+    try {
+      const vtKey = await storage.get("virusTotalApiKey")
+      const abKey = await storage.get("abuseIPDBApiKey")
+      const selectedRaw = await storage.get("selectedServices")
+      const custom = await storage.get("customServices")
+      const theme = await storage.get("isDarkMode")
 
-  // Auto-saving
+      if (vtKey) setVirusTotalApiKey(vtKey)
+      if (abKey) setAbuseIPDBApiKey(abKey)
+
+      // 🛠 Validate selectedServices as a plain object
+      if (
+        selectedRaw &&
+        typeof selectedRaw === "object" &&
+        !Array.isArray(selectedRaw)
+      ) {
+        setSelectedServices(selectedRaw)
+      } else {
+        console.warn("Invalid selectedServices in storage, resetting.")
+        await storage.remove("selectedServices")
+        setSelectedServices(defaultServices)
+      }
+
+      if (Array.isArray(custom)) setCustomServices(custom)
+      if (typeof theme === "boolean") setIsDarkMode(theme)
+    } catch (err) {
+      console.error("Failed to load settings:", err)
+      setSelectedServices(defaultServices)
+    }
+  }
+
+  loadSettings()
+  setSettingsLoaded(true)
+
+}, [])
+
+
+  // Auto-save
   useEffect(() => {
-    chrome.storage.local.set({
-      virusTotalApiKey,
-      abuseIPDBApiKey,
-      selectedServices,
-      customServices,
-      isDarkMode
-    })
+    if (!settingsLoaded) return
+    
+    storage.set("virusTotalApiKey", virusTotalApiKey)
+    storage.set("abuseIPDBApiKey", abuseIPDBApiKey)
+    console.log("Saving selectedServices:", selectedServices)
+    storage.set("selectedServices", selectedServices)
+    storage.set("customServices", customServices)
+    storage.set("isDarkMode", isDarkMode)
   }, [virusTotalApiKey, abuseIPDBApiKey, selectedServices, customServices, isDarkMode])
 
-  // Theme
   useEffect(() => {
     document.body.className = isDarkMode ? "dark-mode" : "light-mode"
   }, [isDarkMode])
 
-  // Standard service selection change
   const handleServiceChange = (type: string, service: string) => {
     const updated = { ...selectedServices }
     if (updated[type]?.includes(service)) {
@@ -57,75 +88,67 @@ const Options = () => {
     setSelectedServices(updated)
   }
 
-  // Add custom service
   const handleAddCustomService = (newService: CustomService) => {
     setCustomServices((prev) => [...prev, newService])
   }
 
-  // Remove custom service
   const handleRemoveCustomService = (index: number) => {
     setCustomServices((prev) => prev.filter((_, i) => i !== index))
   }
 
-  // Test API Key
   const handleTestKeys = async () => {
     const results: string[] = []
 
     const testFetch = async (
-    label: string,
-    url: string,
-    headers: HeadersInit,
-    results: string[]
-  ) => {
-    try {
-      const res = await fetch(url, { headers });
+      label: string,
+      url: string,
+      headers: HeadersInit,
+      results: string[]
+    ) => {
+      try {
+        const res = await fetch(url, { headers })
 
-      if (res.ok) {
-        results.push(`✅ ${label}: OK`);
-      } else {
-        // Handle specific HTTP status codes with better messaging
-        switch (res.status) {
-          case 400:
-            results.push(`❌ ${label}: Bad Request (400)`);
-            break;
-          case 401:
-            results.push(`❌ ${label}: Unauthorized (401)`);
-            break;
-          case 403:
-            results.push(`❌ ${label}: Forbidden (403)`);
-            break;
-          case 404:
-            results.push(`❌ ${label}: Not Found (404)`);
-            break;
-          case 500:
-            results.push(`❌ ${label}: Internal Server Error (500)`);
-            break;
-          case 502:
-            results.push(`❌ ${label}: Bad Gateway (502)`);
-            break;
-          case 503:
-            results.push(`❌ ${label}: Service Unavailable (503)`);
-            break;
-          case 504:
-            results.push(`❌ ${label}: Gateway Timeout (504)`);
-            break;
-          default:
-            results.push(`❌ ${label}: Error (${res.status})`);
-            break;
+        if (res.ok) {
+          results.push(`✅ ${label}: OK`)
+        } else {
+          switch (res.status) {
+            case 400:
+              results.push(`❌ ${label}: Bad Request (400)`)
+              break
+            case 401:
+              results.push(`❌ ${label}: Unauthorized (401)`)
+              break
+            case 403:
+              results.push(`❌ ${label}: Forbidden (403)`)
+              break
+            case 404:
+              results.push(`❌ ${label}: Not Found (404)`)
+              break
+            case 500:
+              results.push(`❌ ${label}: Internal Server Error (500)`)
+              break
+            case 502:
+              results.push(`❌ ${label}: Bad Gateway (502)`)
+              break
+            case 503:
+              results.push(`❌ ${label}: Service Unavailable (503)`)
+              break
+            case 504:
+              results.push(`❌ ${label}: Gateway Timeout (504)`)
+              break
+            default:
+              results.push(`❌ ${label}: Error (${res.status})`)
+              break
+          }
+        }
+      } catch (err) {
+        if (err instanceof TypeError) {
+          results.push(`❌ ${label}: Network error (TypeError)`)
+        } else {
+          results.push(`❌ ${label}: Unknown error`)
         }
       }
-    } catch (err) {
-      // Improved error handling for network issues or other exceptions
-      if (err instanceof TypeError) {
-        // A TypeError typically indicates a network or fetch issue
-        results.push(`❌ ${label}: Network error (TypeError)`);
-      } else {
-        // Catching other errors (e.g., unexpected issues with fetch itself)
-        results.push(`❌ ${label}: Unknown error`);
-      }
     }
-  };
-
 
     if (virusTotalApiKey) {
       await testFetch("VirusTotal", "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8", {
@@ -167,7 +190,6 @@ const Options = () => {
 
 export default Options
 
-// Mount React
 const root = document.getElementById("root")
 if (root) {
   createRoot(root).render(<Options />)

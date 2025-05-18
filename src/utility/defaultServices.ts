@@ -1,6 +1,6 @@
 export const defaultServices = {
   IP: ["VirusTotal", "AbuseIPDB"],
-  Dominio: ["VirusTotal"],
+  Domain: ["VirusTotal"],
   URL: ["VirusTotal"],
   Hash: ["VirusTotal"],
   Email: ["HaveIBeenPwned"],

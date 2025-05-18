@@ -1,5 +1,6 @@
 // src/utils.ts
-
+import { sendToContentScript } from "@plasmohq/messaging"
+import { Storage } from "@plasmohq/storage"
 import * as XLSX from "xlsx"
 
 // Defang e Refang
@@ -49,7 +50,7 @@ export const identifyIOC = (text: string): string | null => {
   // Check if the input is an IP (IPv4 or IPv6)
   if (ipRegex.test(text) || regexIPv6.test(text)) {
     if (isPrivateIP(text)) {
-      showNotification("Error", text + " is a Private IP");
+      //showNotification("Error", text + " is a Private IP");
       return "Private IP";
     } else {
       return "IP";
@@ -113,21 +114,72 @@ export const isPrivateIP = (ip: string): boolean => {
 
 
 
-export const showNotification = (title: string, message: string, type: "basic" = "basic") => {
-  chrome.notifications.create({
-    type,
-    title,
-    message,
-    iconUrl: chrome.runtime.getURL("/assets/icon.png"),
-  })
+export const showNotification = (title: string, message: string): void => {
+  if (typeof chrome !== "undefined" && chrome.notifications?.create) {
+    // ✅ Background-safe (Chrome/Firefox)
+    chrome.notifications.create({
+      type: "basic",
+      title,
+      message,
+      iconUrl: chrome.runtime.getURL("assets/icon.png") // Assicurati che esista
+    })
+  } else if (typeof window !== "undefined" && typeof document !== "undefined") {
+    // ✅ Content script / popup fallback
+    showToast(`${title}: ${message}`)
+  } else {
+    // ✅ Fallback finale: console
+    console.log(`[NOTIFY] ${title}: ${message}`)
+  }
 }
 
 
 
+export const showToast = (message: string, variant: string = "primary") => {
+  let container = document.getElementById("socx-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "socx-toast-container";
+    container.style.position = "fixed";
+    container.style.bottom = "20px";
+    container.style.right = "20px";
+    container.style.zIndex = "9999";
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.gap = "8px";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `socx-toast socx-toast--${variant}`;
+  toast.setAttribute("role", "alert");
+  toast.setAttribute("aria-live", "assertive");
+  toast.setAttribute("aria-atomic", "true");
+
+  toast.innerHTML = `
+    <div class="socx-toast__message">${message}</div>
+    <button class="socx-toast__close" aria-label="Close">&times;</button>
+  `;
+
+  const closeBtn = toast.querySelector("button");
+  closeBtn?.addEventListener("click", () => toast.remove());
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+};
+
+
+
+const storage = new Storage({ area: "local" })
+
 export const saveIOC = async (type: string, text: string): Promise<boolean> => {
+  
   try {
-    const result = await chrome.storage.local.get(["iocHistory"]); // Use chrome.storage.local
-    let iocHistory = result.iocHistory || [];
+    
+    const history = await storage.get<any[]>("iocHistory") || []
+    let iocHistory = history || [];
     // Check if the IOC is already present
     const isDuplicate = iocHistory.some(
       (ioc) => ioc.text === text && ioc.type === type
@@ -140,7 +192,7 @@ export const saveIOC = async (type: string, text: string): Promise<boolean> => {
         iocHistory = iocHistory.slice(0, 20);
       }
       // Save the updated history
-      await chrome.storage.local.set({ iocHistory }); // Use chrome.storage.local
+      await storage.set("iocHistory", iocHistory); // Use chrome.storage.local
       return true;
     } else {
       return true; // The IOC is already present, but we consider the operation valid
@@ -153,32 +205,16 @@ export const saveIOC = async (type: string, text: string): Promise<boolean> => {
 
 
 
-export const copyToClipboard = (text: string, tabId?: number): void => {
-  const sendClipboardMessage = (targetTabId: number) => {
-    chrome.tabs.sendMessage(
-      targetTabId,
-      { action: "copyToClipboard", text },
-      (response) => {
-        if (response?.success) {
-          showNotification("Done", "IOC copied to clipboard")
-        } else if (response?.error) {
-          console.error("Error from content script:", response.error)
-        }
-      }
-    )
-  }
 
-  if (typeof tabId === "number" && tabId >= 0) {
-    sendClipboardMessage(tabId)
-  } else {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const activeTab = tabs[0]
-      if (activeTab?.id !== undefined) {
-        sendClipboardMessage(activeTab.id)
-      } else {
-        console.error("No active tab available to send the message")
-      }
+export const copyToClipboard = async (text: string): Promise<void> => {
+  try {
+    await sendToContentScript({
+      name: "copy-to-clipboard",
+      body: { text }
     })
+    showNotification("Done", "IOC copied to clipboard")
+  } catch (err) {
+    console.error("Error copying to clipboard:", err)
   }
 }
 
@@ -186,7 +222,8 @@ export const copyToClipboard = (text: string, tabId?: number): void => {
 
 
 
-export const extractIOCs = (text: string, refanged: boolean = true): string[] => {
+
+export const extractIOCs = (text: string, refanged: boolean = true): string[] | null => {
   const regexIPv6 = /([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])/g;
   const ipAddressRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
   const domainRegex = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/g;
@@ -298,10 +335,6 @@ export const formatAbuseIPDBData = (abuseData: any): string => {
 
   return `IP Information (AbuseIPDB):\n${lines.join("\n")}`;
 };
-
-
-
-
 
 
 
@@ -514,82 +547,151 @@ export const convertResultsToCSV = (results: { [key: string]: any }): string => 
   return rows.map((row) => row.map((c) => `"${c}"`).join(",")).join("\n")
 }
 
-
-
-
-const formatSection = (title: string, items: Record<string, any>): string => {
-  const formattedItems = Object.entries(items)
-    .map(([label, val]) => `- ${label}:\t${formatValue(val)}`)
-    .join("\n");
-
-  return `${title}:\n${formattedItems}`;
-};
-
-
 export const formatValue = (value: any, defaultValue: string = "N/A"): string => {
   if (value === 0 || value === false) return value.toString()
   return value || defaultValue
 }
 
-const ABUSE_FIELDS = [
+export const ABUSE_FIELDS = [
   "IP",
   "Abuse Score",
   "Total Reports",
   "ISP",
   "Country",
   "Domain",
-  "Last Reported At"
+  "Usage Type",
+  "IP Version",
+  "Is Tor",
+  "Is Whitelisted",
+  "Hostnames",
+  "Last Reported"
 ]
 
-const VT_FIELDS = [
+
+export const VT_FIELDS = [
+  "IOC",
+  "MD5",
+  "SHA1",
+  "SHA256",
+  "Name",
+  "Type",
+  "Size",
+  "TLD",
+  "First Submission",
+  "Last Analysis",
+  "Reputation",
+  "Tags",
+  "File Names",
+  "Trusted Verdict",
+  "ASN",
+  "AS Owner",
+  "Country",
+  "Continent",
+  "Network",
+  "Registry",
   "Malicious",
   "Suspicious",
   "Harmless",
   "Undetected",
-  "HTTPS Certificate Valid Until",
-  "HTTPS Certificate Issuer",
+  "HTTPS Valid Until",
+  "HTTPS Issuer",
   "Categories",
-  "WHOIS Creation Date",
-  "WHOIS Expiry Date",
-  "Registrar",
-  "Organization"
+  "WHOIS Creation",
+  "WHOIS Expiry",
+  "WHOIS Registrar",
+  "WHOIS Organization"
 ]
 
-export const getAbuseExportFields = (abuse: any) => [
-  abuse.ipAddress ?? "N/A",
-  abuse.abuseConfidenceScore?.toString() ?? "0",
-  abuse.totalReports?.toString() ?? "0",
-  abuse.isp ?? "N/A",
-  abuse.countryCode ?? "N/A",
-  abuse.domain ?? "N/A",
-  abuse.lastReportedAt ?? "N/A"
-]
 
-export const getVirusTotalExportFields = (attributes: any) => {
-  const stats = attributes?.last_analysis_stats ?? {}
-  const cert = attributes?.last_https_certificate ?? {}
-  const categories = attributes?.categories
-    ? Object.values(attributes.categories).join(", ")
-    : "N/A"
 
-  const whoisText = attributes?.whois || ""
-  const creationDate =
-    extractSingleFromWhois(whoisText, /Created:\s*(.+)/gi, "earliest") ??
-    extractSingleFromWhois(whoisText, /Creation Date:\s*(.+)/gi, "earliest") ??
-    extractSingleFromWhois(whoisText, /Registered On:\s*(.+)/gi, "earliest")
 
-  const expiryDate =
-    extractSingleFromWhois(whoisText, /Expiry Date:\s*(.+)/gi, "earliest") ??
-    extractSingleFromWhois(whoisText, /Expire Date:\s*(.+)/gi, "earliest") ??
-    extractSingleFromWhois(whoisText, /Expires On:\s*(.+)/gi, "earliest")
 
-  const registrar =
-    extractSingleFromWhois(whoisText, /Registrar(?: Name)?:\s*(.+)/gi, "first") ??
-    extractSingleFromWhois(whoisText, /Sponsoring Registrar:\s*(.+)/gi, "first")
 
-  const organization = extractBestOrganization(whoisText)
+export const getAbuseExportFields = (abuse: any): string[] => {
+  const d = abuse?.data ?? abuse
+  if (!d || typeof d !== "object") return ABUSE_FIELDS.map(() => "N/A")
+
+  const hostnames =
+    Array.isArray(d.hostnames) && d.hostnames.length > 0
+      ? d.hostnames.join(", ")
+      : "N/A"
+
+  const isWhitelisted =
+    d.isWhitelisted === true
+      ? "Yes"
+      : d.isWhitelisted === false
+      ? "No"
+      : "Unknown"
 
   return [
+    d.ipAddress ?? "N/A",
+    `${d.abuseConfidenceScore ?? 0}%`,
+    d.totalReports?.toString() ?? "0",
+    d.isp ?? "N/A",
+    d.countryCode ?? "N/A",
+    d.domain ?? "N/A",
+    d.usageType ?? "N/A",
+    d.ipVersion === 6 ? "IPv6" : "IPv4",
+    d.isTor ? "Yes" : "No",
+    isWhitelisted,
+    hostnames,
+    d.lastReportedAt ?? "N/A"
+  ]
+}
+
+
+export const getVirusTotalExportFields = (attr: any, d?: any): string[] => {
+  const stats = attr?.last_analysis_stats ?? {}
+  const cert = attr?.last_https_certificate ?? {}
+  const categories = attr?.categories
+    ? Object.values(attr.categories).join(", ")
+    : "N/A"
+
+  const whois = attr?.whois || ""
+
+  const creationDate =
+    extractSingleFromWhois(whois, /Created:\s*(.+)/gi, "earliest") ??
+    extractSingleFromWhois(whois, /Creation Date:\s*(.+)/gi, "earliest") ??
+    extractSingleFromWhois(whois, /Registered On:\s*(.+)/gi, "earliest")
+
+  const expiryDate =
+    extractSingleFromWhois(whois, /Expiry Date:\s*(.+)/gi, "earliest") ??
+    extractSingleFromWhois(whois, /Expire Date:\s*(.+)/gi, "earliest") ??
+    extractSingleFromWhois(whois, /Expires On:\s*(.+)/gi, "earliest")
+
+  const registrar =
+    extractSingleFromWhois(whois, /Registrar(?: Name)?:\s*(.+)/gi, "first") ??
+    extractSingleFromWhois(whois, /Sponsoring Registrar:\s*(.+)/gi, "first")
+
+  const organization = extractBestOrganization(whois)
+
+  return [
+    d?.id ?? "N/A",                                  // IOC
+    attr.md5 ?? "N/A",
+    attr.sha1 ?? "N/A",
+    attr.sha256 ?? "N/A",
+    attr.meaningful_name ?? "N/A",
+    attr.type_description ?? "N/A",
+    attr.size?.toString() ?? "N/A",
+    attr.tld ?? "N/A",
+    attr.first_submission_date
+      ? new Date(attr.first_submission_date * 1000).toISOString().split("T")[0]
+      : "N/A",
+    attr.last_analysis_date
+      ? new Date(attr.last_analysis_date * 1000).toISOString().split("T")[0]
+      : "N/A",
+    attr.reputation?.toString() ?? "N/A",
+    attr.tags?.join(", ") ?? "N/A",
+    attr.names?.slice(0, 5).join(", ") ?? "N/A",
+    attr.trusted_verdict?.verdict
+      ? `${attr.trusted_verdict.verdict} (${attr.trusted_verdict.organization || "Unknown"})`
+      : "N/A",
+    attr.asn ?? "N/A",
+    attr.as_owner ?? "N/A",
+    attr.country ?? "N/A",
+    attr.continent ?? "N/A",
+    attr.network ?? "N/A",
+    attr.regional_internet_registry ?? "N/A",
     stats.malicious?.toString() ?? "0",
     stats.suspicious?.toString() ?? "0",
     stats.harmless?.toString() ?? "0",
@@ -604,14 +706,18 @@ export const getVirusTotalExportFields = (attributes: any) => {
   ]
 }
 
+
+
+
 export const exportResultsByEngine = (results: { [key: string]: any }) => {
-  const vtRows = [["IOC", ...VT_FIELDS]]
+  const vtRows = [["IOC", ...VT_FIELDS.slice(1)]]
   const abuseRows = [["IOC", ...ABUSE_FIELDS]]
 
   for (const [ioc, result] of Object.entries(results)) {
-    const vt = result?.VirusTotal?.data?.attributes
-    if (vt) {
-      vtRows.push([ioc, ...getVirusTotalExportFields(vt)])
+    const vtData = result?.VirusTotal?.data
+    const vtAttr = vtData?.attributes
+    if (vtAttr) {
+      vtRows.push([ioc, ...getVirusTotalExportFields(vtAttr, vtData)])
     }
 
     const abuse = result?.AbuseIPDB?.data
@@ -624,8 +730,38 @@ export const exportResultsByEngine = (results: { [key: string]: any }) => {
   if (abuseRows.length > 1) downloadCSV(abuseRows, "AbuseIPDB_IOC_Results")
 }
 
-const downloadCSV = (rows: string[][], filename: string) => {
-  const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n")
+// Funzione per eseguire l'escape dei valori CSV
+const escape = (value: any): string => {
+  const str = String(value ?? "N/A")
+  return `"${str.replace(/"/g, '""').replace(/\r?\n/g, " ")}"`
+}
+
+// Funzione per scaricare il CSV
+const downloadCSV = (rows: any[][], filename: string, delimiter: string = ",") => {
+  const escape = (value: any): string => {
+    const str = String(value ?? "N/A")
+    return `"${str.replace(/"/g, '""').replace(/\r?\n/g, " ")}"`
+  }
+
+  if (rows.length < 2) return // Niente da esportare se ci sono solo intestazioni
+
+  const headers = rows[0]
+  const dataRows = rows.slice(1)
+
+  // Trova colonne non vuote (almeno un valore non vuoto e diverso da "N/A")
+  const nonEmptyColumnIndices = headers.map((_, colIdx) =>
+    dataRows.some(row => {
+      const val = row[colIdx]
+      return val !== "" && val !== null && val !== undefined && val !== "N/A"
+    })
+  )
+
+  // Filtra colonne vuote
+  const filteredRows = rows.map(row =>
+    row.filter((_, colIdx) => nonEmptyColumnIndices[colIdx])
+  )
+
+  const csv = filteredRows.map((row) => row.map(escape).join(delimiter)).join("\n")
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
@@ -635,6 +771,8 @@ const downloadCSV = (rows: string[][], filename: string) => {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+
 
 export const exportResultsToExcel = (results: { [key: string]: any }) => {
   const vtSheetData: (string | number)[][] = [["IOC", ...VT_FIELDS]]
@@ -652,18 +790,40 @@ export const exportResultsToExcel = (results: { [key: string]: any }) => {
   }
 
   const workbook = XLSX.utils.book_new()
-  
-  const vtSheet = XLSX.utils.aoa_to_sheet(vtSheetData)
-  const abuseSheet = XLSX.utils.aoa_to_sheet(abuseSheetData)
-  if (vtSheetData.length > 1) {
+
+  const cleanSheet = (data: (string | number)[][]) => {
+    if (data.length < 2) return null
+
+    const headers = data[0]
+    const rows = data.slice(1)
+
+    const nonEmptyCols = headers.map((_, colIdx) =>
+      rows.some(row => {
+        const val = row[colIdx]
+        return val !== "" && val !== null && val !== undefined && val !== "N/A"
+      })
+    )
+
+    return data.map(row => row.filter((_, i) => nonEmptyCols[i]))
+  }
+
+  const cleanedVt = cleanSheet(vtSheetData)
+  const cleanedAbuse = cleanSheet(abuseSheetData)
+
+  if (cleanedVt?.length > 1) {
+    const vtSheet = XLSX.utils.aoa_to_sheet(cleanedVt)
     XLSX.utils.book_append_sheet(workbook, vtSheet, "VirusTotal")
-    }
-  if (abuseSheetData.length > 1) {
+  }
+
+  if (cleanedAbuse?.length > 1) {
+    const abuseSheet = XLSX.utils.aoa_to_sheet(cleanedAbuse)
     XLSX.utils.book_append_sheet(workbook, abuseSheet, "AbuseIPDB")
   }
 
   XLSX.writeFile(workbook, `SOCx_IOC_Report_${new Date().toISOString().split("T")[0]}.xlsx`)
 }
+
+
 
 export const extractSingleFromWhois = (
   whois: string,
@@ -748,40 +908,5 @@ export const extractBestOrganization = (whois: string): string => {
 }
 
 
-export const showToast = (message: string, variant: string = "primary") => {
-  let container = document.getElementById("socx-toast-container");
-  if (!container) {
-    container = document.createElement("div");
-    container.id = "socx-toast-container";
-    container.style.position = "fixed";
-    container.style.bottom = "20px";
-    container.style.right = "20px";
-    container.style.zIndex = "9999";
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.gap = "8px";
-    document.body.appendChild(container);
-  }
-
-  const toast = document.createElement("div");
-  toast.className = `socx-toast socx-toast--${variant}`;
-  toast.setAttribute("role", "alert");
-  toast.setAttribute("aria-live", "assertive");
-  toast.setAttribute("aria-atomic", "true");
-
-  toast.innerHTML = `
-    <div class="socx-toast__message">${message}</div>
-    <button class="socx-toast__close" aria-label="Close">&times;</button>
-  `;
-
-  const closeBtn = toast.querySelector("button");
-  closeBtn?.addEventListener("click", () => toast.remove());
-
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.remove();
-  }, 3000);
-};
 
 

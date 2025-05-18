@@ -1,4 +1,5 @@
 import type { PlasmoCSConfig } from "plasmo"
+import { sendToBackground } from "@plasmohq/messaging"
 import {
   extractIOCs,
   identifyIOC,
@@ -42,24 +43,6 @@ function copyTextWithFallback(text: string): boolean {
   }
 }
 
-// Listen for clipboard copy messages
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === "copyToClipboard" && typeof message.text === "string") {
-    navigator.clipboard.writeText(message.text)
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => {
-        console.warn("navigator.clipboard.writeText failed, using fallback:", err.message)
-        const success = copyTextWithFallback(message.text)
-        if (success) {
-          sendResponse({ success: true })
-        } else {
-          sendResponse({ error: "Copy failed with fallback as well" })
-        }
-      })
-
-    return true // Indicates async response
-  }
-})
 
 let currentButton: HTMLButtonElement | null = null
 let currentMagicButton: HTMLButtonElement | null = null
@@ -244,23 +227,31 @@ observer.observe(document.body, {
 
 setTimeout(() => repositionButtons(), 0)
 
+
 function getIOCInfo(ioc: string): Promise<any> {
   const selectedServices = [identifyIOC(ioc) === "IP" ? "AbuseIPDB" : "VirusTotal"]
   console.log("Selected services:", selectedServices)
-  console.log("IOC:", ioc)
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      { action: "checkBulkIOCs", iocList: [ioc], services: selectedServices },
-      resolve
-    )
+  return sendToBackground({
+    name: "check-bulk-iocs",
+    body: {
+      iocList: [ioc],
+      services: selectedServices
+    }
   })
 }
 
+
 function requestIOCInfo(ioc: string): Promise<any> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: "MagicIOCRequest", IOC: ioc }, resolve)
+  console.log("Requesting IOC info for:", ioc)
+  return sendToBackground({
+    name: "magic-ioc-request",
+    body: {
+      IOC: ioc
+    }
   })
 }
+
+
 
 function debounce(fn: Function, delay: number) {
   let timeout: NodeJS.Timeout

@@ -1,67 +1,89 @@
 import {
   copyToClipboard, extractIOCs, refang, defang, formatCVEs,
   identifyIOC, isPrivateIP, showNotification, saveIOC
-} from "../utility/utils";
-import { servicesConfig } from "../utility/servicesConfig";
-import { defaultServices } from "../utility/defaultServices";
+} from "../utility/utils"
+import { servicesConfig } from "../utility/servicesConfig"
+import { defaultServices } from "../utility/defaultServices"
+import { Storage } from "@plasmohq/storage"
 
-export async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab: chrome.tabs.Tab) {
-  const selection = info.selectionText?.trim();
-  if (!selection) return showNotification("Error", "No text selected.");
+const storage = new Storage({ area: "local" })
 
-  const iocList = extractIOCs(selection);
-  const ioc = iocList?.[0];
-  const type = identifyIOC(ioc);
+type SelectedServices = {
+  [iocType: string]: string[] // Es: { IP: ["VirusTotal", ...] }
+}
 
-  const copyOps = {
-    "refangIOC": () => copyToClipboard(iocList.map(refang).join("\n"), tab.id),
-    "defangIOC": () => copyToClipboard(iocList.map(defang).join("\n"), tab.id),
-    "copyCVE": () => copyToClipboard(formatCVEs(selection, false), tab.id),
-    "copyCVECSV": () => copyToClipboard(formatCVEs(selection, true), tab.id)
-  };
+export async function handleMenuClick(info: any, tab: any) {
+  const selection = info.selectionText?.trim()
+  if (!selection) {
+    showNotification("Error", "No text selected.")
+    return
+  }
 
-  console.log("Menu clicked:", info.menuItemId, selection, tab.id);
-  if (info.menuItemId in copyOps) return copyOps[info.menuItemId]();
+  const iocList = extractIOCs(selection)
+  const ioc = iocList?.[0]
+  const type = identifyIOC(ioc)
 
-  if (!ioc || !type) return showNotification("Error", "Invalid IOC.");
-  if (type === "IP" && isPrivateIP(ioc)) return showNotification("Private", "Private IP, skipping analysis.");
+  const copyOps: Record<string, () => void> = {
+    refangIOC: () => copyToClipboard(iocList.map(refang).join("\n")),
+    defangIOC: () => copyToClipboard(iocList.map(defang).join("\n")),
+    copyCVE: () => copyToClipboard(formatCVEs(selection, false)),
+    copyCVECSV: () => copyToClipboard(formatCVEs(selection, true))
+  }
+
+  console.log("Menu clicked:", info.menuItemId, selection, tab.id)
+  if (info.menuItemId in copyOps) {
+    copyOps[info.menuItemId]()
+    return
+  }
+
+  if (!ioc || !type) {
+    showNotification("Error", "Invalid IOC.")
+    return
+  }
+
+  if (type === "IP" && isPrivateIP(ioc)) {
+    showNotification("Private", "Private IP, skipping analysis.")
+    return
+  }
 
   if (info.menuItemId === "CyberChef") {
-    const base64 = btoa(unescape(encodeURIComponent(selection))).replaceAll("=", "");
-    chrome.tabs.create({ url: `https://gchq.github.io/CyberChef/#input=${base64}` });
-    return;
+    const base64 = btoa(unescape(encodeURIComponent(selection))).replaceAll("=", "")
+    chrome.tabs.create({ url: `https://gchq.github.io/CyberChef/#input=${base64}` })
+    return
   }
 
   if (info.menuItemId === "AddToBulkCheck") {
-    chrome.storage.local.set({ bulkIOCList: iocList }, () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('/tabs/bulk_check.html') });
-    });
-    return;
+    await storage.set("bulkIOCList", iocList)
+    // Apri la pagina React (tabs/bulk-check.tsx)
+    chrome.tabs.create({ url: chrome.runtime.getURL("tabs/bulk-check.html") })
+    return
   }
 
-  await saveIOC(type, ioc);
+  await saveIOC(type, ioc)
 
   if (info.menuItemId === "MagicIOC") {
-    const settings = await chrome.storage.local.get("selectedServices");
-    const selected = settings.selectedServices || defaultServices;
+    const selected = await storage.get<SelectedServices>("selectedServices") || defaultServices
 
-    if (!selected[type]) return showNotification("Error", "No service selected.");
+    if (!selected[type]) {
+      showNotification("Error", "No service selected.")
+      return
+    }
 
-    selected[type].forEach(service => {
-      const config = servicesConfig.services[service];
+    selected[type].forEach((service) => {
+      const config = servicesConfig.services[service]
       if (config?.supportedTypes.includes(type)) {
-        chrome.tabs.create({ url: config.url(type, ioc) });
+        chrome.tabs.create({ url: config.url(type, ioc) })
       }
-    });
-    return;
+    })
+    return
   }
 
-  const [menuType, service] = info.menuItemId.toString().split("_");
-  const config = servicesConfig.services[service];
+  const [menuType, service] = info.menuItemId.toString().split("_")
+  const config = servicesConfig.services[service]
 
   if (config?.supportedTypes.includes(type)) {
-    chrome.tabs.create({ url: config.url(type, ioc) });
+    chrome.tabs.create({ url: config.url(type, ioc) })
   } else {
-    showNotification("Error", "Invalid service or type.");
+    showNotification("Error", "Invalid service or type.")
   }
 }

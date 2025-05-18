@@ -1,11 +1,14 @@
 import tippy from "tippy.js"
+import { Storage } from "@plasmohq/storage"
 
-export const createTooltip = (text: string, button: HTMLButtonElement) => {
+const storage = new Storage({ area: "local" })
+
+export const createTooltip = async (text: string, button: HTMLButtonElement) => {
   let formatted = text.replaceAll("\n", "<br>")
 
   let threatStatus: "malicious" | "suspicious" | "benign" | "unknown" = "unknown"
 
-  // Highlight "Abuse Score"
+  // Highlight Abuse Score
   formatted = formatted.replace(/Abuse Score:\s*(\d+)\%/g, (match, val) => {
     const score = parseInt(val)
     if (score === 0) {
@@ -17,7 +20,7 @@ export const createTooltip = (text: string, button: HTMLButtonElement) => {
     }
   })
 
-  // Highlight "Malicious"
+  // Highlight Malicious
   formatted = formatted.replace(/Malicious:\s*(\d+)/g, (match, val) => {
     const detections = parseInt(val)
     if (detections > 5) {
@@ -48,17 +51,16 @@ export const createTooltip = (text: string, button: HTMLButtonElement) => {
     </div>
   `
 
-  chrome.storage.local.get("isDarkMode", ({ isDarkMode }) => {
-    const tooltipTheme = isDarkMode ? "socx-dark" : "socx-light"
+  const isDarkMode = await storage.get<boolean>("isDarkMode")
+  const tooltipTheme = isDarkMode ? "socx-dark" : "socx-light"
 
-    tippy(button, {
-      allowHTML: true,
-      content: contentHTML,
-      theme: tooltipTheme,
-      maxWidth: 400,
-      interactive: true,
-      placement: "right",
-      animation: false // disable animation
-    }).show()
-  })
+  tippy(button, {
+    allowHTML: true,
+    content: contentHTML,
+    theme: tooltipTheme,
+    maxWidth: 400,
+    interactive: true,
+    placement: "right",
+    animation: false
+  }).show()
 }
