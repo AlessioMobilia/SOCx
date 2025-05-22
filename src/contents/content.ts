@@ -1,4 +1,5 @@
 import type { PlasmoCSConfig } from "plasmo"
+
 import { sendToBackground } from "@plasmohq/messaging"
 import {
   extractIOCs,
@@ -18,29 +19,6 @@ import "./content.css"
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
   all_frames: true
-}
-
-// Clipboard fallback copy method
-function copyTextWithFallback(text: string): boolean {
-  try {
-    const textarea = document.createElement("textarea")
-    textarea.value = text
-    textarea.style.position = "fixed"
-    textarea.style.opacity = "0"
-    textarea.style.pointerEvents = "none"
-
-    const parent = document.body || document.documentElement || document.head
-    parent.appendChild(textarea)
-    textarea.focus()
-    textarea.select()
-
-    const successful = document.execCommand("copy")
-    parent.removeChild(textarea)
-    return successful
-  } catch (err) {
-    console.error("Fallback copy failed:", err)
-    return false
-  }
 }
 
 
@@ -260,3 +238,51 @@ function debounce(fn: Function, delay: number) {
     timeout = setTimeout(() => fn(...args), delay)
   }
 }
+
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.name === "copy-to-clipboard") {
+    const text = message.body?.text
+    if (typeof text === "string") {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          sendResponse({ success: true })
+        })
+        .catch((err) => {
+          console.warn("Primary clipboard API failed, trying fallback:", err)
+
+          // Fallback method using execCommand
+          try {
+            const textarea = document.createElement("textarea")
+            textarea.value = text
+            textarea.style.position = "fixed"
+            textarea.style.top = "-1000px"
+            textarea.style.opacity = "0"
+            document.body.appendChild(textarea)
+            textarea.focus()
+            textarea.select()
+
+            const success = document.execCommand("copy")
+            document.body.removeChild(textarea)
+
+            sendResponse({
+              success,
+              fallback: true
+            })
+          } catch (fallbackErr) {
+            console.error("Clipboard fallback also failed:", fallbackErr)
+            sendResponse({
+              success: false,
+              error: fallbackErr.message
+            })
+          }
+        })
+
+      return true // Keep channel open for async response
+    } else {
+      sendResponse({ success: false, error: "Invalid text" })
+    }
+  }
+})
+

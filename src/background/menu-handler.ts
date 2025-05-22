@@ -32,6 +32,7 @@ export async function handleMenuClick(info: any, tab: any) {
 
   console.log("Menu clicked:", info.menuItemId, selection, tab.id)
   if (info.menuItemId in copyOps) {
+    console.log("Copying:", info.menuItemId);
     copyOps[info.menuItemId]()
     return
   }

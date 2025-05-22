@@ -210,11 +210,13 @@ export const copyToClipboard = async (text: string): Promise<void> => {
   try {
     await sendToContentScript({
       name: "copy-to-clipboard",
-      body: { text }
+      body: { text: text }
     })
+    
     showNotification("Done", "IOC copied to clipboard")
   } catch (err) {
-    console.error("Error copying to clipboard:", err)
+    showNotification("Error", "IOC not copied to clipboard")
+    //console.error("Error copying to clipboard:", err)
   }
 }
 

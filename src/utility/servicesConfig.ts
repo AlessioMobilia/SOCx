@@ -160,6 +160,11 @@ export const servicesConfig = {
       supportedTypes: ["IP", "Hash", "URL", "Domain"],
       url: (type: string, text: string) => `https://threatfox.abuse.ch/browse.php?search=ioc%3A+${encodeURIComponent(text)}`,
     },
+    Google: {
+      title: "Search on Google",
+      supportedTypes: ["IP", "Hash", "URL", "Domain", "Email", "ASN", "MAC"],
+      url: (type: string, text: string) => `https://www.google.com/search?q="${encodeURIComponent(text)}"`,
+    },
     ViewDNS: {
       title: "Check on ViewDNS.info",
       supportedTypes: ["Domain", "IP", "ASN"],
@@ -178,20 +183,20 @@ export const servicesConfig = {
     IP: [
       "VirusTotal", "AbuseIPDB", "Censys", "IPQualityScore", "IPinfo", "AlienVault",
       "IBMXForce", "MxToolbox", "Pulsedive", "Spur", "PassiveDNS", "Shodan",
-      "GreyNoise", "ViewDNS", "ThreatFox"
+      "GreyNoise", "ViewDNS", "ThreatFox", "Google"
     ],
     Domain: [
       "VirusTotal", "Censys", "AlienVault", "IBMXForce", "MxToolbox", "Pulsedive",
-      "SecurityTrails", "ViewDNS", "Robtex", "ThreatFox"
+      "SecurityTrails", "ViewDNS", "Robtex", "ThreatFox", "Google"
     ],
     URL: [
-      "VirusTotal", "IBMXForce", "UrlScan", "PhishTank", "Tria_ge", "ThreatFox"
+      "VirusTotal", "IBMXForce", "UrlScan", "PhishTank", "Tria_ge", "ThreatFox", "Google"
     ],
     Hash: [
-      "VirusTotal", "MalwareBazaar", "Pulsedive", "AlienVault", "Tria_ge", "ThreatFox"
+      "VirusTotal", "MalwareBazaar", "Pulsedive", "AlienVault", "Tria_ge", "ThreatFox", "Google"
     ],
-    Email: ["Hunter", "HaveIBeenPwned"],
-    ASN: ["BGPToolkit", "ViewDNS"],
-    MAC: ["MACVendors", "WiresharkOUI"],
+    Email: ["Hunter", "HaveIBeenPwned", "Google"],
+    ASN: ["BGPToolkit", "ViewDNS", "Google"],
+    MAC: ["MACVendors", "WiresharkOUI", "Google"],
   },
 };
