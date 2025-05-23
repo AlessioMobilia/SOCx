@@ -1,6 +1,6 @@
 import {
   copyToClipboard, extractIOCs, refang, defang, formatCVEs,
-  identifyIOC, isPrivateIP, showNotification, saveIOC
+  identifyIOC, isPrivateIP, showNotification, saveIOC, formatAndCopySelection
 } from "../utility/utils"
 import { servicesConfig } from "../utility/servicesConfig"
 import { defaultServices } from "../utility/defaultServices"
@@ -27,7 +27,8 @@ export async function handleMenuClick(info: any, tab: any) {
     refangIOC: () => copyToClipboard(iocList.map(refang).join("\n")),
     defangIOC: () => copyToClipboard(iocList.map(defang).join("\n")),
     copyCVE: () => copyToClipboard(formatCVEs(selection, false)),
-    copyCVECSV: () => copyToClipboard(formatCVEs(selection, true))
+    copyCVECSV: () => copyToClipboard(formatCVEs(selection, true)),
+    extractText: () => formatAndCopySelection()
   }
 
   console.log("Menu clicked:", info.menuItemId, selection, tab.id)

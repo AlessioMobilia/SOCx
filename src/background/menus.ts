@@ -12,6 +12,7 @@ export const setupContextMenus = async () => {
 
   const baseMenus = [
     { id: "MagicIOC", title: "MAGIC IOC" },
+    { id: "extractText", title: "Key:Value Smart formatting" },
     { id: "AddToBulkCheck", title: "Bulk Check" },
     { id: "CyberChef", title: "Open in CyberChef" },
     { id: "getIOC", title: "Extract IOC" },

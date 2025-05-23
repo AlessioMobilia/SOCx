@@ -33,6 +33,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     for (const ioc of iocList) {
       const type = identifyIOC(ioc)
       const result: Record<string, any> = {}
+      let privateIpcount = 0;
 
       if (type) {
         if (services.includes("VirusTotal") && type !== "MAC") {
@@ -51,7 +52,11 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
             result.AbuseIPDB = { error: "Fetch failed" }
           }
         } else if (type === "Private IP") {
-          showNotification("Error", "Private IP, skipping analysis.")
+          privateIpcount++;
+          if(privateIpcount == 0) {
+          showNotification("Error", "Skipping the private IP address.")
+        }
+
         }
       }
 

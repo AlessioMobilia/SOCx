@@ -225,6 +225,14 @@ export const copyToClipboard = async (text: string): Promise<void> => {
 
 
 
+
+
+
+
+
+
+
+
 export const extractIOCs = (text: string, refanged: boolean = true): string[] | null => {
   const regexIPv6 = /([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])/g;
   const ipAddressRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
@@ -911,4 +919,351 @@ export const extractBestOrganization = (whois: string): string => {
 
 
 
+// Funzione per inviare un messaggio al content script format-selection
+export const formatAndCopySelection = async (): Promise<void> => {
+  try {
+    const response = await sendToContentScript({
+      name: "format-selection"
+    })
 
+    const formattedText = response?.formatted
+    console.log("Response:", response);
+
+    if (typeof formattedText === "string" && formattedText.trim() !== "" && response?.success) {
+      await copyToClipboard(formattedText)
+    } else {
+      showNotification("Nothing to copy", "No formatted text received.")
+    }
+  } catch (error) {
+    showNotification("Error", "Could not format or copy selection.")
+    console.error("formatAndCopySelection error:", error)
+  }
+}
+
+
+// Funzione per formattare coppie chiave:valore allineate
+function formatAlignedPairs(pairs: [string, string][]): string {
+  console.log("formatAlignedPairs - input pairs:", pairs);
+  const cleanedPairs = pairs.map(([k, v]) => [
+    normalizeKey(k),
+    v.replace(/\s+/g, " ").trim(),
+  ]);
+  const maxKeyLength = Math.max(...cleanedPairs.map(([k]) => k.length));
+  const labelWithColonWidth = maxKeyLength + 1; // +1 for ':'
+  return cleanedPairs
+    .map(([k, v]) => `${(k + ":").padEnd(labelWithColonWidth + 1)}${v}`)
+    .join("\n");
+}
+
+
+
+
+// Funzione per formattare testo tabulato
+function formatTabSeparatedText(text: string): string | null {
+  if (!text.includes("\t")) return null;
+  const lines = text.split("\n").map(line => line.split("\t"));
+  const valid = lines.filter(row => row.length === 2) as [string, string][];
+  if (valid.length === 0) return null;
+  return formatAlignedPairs(valid);
+}
+
+
+// Funzione per formattare testo chiave:valore
+function formatColonSeparatedText(text: string): string | null {
+  const lines = text.split("\n").filter(Boolean);
+  const pairs = lines.map(line => line.split(/:(.+)/)).filter(p => p.length === 3).map(([, k, v]) => [k.trim(), v.trim()] as [string, string]);
+  if (pairs.length === 0) return null;
+  return formatAlignedPairs(pairs);
+}
+
+
+function normalizeKey(key: string): string {
+  return key
+    .replace(/\(s\)/gi, "s")
+    .replace(/Usage Type/i, "Usage")
+    .replace(/Domain Name/i, "Domain")
+    .replace(/Hostname\(s\)/i, "Hostnames")
+    .replace(/Abuse Confidence/i, "Abuse Confidence")
+    .replace(/IP Address/i, "IP")
+    .replace(/[:=]\s*$/, "") // <-- rimuove : o = finali
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+
+
+function extractThTdPairsFromDiv(div: HTMLElement): [string, string][] {
+  const pairs: [string, string][] = [];
+  const ths = Array.from(div.querySelectorAll("th"));
+  for (const th of ths) {
+    const td = th.parentElement?.querySelector("td");
+    if (td) {
+      const key = normalizeKey(th.textContent?.trim() || "");
+      const value = cleanHTMLContent(td.innerHTML);
+      pairs.push([key, value]);
+    }
+  }
+  return pairs;
+}
+
+function cleanHTMLContent(html: string): string {
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = html;
+  tempDiv.querySelectorAll("img").forEach(el => el.remove());
+  tempDiv.querySelectorAll("br").forEach(el => el.replaceWith(" "));
+  return tempDiv.textContent?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+export function formatSelectedText(lastValidSelection: Selection): string {
+  console.log("Formatting selected text:", lastValidSelection);
+  if (!lastValidSelection || lastValidSelection.rangeCount === 0) return "";
+
+  const range = lastValidSelection.getRangeAt(0);
+  const fragment = range.cloneContents();
+  const div = document.createElement("div");
+  div.appendChild(fragment);
+  console.log("Selected HTML:", div.innerHTML);
+
+  const headingEls = Array.from(div.querySelectorAll("h1, h2, h3, h4"))
+    .map(el => el.textContent?.trim())
+    .filter(Boolean);
+
+  const paragraphEls = Array.from(div.querySelectorAll("p"))
+    .map(el => el.textContent?.trim())
+    .filter(Boolean);
+
+  const rawPrefixLines = [...headingEls];
+  const plainTextLower = div.innerText.toLowerCase();
+  for (const p of paragraphEls) {
+    if (!plainTextLower.includes(p.toLowerCase())) {
+      rawPrefixLines.push(p);
+    }
+  }
+
+  const sectionHeaders = Array.from(div.querySelectorAll(".header"))
+    .map(el => el.textContent?.trim())
+    .filter(Boolean);
+  rawPrefixLines.unshift(...sectionHeaders);
+
+  const rawPrefix = rawPrefixLines.join("\n");
+
+  const thTdPairs = extractThTdPairsFromDiv(div);
+  console.log("Sezione 0 - th/td pairs rilevati:", thTdPairs);
+  if (thTdPairs.length > 0) {
+    const body = formatAlignedPairs(thTdPairs);
+    return concatClean(rawPrefix, body);
+  }
+
+  console.log("sezione1 - tabelle e righe strutturati");
+  const tableRows = Array.from(div.querySelectorAll("tr"));
+  const structuredRows: string[][] = [];
+  for (const row of tableRows) {
+    const cells = Array.from(row.querySelectorAll("th, td")).map(cell => getCleanedCellText(cell as HTMLElement));
+    if (cells.length > 0) structuredRows.push(cells);
+  }
+  console.log("Structured rows:", structuredRows);
+  const maxCols = Math.max(...structuredRows.map(r => r.length), 0);
+  if (maxCols === 2) {
+    const twoColRows = structuredRows.filter(r => r.length === 2).map(r => [r[0], r[1]] as [string, string]);
+    if (twoColRows.length > 0) {
+      const body = formatAlignedPairs(twoColRows);
+      return concatClean(rawPrefix, body);
+    }
+  }
+  if (maxCols >= 3) {
+    const colWidths: number[] = [];
+    structuredRows.forEach(row => row.forEach((cell, i) => {
+      colWidths[i] = Math.max(colWidths[i] || 0, cell.length);
+    }));
+    const body = structuredRows.map(row => row.map((cell, i) => cell.padEnd(colWidths[i])).join(" | ")).join("\n");
+    return concatClean(rawPrefix, body);
+  }
+
+  // Sezione 2b: Layout label + div generico (anche senza grid-border)
+  console.log("sezione2b - label con div associato");
+
+  const labelDivPairs: [string, string][] = [];
+  const labels = Array.from(div.querySelectorAll("label"));
+
+  for (const label of labels) {
+    const key = normalizeKey(label.textContent?.trim() || "");
+
+    // Trova il div successivo non vuoto e non decorativo
+    let next = label.nextElementSibling;
+    while (next && (next.tagName !== "DIV" || next.classList.contains("grid-border") || next.textContent?.trim() === "")) {
+      next = next.nextElementSibling;
+    }
+
+    if (next && next.tagName === "DIV") {
+      const val = next.textContent?.replace(/\s+/g, " ").trim();
+      if (val) {
+        labelDivPairs.push([key, val]);
+      }
+    }
+  }
+
+  if (labelDivPairs.length > 0) {
+    console.log("Sezione 2b - label+div:", labelDivPairs);
+    const body = formatAlignedPairs(labelDivPairs);
+    return concatClean(rawPrefix, body);
+  }
+
+
+  console.log("sezione2bc - parsing da testo visibile");
+  const plainText = div.innerText.trim();
+  const textPairs: [string, string][] = [];
+  const seenKeys = new Set<string>();
+
+  const recurseExtract = (text: string, prefix = "") => {
+    let currentPath: string[] = prefix ? [prefix] : [];
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+    for (let line of lines) {
+      if (line.endsWith("{")) {
+        const key = line.replace(/[:{\s]+$/g, "");
+        currentPath.push(normalizeKey(key));
+      } else if (line === "}" || line === "},") {
+        currentPath.pop();
+      } else {
+        const match = line.match(/^"?([\w.-]+)"?\s*[:=]\s*"?([^"\n,{}]*)"?,?$/);
+        if (match) {
+          let fullKey = [...currentPath, normalizeKey(match[1])].join(".");
+          fullKey = fullKey.replace(/^\.+/, "").replace(/\"/g, "");
+          const value = match[2].trim();
+          if (!seenKeys.has(fullKey)) {
+            textPairs.push([fullKey, value]);
+            seenKeys.add(fullKey);
+          }
+        }
+      }
+    }
+  };
+
+  recurseExtract(plainText);
+
+  console.log("Sezione 2bc - parsed from text:", textPairs);
+  if (textPairs.length > 0) {
+    return formatAlignedPairs(textPairs);
+  }
+
+  console.log("sezione2e - span consecutivi key/value");
+  const spanPairs: [string, string][] = [];
+  const spans = Array.from(div.querySelectorAll("span")).map(s => s.textContent?.trim() || "");
+  for (let i = 0; i < spans.length - 1; i++) {
+    const key = spans[i].replace(/:$/, "").trim();
+    const val = spans[i + 1].trim();
+    if (key && val && !key.includes(" ") && /^[a-zA-Z_]+$/.test(key) && /^(true|false|""|\d+)$/.test(val)) {
+      spanPairs.push([key, val]);
+      i++;
+    }
+  }
+  console.log("Sezione 2e - span pairs:", spanPairs);
+  if (spanPairs.length > 0) {
+    return formatAlignedPairs(spanPairs);
+  }
+
+  console.log("sezione2d - label con più valori (descriptor)");
+  const labelValueMap = new Map<string, string[]>();
+  const allDivs = Array.from(div.querySelectorAll("div"));
+  let currentLabel: string | null = null;
+  for (const d of allDivs) {
+    const text = d.textContent?.trim();
+    const className = d.className;
+    if (!text) continue;
+    if (!className.includes("descriptor") && !className.includes("action") && !d.querySelector(".descriptor")) {
+      currentLabel = normalizeKey(text);
+      continue;
+    }
+    if ((className.includes("descriptor") || d.classList.contains("descriptor")) && currentLabel) {
+      const val = text.replace(/\s+/g, " ").trim();
+      if (!labelValueMap.has(currentLabel)) labelValueMap.set(currentLabel, []);
+      labelValueMap.get(currentLabel)!.push(val);
+    }
+  }
+  const labelValuePairs: [string, string][] = Array.from(labelValueMap.entries()).filter(([k, v]) => v.length > 0).map(([k, values]) => [k, values.join(", ")]);
+  console.log("Sezione 2d - label+descriptor:", labelValuePairs);
+  if (labelValuePairs.length > 0) {
+    const body = formatAlignedPairs(labelValuePairs);
+    return concatClean(rawPrefix, body);
+  }
+
+  console.log("sezione3 - coppie di span");
+  const rawText = lastValidSelection.toString().trim();
+  const extractedPairs = extractKeyValuePairsFromText(rawText);
+  console.log("Estratti da testo libero:", extractedPairs);
+  if (extractedPairs.length > 1) {
+    const body = formatAlignedPairs(extractedPairs);
+    return concatClean(rawPrefix, body);
+  }
+
+  console.log("sezione4 - liste generiche");
+  const lists = div.querySelectorAll("ul, ol");
+  if (lists.length > 0) {
+    const output: string[] = [];
+    lists.forEach(list => {
+      list.querySelectorAll("li").forEach(item => {
+        const text = item.textContent?.trim();
+        if (text) output.push(`- ${text}`);
+      });
+    });
+    if (output.length > 0) {
+      const body = output.join("\n");
+      return concatClean(rawPrefix, body);
+    }
+  }
+
+  console.log("sezione5 - fallback");
+  const tabFormatted = formatTabSeparatedText(rawText);
+  if (tabFormatted) return rawPrefix ? `${rawPrefix}\n\n${tabFormatted}` : tabFormatted;
+
+  const colonFormatted = formatColonSeparatedText(rawText);
+  if (colonFormatted) return rawPrefix ? `${rawPrefix}\n\n${colonFormatted}` : colonFormatted;
+
+  return rawPrefix ? `${rawPrefix}\n\n${rawText}` : rawText;
+}
+
+
+
+
+
+
+
+
+
+
+function extractKeyValuePairsFromText(text: string): [string, string][] {
+  const regex = /([a-zA-Z0-9_.\-()\[\]\s]{3,}?)\s*[:=]\s*(.+?)(?=(\n|$))/g;
+  const pairs: [string, string][] = [];
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const key = match[1].trim();
+    const val = match[2].trim();
+    // Escludi chiavi troppo corte o sospette
+    if (key.length < 3 || key === val) continue;
+    pairs.push([key, val]);
+  }
+  return pairs;
+}
+
+// Ottiene il testo visuale, rimpiazzando <br> con spazi, mantenendo i <div> concatenati
+function getCleanedCellText(cell: HTMLElement): string {
+  const clone = cell.cloneNode(true) as HTMLElement;
+
+  // Rimuove <script>, <style>, Angular template placeholders
+  clone.querySelectorAll("script, style, [type='text/ng-template'], [compile]").forEach(el => el.remove());
+
+  // Sostituisce <br> con spazio
+  clone.querySelectorAll("br").forEach(br => br.replaceWith(" "));
+
+  // Semplifica <a> e <div> mantenendo solo testo
+  clone.querySelectorAll("a, div").forEach(el => {
+    el.replaceWith(document.createTextNode(el.textContent || ""));
+  });
+
+  return clone.innerText.replace(/\s+/g, " ").trim();
+}
+
+
+function concatClean(prefix: string, body: string): string {
+  return [prefix.trim(), body.trim()].filter(Boolean).join("\n\n");
+}
