@@ -21,15 +21,6 @@ export const config: PlasmoCSConfig = {
   all_frames: true
 }
 
-console.log("Content script loaded on:", window.location.href)
-console.log("Is top frame:", window.top === window.self)
-
-if (window.top !== window.self) {
-  // Siamo in un iframe → non eseguire nulla
-  console.log("⛔ Ignorato: siamo in un iframe:", window.location.href)
-} else {
-  console.log("✅ Content script attivo sulla pagina principale:", window.location.href)
-
   // inizializzazione sicura
   if (!(window as any)._formatScriptInitialized) {
     ;(window as any)._formatScriptInitialized = true
@@ -317,4 +308,3 @@ if (window.top !== window.self) {
     })
 
   }
-}

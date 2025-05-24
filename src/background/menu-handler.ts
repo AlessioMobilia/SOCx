@@ -28,7 +28,7 @@ export async function handleMenuClick(info: any, tab: any) {
     defangIOC: () => copyToClipboard(iocList.map(defang).join("\n")),
     copyCVE: () => copyToClipboard(formatCVEs(selection, false)),
     copyCVECSV: () => copyToClipboard(formatCVEs(selection, true)),
-    extractText: () => formatAndCopySelection()
+    extractText: () => formatAndCopySelection(tab.id, info.frameId) 
   }
 
   console.log("Menu clicked:", info.menuItemId, selection, tab.id)

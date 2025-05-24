@@ -920,11 +920,11 @@ export const extractBestOrganization = (whois: string): string => {
 
 
 // Funzione per inviare un messaggio al content script format-selection
-export const formatAndCopySelection = async (): Promise<void> => {
+export const formatAndCopySelection = async (tabId: number, frameId: number): Promise<void> => {
   try {
-    const response = await sendToContentScript({
+    const response = await chrome.tabs.sendMessage(tabId, {
       name: "format-selection"
-    })
+    }, { frameId })
 
     const formattedText = response?.formatted
     console.log("Response:", response);
@@ -939,6 +939,7 @@ export const formatAndCopySelection = async (): Promise<void> => {
     console.error("formatAndCopySelection error:", error)
   }
 }
+
 
 
 // Funzione per formattare coppie chiave:valore allineate
