@@ -15,6 +15,7 @@ import { createTooltip } from "../utility/tooltipFactory"
 import "tippy.js/dist/tippy.css"
 import "./content.css"
 
+console.log("[Plasmo] Content script loaded");
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
@@ -250,6 +251,7 @@ export const config: PlasmoCSConfig = {
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message?.name === "copy-to-clipboard") {
+        console.log("Received copy-to-clipboard message:", message)
         const text = message.body?.text
         if (typeof text === "string") {
           navigator.clipboard.writeText(text)
