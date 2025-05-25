@@ -60,20 +60,42 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
 
   const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
 
-  const getRiskLevel = (result: any): "low" | "medium" | "high" => {
-    const vt = result?.VirusTotal;
-    const abuse = result?.AbuseIPDB;
+const getRiskLevel = (result: any): "low" | "medium" | "high" => {
+  const vt = result?.VirusTotal;
+  const abuse = result?.AbuseIPDB;
 
-    let vtMalicious = vt?.data?.attributes?.last_analysis_stats?.malicious || 0;
-    let vtSuspicious = vt?.data?.attributes?.last_analysis_stats?.suspicious || 0;
-    let abuseScore = abuse?.data?.abuseConfidenceScore || 0;
+  let vtLevel: "low" | "medium" | "high" = "low";
+  let abuseLevel: "low" | "medium" | "high" = "low";
 
-    const totalScore = vtMalicious + vtSuspicious + abuseScore;
+  // Controllo VirusTotal con soglie abbassate e bonus harmless
+  if (vt) {
+    const stats = vt?.data?.attributes?.last_analysis_stats || {};
+    const malicious = stats?.malicious || 0;
+    const suspicious = stats?.suspicious || 0;
+    const harmless = stats?.harmless || 0;
 
-    if (totalScore >= 40) return "high";
-    if (totalScore >= 10) return "medium";
-    return "low";
-  };
+    // Calcola bonus harmless limitato a massimo 5 punti
+    const harmlessBonus = Math.min(harmless * 0.2, 5);
+    const vtScore = (malicious * 3) + suspicious - harmlessBonus;
+
+    if (vtScore >= 20) vtLevel = "high";
+    else if (vtScore >= 5) vtLevel = "medium";
+  }
+
+  // Controllo AbuseIPDB con soglie abbassate
+  if (abuse) {
+    const abuseScore = abuse?.data?.abuseConfidenceScore || 0;
+
+    if (abuseScore >= 50) abuseLevel = "high";
+    else if (abuseScore >= 20) abuseLevel = "medium";
+  }
+
+  // Confronta i livelli e ritorna il più grave
+  const levels = ["low", "medium", "high"];
+  return levels[Math.max(levels.indexOf(vtLevel), levels.indexOf(abuseLevel))] as "low" | "medium" | "high";
+};
+
+
 
   const getRiskClass = (risk: "low" | "medium" | "high") => {
     switch (risk) {
