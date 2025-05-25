@@ -208,18 +208,19 @@ export const saveIOC = async (type: string, text: string): Promise<boolean> => {
 
 export const copyToClipboard = async (text: string): Promise<void> => {
   try {
-    await sendToContentScript({
+    const response = await sendToContentScript({
       name: "copy-to-clipboard",
       body: { text: text }
     })
-    
+    console.log("Response from content script:", response);
+
     showNotification("Done", "IOC copied to clipboard")
   } catch (err) {
     showNotification("Error", "IOC not copied to clipboard")
     //console.error("Error copying to clipboard:", err)
   }
 }
-
+  
 
 
 
@@ -930,6 +931,7 @@ export const formatAndCopySelection = async (tabId: number, frameId: number): Pr
     console.log("Response:", response);
 
     if (typeof formattedText === "string" && formattedText.trim() !== "" && response?.success) {
+      console.log("Formatted text to copy:", formattedText);
       await copyToClipboard(formattedText)
     } else {
       showNotification("Nothing to copy", "No formatted text received.")
@@ -992,14 +994,19 @@ export function formatSelectedText(lastValidSelection: Selection): string {
     finalText = finalText.concat(keyValuePairsDiv.toString()+"\n\n");
   }
 
+  const tableDatas = extractMultiElementTable(div);
+  if (tableDatas !== null) {
+    console.log("Dati tabellari estratti:", tableDatas);
+    finalText = finalText.concat(tableDatas.toString()+"\n\n");
+  }
 
-    console.log("Final html content:", div.innerHTML);
 
-    let remainingText = extractRemainingText(div);
-    finalText = remainingText.trim() + "\n\n" + finalText;
+  console.log("Final html content:", div.innerHTML);
+  let remainingText = extractRemainingText(div);
+  finalText = remainingText.trim() + "\n\n" + finalText;
     
-    console.log("Final formatted text:", finalText);
-   return finalText;
+  console.log("Final formatted text:", finalText);
+  return finalText;
 }
 
 function cleanContent(container: HTMLElement): void {
@@ -1071,14 +1078,22 @@ function extractTableLikeData(container: HTMLElement): string | null {
 function formatKeyValue(rows: string[][]): string {
   // Funzione per controllare se il testo è un timestamp, url, email, ecc.
   const isSpecialCase = (text: string) => {
-  return /(\d{1,2}:\d{2}(:\d{2})?)/.test(text) ||      // Orari presenti nel testo
-         /\bhttps?:\/\//.test(text) ||                 // URL nel testo
-         /\S+@\S+\.\S+/.test(text) ||                  // Email nel testo
-         /\d{4}-\d{2}-\d{2}/.test(text) ||             // Date ISO nel testo
-         /\bUTC[+-]?\d{1,2}:\d{2}\b/.test(text) ||     // Timezone nel testo
-         /\/[\w\/\-:.]+/.test(text);                   // Path con / e :
+    return /(\d{1,2}:\d{2}(:\d{2})?)/.test(text) ||      // Orari presenti nel testo
+           /\bhttps?:\/\//.test(text) ||                 // URL nel testo
+           /\S+@\S+\.\S+/.test(text) ||                  // Email nel testo
+           /\d{4}-\d{2}-\d{2}/.test(text) ||            // Date ISO nel testo
+           /\bUTC[+-]?\d{1,2}:\d{2}\b/.test(text) ||    // Timezone nel testo
+           /\/[\w\/\-:.]+/.test(text);                  // Path con / e :
   };
 
+  // Funzione per rimuovere virgolette solo se presenti entrambe
+  const removeSurroundingQuotes = (text: string) => {
+    if ((text.startsWith('"') && text.endsWith('"')) || 
+        (text.startsWith("'") && text.endsWith("'"))) {
+      return text.slice(1, -1);
+    }
+    return text;
+  };
 
   // Pulisce le chiavi
   const cleanedKeys = rows
@@ -1086,8 +1101,8 @@ function formatKeyValue(rows: string[][]): string {
     .map(([key, _]) => {
       let cleanedKey = key.trim();
       if (!isSpecialCase(cleanedKey)) {
-        cleanedKey = cleanedKey.replace(/^['"]+|['"]+$/g, "");   // Rimuove ' o " agli estremi
-        cleanedKey = cleanedKey.replace(/[:=]+$/, "");           // Rimuove : o = finali
+        cleanedKey = removeSurroundingQuotes(cleanedKey);   // Rimuove solo se presenti entrambe
+        cleanedKey = cleanedKey.replace(/[:=]+$/, "");      // Rimuove : o = finali
       }
       return cleanedKey + ":";
     });
@@ -1100,9 +1115,9 @@ function formatKeyValue(rows: string[][]): string {
     .map(([key, value], index) => {
       let cleanedValue = value.trim();
       if (!isSpecialCase(cleanedValue)) {
-      cleanedValue = cleanedValue.replace(/[,;]+$/, "");        // Rimuove , o ; finali
-      cleanedValue = cleanedValue.replace(/^['"]+|['"]+$/g, ""); // Rimuove ' o " agli estremi
-    }
+        cleanedValue = cleanedValue.replace(/[,;]+$/, "");  
+        cleanedValue = removeSurroundingQuotes(cleanedValue);  // Rimuove solo se presenti entrambe
+      }
 
       return `${cleanedKeys[index].padEnd(maxKeyLength, " ")} ${cleanedValue}`;
     })
@@ -1111,17 +1126,24 @@ function formatKeyValue(rows: string[][]): string {
 
 
 
-  function formatTableData(rows: string[][]): string {
+
+function formatTableData(rows: string[][]): string {
   if (rows.length === 0) return "";
 
   const columnCount = Math.max(...rows.map(r => r.length));
 
+  // Pulisce le celle da \n e \r
+  const cleanedRows = rows.map(row =>
+    row.map(cell => cell.replace(/[\r\n]+/g, " ").trim())
+  );
+
   if (columnCount === 2) {
-    return formatKeyValue(rows);
+    return formatKeyValue(cleanedRows);
   } else {
-    return formatMarkdownTable(rows, columnCount);
+    return formatMarkdownTable(cleanedRows, columnCount);
   }
 }
+
 
 function formatMarkdownTable(rows: string[][], columnCount: number): string {
   // Calcola la larghezza massima di ogni colonna
@@ -1224,43 +1246,83 @@ function extractSpanKeyValue(container: HTMLElement): string | null {
 }
 
 function extractTextKeyValue(container: HTMLElement): string | null {
-  // Ottieni tutto il testo
-  let fullText = container.textContent || "";
-
-  // Espressione regolare per trovare chiave: valore o chiave= valore
-  const regex = /([^\n:=]+?)\s*[:=]\s*([^\n]+)/g;
-
   const keyValuePairs: string[][] = [];
-  let match;
-
-  // Trova tutti i nodi discendenti contenenti testo
   const textNodes = Array.from(container.querySelectorAll("*"));
+  const lines = (container.textContent || "").split("\n");
 
-  while ((match = regex.exec(fullText)) !== null) {
-    const key = match[1].trim();
-    const value = match[2].trim();
+  const isSpecialCase = (text: string) => (
+    /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) ||        // Orario solo
+    /^https?:\/\/\S+$/.test(text) ||                // URL solo
+    /^\S+@\S+\.\S+$/.test(text) ||                  // Email solo
+    /^\d{4}-\d{2}-\d{2}$/.test(text) ||             // Data ISO solo
+    /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) ||         // Timezone solo
+    /^\/[\w\/\-:.]+$/.test(text)                    // Path solo
+  );
 
-    // Controlla se il valore è una parentesi graffa (singola)
-    if (value === "{" || value === "}") continue;
+  lines.forEach(line => {
+    const trimmedLine = line.trim();
+      if (trimmedLine === "") return;
 
-    keyValuePairs.push([key, value]);
+    const match = trimmedLine.match(/^([^\s:=][^:=]*)\s*[:=]\s*(.+)$/);
+    if (match) {
+      const key = match[1].trim();
+      const value = match[2].trim();
 
-    // Cerca e rimuovi il nodo contenitore del testo corrispondente
-    textNodes.forEach(node => {
-      if (node.textContent?.includes(match[1]) || node.textContent?.includes(match[2])) {
-        node.remove();
-      }
-    });
-  }
+      // Salta solo se l'intera riga è speciale (es. solo timestamp, URL, ecc.)
+      if (isSpecialCase(trimmedLine)) return;
+
+      keyValuePairs.push([key, value]);
+
+      textNodes.forEach(node => {
+        if (node.textContent?.includes(trimmedLine)) {
+          node.remove();
+        }
+      });
+    }
+  });
 
   if (keyValuePairs.length === 0) return null;
 
   return formatKeyValue(keyValuePairs);
 }
 
+function extractMultiElementTable(container: HTMLElement, childTag: string = "div"): string | null {
+  const tableRows: string[][] = [];
+  
+  const parents = container.querySelectorAll("*");
+  parents.forEach(parent => {
+    if (!container.contains(parent)) return;
+
+    const children = Array.from(parent.children);
+
+    // Controlla che ci siano almeno 2 figli, tutti dello stesso tipo di tag
+    if (children.length > 2 && children.every(child => child.tagName.toLowerCase() === childTag.toLowerCase())) {
+      const row: string[] = children.map(child => (child.textContent || "").trim());
+      if (row.some(cell => cell)) {  // Se almeno un dato presente
+        tableRows.push(row);
+      }
+
+      // Rimuove tutti i figli e il parent dal DOM
+      children.forEach(child => child.remove());
+      parent.remove();
+    }
+  });
+
+  if (tableRows.length === 0) return null;
+
+  return formatTableData(tableRows);
+}
 
 
-function extractPairDivKeyValue(container: HTMLElement, childTag: string = "div"): string | null {
+
+
+
+
+
+
+
+
+function extractPairDivKeyValue(container: HTMLElement): string | null {
   const keyValuePairs: string[][] = [];
   let lastKey: string | null = null;
 
@@ -1270,9 +1332,8 @@ function extractPairDivKeyValue(container: HTMLElement, childTag: string = "div"
 
     const children = Array.from(parent.children);
 
-    if (children.length === 2 && 
-        children.every(child => child.tagName.toLowerCase() === childTag.toLowerCase())) {
-
+    // Controlla che ci siano esattamente 2 figli, ma non richiede stesso tag
+    if (children.length === 2) {
       const key = (children[0].textContent || "").trim();
       const value = (children[1].textContent || "").trim();
 
@@ -1303,20 +1364,55 @@ function extractPairDivKeyValue(container: HTMLElement, childTag: string = "div"
   return formatKeyValue(keyValuePairs);
 }
 
+
 function extractRemainingText(container: HTMLElement, separator: string = "\n"): string {
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
   const texts: string[] = [];
 
-  let node;
-  while ((node = walker.nextNode())) {
-    const text = node.textContent?.trim();
-    if (text) {
-      texts.push(text);
+  let currentLine = "";
+  let isInsideLi = false;
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim();
+      if (text) {
+        currentLine += (currentLine ? " " : "") + text;
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const element = node as Element;
+      const tag = element.tagName.toLowerCase();
+
+      if (tag === "li") {
+        // Se siamo in un <li>, gestiamo come nuova riga con - puntato
+        if (currentLine) {
+          texts.push(currentLine);  // Salva riga precedente
+        }
+        currentLine = "-";  // Inizia nuova riga con -
+        isInsideLi = true;
+      } else if (["strong", "b", "i", "em", "u"].includes(tag)) {
+        // Elementi di formattazione: continuare, testo sarà aggiunto dal testo figlio
+        continue;
+      } else {
+        // Elemento non di formattazione: salva riga attuale se presente
+        if (currentLine) {
+          texts.push(currentLine);
+          currentLine = "";
+        }
+        isInsideLi = false;
+      }
     }
+  }
+
+  if (currentLine) {
+    texts.push(currentLine);
   }
 
   return texts.join(separator);
 }
+
+
 
 
 

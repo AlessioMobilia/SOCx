@@ -25,6 +25,8 @@ export const config: PlasmoCSConfig = {
   // inizializzazione sicura
   if (!(window as any)._formatScriptInitialized) {
     ;(window as any)._formatScriptInitialized = true
+    // Controlla se siamo nell'iframe o nella finestra principale
+    const isInIframe = window.self !== window.top;
 
 
 
@@ -37,6 +39,8 @@ export const config: PlasmoCSConfig = {
     document.addEventListener("mouseup", debounce(handleSelection, 300))
     document.addEventListener("selectionchange", handleSelectionChange)
 
+
+    
     function handleSelectionChange() {
       const selection = window.getSelection()
       if (!selection || selection.toString().trim() === "") {
