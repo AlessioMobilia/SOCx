@@ -959,6 +959,12 @@ export function formatSelectedText(lastValidSelection: Selection): string {
   console.log("Selected HTML after cleanup:", div.innerHTML);
   let finalText = "";
 
+  const SplunkData = extractSplunkKeyValue(div);
+  if (SplunkData !== null) {
+    console.log("Dati Splunk estratti:", SplunkData);
+    finalText = finalText.concat(SplunkData.toString()+"\n\n");
+  }
+
   // Estrazione dei dati tabellari
   const tableData = extractTableLikeData(div);
   if (tableData !== null) {
@@ -966,26 +972,9 @@ export function formatSelectedText(lastValidSelection: Selection): string {
     finalText = finalText.concat(tableData.toString()+"\n\n");
   }
 
-  // Estrazione delle chiavi-valori con dei label
-  const labelData = extractLabelKeyValue(div);
-  if (labelData !== null) {
-    console.log("Dati label chiave-valore estratti:", labelData);
-    finalText = finalText.concat(labelData.toString()+"\n\n");
-  }
+  
 
-  // Estrazione delle chiavi-valori span
-  const spanData = extractSpanKeyValue(div);
-  if (spanData !== null) {
-    console.log("Dati span chiave-valore estratti:", spanData);
-    finalText = finalText.concat(spanData.toString()+"\n\n");
-  }
 
-  // Estrazione dei dati chiave-valore da testo semplice
-  const keyValueData = extractTextKeyValue(div);
-  if (keyValueData !== null) {
-    console.log("Dati chiave-valore estratti:", keyValueData);
-    finalText = finalText.concat(keyValueData.toString()+"\n\n"); 
-  }
 
   // Estrazione dei dati chiave-valore da div o tag consecutivi dentro un altro tag
   const keyValuePairsDiv = extractPairDivKeyValue(div);
@@ -1000,10 +989,30 @@ export function formatSelectedText(lastValidSelection: Selection): string {
     finalText = finalText.concat(tableDatas.toString()+"\n\n");
   }
 
+  const spanData = extractSpanKeyValue(div);
+  if (spanData !== null) {
+    console.log("Dati span chiave-valore estratti:", spanData);
+    finalText = finalText.concat(spanData.toString()+"\n\n");
+  }
 
+  // Estrazione delle chiavi-valori con dei label
+  const labelData = extractLabelKeyValue(div);
+  if (labelData !== null) {
+    console.log("Dati label chiave-valore estratti:", labelData);
+    finalText = finalText.concat(labelData.toString()+"\n\n");
+  }
+
+  // Estrazione dei dati chiave-valore da testo semplice
+  const keyValueData = extractTextKeyValue(div);
+  if (keyValueData !== null) {
+    console.log("Dati chiave-valore estratti:", keyValueData);
+    finalText = finalText.concat(keyValueData.toString()+"\n\n"); 
+  }
+
+  // Estrazione delle chiavi-valori span
   console.log("Final html content:", div.innerHTML);
-  let remainingText = extractRemainingText(div);
-  finalText = remainingText.trim() + "\n\n" + finalText;
+  //let remainingText = extractRemainingText(div);
+  //finalText = remainingText.trim() + "\n\n" + finalText;
     
   console.log("Final formatted text:", finalText);
   return finalText;
@@ -1020,10 +1029,87 @@ function cleanContent(container: HTMLElement): void {
     elements.forEach(el => el.remove());
   });
 
-  // Rimuovi tutti gli elementi che contengono solo = o :
+  // Rimuovi elementi hidden (con attributo hidden o stile display: none)
   container.querySelectorAll("*").forEach(el => {
-    const text = el.textContent?.trim() || "";
-    if (/^[:=]+$/.test(text)) {
+    if (el.hasAttribute("hidden") || getComputedStyle(el).display === "none") {
+      el.remove();
+    }
+  });
+
+  // Rimuovi elementi tooltip (id o class con 'tooltip', case-insensitive)
+  container.querySelectorAll("*").forEach(el => {
+    const id = el.id?.toLowerCase() || "";
+    const className = el.className?.toLowerCase() || "";
+    if (id.includes("tooltip")) {
+      el.remove();
+    }
+  });
+
+  // Rimuovi elementi con class che contengono 'button' o 'copy', case-insensitive
+  container.querySelectorAll("*").forEach(el => {
+    const className = el.className?.toLowerCase() || "";
+    if (className.includes("copy")) {
+      el.remove();
+    }   
+  });
+
+  // Rimuovi tutti i tag <br>
+  container.querySelectorAll("br").forEach(el => el.remove());
+
+  container.querySelectorAll("*").forEach(el => {
+    el.childNodes.forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.textContent = node.textContent
+          ?.replace(/\u00A0/g, " ")              // Sostituisce spazi non separabili
+          .replace(/[\u200B-\u200D\uFEFF]/g, " ") // Caratteri invisibili
+          .replace(/\s+/g, " ")                  // Spazi multipli in uno solo
+          .trim();
+      }
+    });
+
+    // per rimuovere anche &nbsp; presenti come entità HTML (non ancora convertiti in caratteri)
+    if (el.innerHTML.includes("&nbsp;")) {
+      el.innerHTML = el.innerHTML.replace(/&nbsp;/g, " ");
+    }
+  });
+
+
+  // Rimuovi elementi con solo testo =, :, [-], [+] o singole parentesi
+  container.querySelectorAll("*").forEach(el => {
+    let text = el.textContent?.trim() || "";
+    if (
+      /^[:=]+$/.test(text) || 
+      /^\[\-\]$/.test(text) || 
+      /^\[\+\]$/.test(text) || 
+      /^[\(\)\[\]\{\}]$/.test(text)
+    ) {
+      el.remove();
+    }
+  });
+
+
+
+
+
+  // Rimuovi elementi con attributi data-icon-name o jsexpands o jscollapse o data-icon, o con figli che sembrano icone
+  container.querySelectorAll("*").forEach(el => {
+  if (el.hasAttribute("data-icon-name") || el.hasAttribute("data-icon") || el.hasAttribute("jscollapse") || el.hasAttribute("jsexpands")) {
+    el.remove();
+  } 
+  // Rimuovi SOLO gli elementi effettivi (non l'intero nodo se contiene icone)
+  else {
+    const iconDescendant = el.querySelector(":scope > [data-icon-name], :scope > [data-icon], :scope > svg");
+    if (iconDescendant) {
+      iconDescendant.remove(); // Rimuove solo l'icona, non l'intero el
+    }
+  }
+});
+
+
+  // Rimuovi solo i tag <i> con classi che indicano icone (es: fa, fa-icon)
+  container.querySelectorAll("i").forEach(el => {
+    const className = el.className?.toLowerCase() || "";
+    if (className.includes("fa") || className.includes("fa-icon")) {
       el.remove();
     }
   });
@@ -1033,7 +1119,12 @@ function cleanContent(container: HTMLElement): void {
   container.querySelectorAll("*").forEach(el => {
     attributesToRemove.forEach(attr => el.removeAttribute(attr));
   });
+
+  
 }
+
+
+
 
 
 function extractTableLikeData(container: HTMLElement): string | null {
@@ -1207,7 +1298,7 @@ function extractLabelKeyValue(container: HTMLElement): string | null {
   return formatKeyValue(keyValuePairs);
 }
 
-
+// Funzione per estrarre coppie chiave-valore da span consecutivi
 function extractSpanKeyValue(container: HTMLElement): string | null {
 
   const keyValuePairs: string[][] = [];
@@ -1274,7 +1365,7 @@ function extractTextKeyValue(container: HTMLElement): string | null {
       keyValuePairs.push([key, value]);
 
       textNodes.forEach(node => {
-        if (node.textContent?.includes(trimmedLine)) {
+        if (node.textContent?.includes(trimmedLine) || node.textContent?.includes(key) || node.textContent?.includes(value)) {
           node.remove();
         }
       });
@@ -1285,6 +1376,36 @@ function extractTextKeyValue(container: HTMLElement): string | null {
 
   return formatKeyValue(keyValuePairs);
 }
+
+// Funzione per estrarre coppie chiave-valore da Splunk
+function extractSplunkKeyValue(container) {
+  const keyValuePairs = [];
+
+  // Seleziona tutti gli span.key.level-* (ordina per profondità discendente se necessario)
+  const keyLevelSpans = container.querySelectorAll("span.key[class*='level-']");
+
+  keyLevelSpans.forEach(levelSpan => {
+    // Trova solo i discendenti diretti (non quelli annidati in altri level)
+    const keyNameEl = Array.from(levelSpan.children).find(child => (child as Element).matches("span.key-name"));
+    const valueEl = Array.from(levelSpan.children).find(child => (child as Element).matches("span.t"));
+
+    if (keyNameEl && valueEl) {
+      const key = (keyNameEl as Element).textContent?.trim() || "";
+      const value = (valueEl as Element).textContent?.trim() || "";
+
+      if (key && value) {
+        keyValuePairs.push([key, value]);
+      }
+    }
+  });
+
+  // Rimuovi tutti gli span.key.level-*
+  keyLevelSpans.forEach(levelSpan => levelSpan.remove());
+
+  return formatKeyValue(keyValuePairs);
+}
+
+
 
 function extractMultiElementTable(container: HTMLElement, childTag: string = "div"): string | null {
   const tableRows: string[][] = [];
