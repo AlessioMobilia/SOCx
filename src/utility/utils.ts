@@ -1054,7 +1054,7 @@ export function formatSelectedText(lastValidSelection: Selection): string {
 function cleanContent(container: HTMLElement): void {
   // Elementi da rimuovere (contenuti invisibili o superflui)
   const selectorsToRemove = [
-    "img", "svg", "select", "button", "input[type='checkbox']", 
+    "img", "svg", "select", "input[type='checkbox']", 
     "script", "style", "noscript", "template", "iframe", "object", "embed"
   ];
   selectorsToRemove.forEach(selector => {
@@ -1078,13 +1078,15 @@ function cleanContent(container: HTMLElement): void {
     }
   });
 
-  // Rimuovi elementi con class che contengono 'button' o 'copy', case-insensitive
+  // Rimuovi elementi con class che contengono  'copy', case-insensitive
   container.querySelectorAll("*").forEach(el => {
     const className = el.className?.toLowerCase() || "";
     if (className.includes("copy")) {
       el.remove();
     }   
   });
+
+
 
   // Rimuovi tutti i tag <br>
   container.querySelectorAll("br").forEach(el => el.remove());
@@ -1152,6 +1154,12 @@ function cleanContent(container: HTMLElement): void {
   container.querySelectorAll("*").forEach(el => {
     attributesToRemove.forEach(attr => el.removeAttribute(attr));
   });
+
+  container.querySelectorAll("button").forEach(el => {
+  if (el.textContent?.trim() === "")  {
+    el.remove(); // Rimuove i bottoni vuoti
+  }
+});
 }
 
 
@@ -1184,34 +1192,40 @@ function extractTableLikeData(container: HTMLElement): string | null {
 
 function extractGridcellKeyValue(container: HTMLElement): string | null {
   const keyValuePairs: string[][] = [];
-
-  // Trova tutte le righe con role=row
   const rowElements = container.querySelectorAll('[role="row"]');
 
   rowElements.forEach(row => {
-    // Cerca i gridcell dentro la riga
-    const gridcells = Array.from(row.querySelectorAll('[role="gridcell"]')).filter(gc => gc.textContent?.trim());
+    // Verifica se il row è ancora nel DOM (non già rimosso)
+    if (!container.contains(row)) return;
 
-    // Considera solo righe con esattamente 2 gridcell
-    if (gridcells.length === 2) {
-      const key = (gridcells[0].textContent || "").trim();
-      const value = (gridcells[1].textContent || "").trim();
+    // Verifica che il row non sia contenuto in un altro gridcell (evita duplicati)
+    if (row.closest('[role="gridcell"]')) return;
 
-      if (key && value) {
-        keyValuePairs.push([key, value]);
-        row.remove(); // Rimuove l'intera riga dal DOM
-      }
-    }
-    else if (gridcells.length === 1) {
-      // Prova a vedere se il singolo gridcell ha esattamente 2 figli (chiave-valore)
-      const children = Array.from(gridcells[0].children).filter(el => el.textContent?.trim());
+    const gridcells = Array.from(row.querySelectorAll('[role="gridcell"]'));
+    let extracted = false;
+
+    // Cerca gridcell con esattamente due figli (chiave e valore)
+    for (const gridcell of gridcells) {
+      const children = Array.from(gridcell.children).filter(el => el.textContent?.trim());
       if (children.length === 2) {
         const key = (children[0].textContent || "").trim();
         const value = (children[1].textContent || "").trim();
         if (key && value) {
           keyValuePairs.push([key, value]);
           row.remove();
+          extracted = true;
+          break;
         }
+      }
+    }
+
+    // Se non ha trovato nulla nei figli, cerca gridcell separati
+    if (!extracted && gridcells.length >= 2) {
+      const key = (gridcells[0].textContent || "").trim();
+      const value = (gridcells[1].textContent || "").trim();
+      if (key && value) {
+        keyValuePairs.push([key, value]);
+        row.remove();
       }
     }
   });
@@ -1221,6 +1235,9 @@ function extractGridcellKeyValue(container: HTMLElement): string | null {
   return formatKeyValue(keyValuePairs);
 }
 
+
+
+
 function extractGridTable(container) {
   const rows = [];
 
@@ -1228,14 +1245,21 @@ function extractGridTable(container) {
   const rowElements = container.querySelectorAll('[role="row"]');
 
   rowElements.forEach(rowEl => {
-    // Seleziona tutti i figli con role="gridcell" all'interno della riga
+    // Verifica se il row è ancora presente nel DOM
+    if (!container.contains(rowEl)) return;
+
+    // Verifica che il row non sia figlio di un altro gridcell
+    if (rowEl.closest('[role="gridcell"]')) return;
+
+    // Seleziona tutti i gridcell nella riga
     const cells = Array.from(rowEl.querySelectorAll('[role="gridcell"]')).map(cell =>
-      (cell as Element).textContent?.trim() || ""
+      (cell as Element).textContent?.trim().replace(/\s+/g, " ") || ""
     );
 
     // Aggiunge la riga solo se contiene almeno una cella con testo
-    if (cells.length > 0 && cells.some(cell => cell !== '')) {
+    if (cells.length > 0 && cells.some(cell => cell !== "")) {
       rows.push(cells);
+      rowEl.remove(); // Rimuove la riga dal DOM per evitare doppioni
     }
   });
 
@@ -1245,6 +1269,7 @@ function extractGridTable(container) {
   // Formatta i dati raccolti in una tabella Markdown
   return formatTableData(rows);
 }
+
 
 
 
