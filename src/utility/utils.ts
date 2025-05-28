@@ -973,6 +973,11 @@ export function formatSelectedText(lastValidSelection: Selection): string {
   }
 
   
+  const tableDatas = extractMultiElementTable(div);
+  if (tableDatas !== null) {
+    console.log("Dati tabellari estratti:", tableDatas);
+    finalText = finalText.concat(tableDatas.toString()+"\n\n");
+  }
 
 
 
@@ -983,16 +988,12 @@ export function formatSelectedText(lastValidSelection: Selection): string {
     finalText = finalText.concat(keyValuePairsDiv.toString()+"\n\n");
   }
 
-  const tableDatas = extractMultiElementTable(div);
-  if (tableDatas !== null) {
-    console.log("Dati tabellari estratti:", tableDatas);
-    finalText = finalText.concat(tableDatas.toString()+"\n\n");
-  }
 
-  const spanData = extractSpanKeyValue(div);
-  if (spanData !== null) {
-    console.log("Dati span chiave-valore estratti:", spanData);
-    finalText = finalText.concat(spanData.toString()+"\n\n");
+
+  const dtdldata = extractDtDdKeyValue(div);
+  if (dtdldata !== null) {
+    console.log("Dati dt dl chiave-valore estratti:", dtdldata);
+    finalText = finalText.concat(dtdldata.toString()+"\n\n");
   }
 
   // Estrazione delle chiavi-valori con dei label
@@ -1000,6 +1001,13 @@ export function formatSelectedText(lastValidSelection: Selection): string {
   if (labelData !== null) {
     console.log("Dati label chiave-valore estratti:", labelData);
     finalText = finalText.concat(labelData.toString()+"\n\n");
+  }
+
+
+  const spanData = extractSpanKeyValue(div);
+  if (spanData !== null) {
+    console.log("Dati span chiave-valore estratti:", spanData);
+    finalText = finalText.concat(spanData.toString()+"\n\n");
   }
 
   // Estrazione dei dati chiave-valore da testo semplice
@@ -1073,6 +1081,13 @@ function cleanContent(container: HTMLElement): void {
     }
   });
 
+  // Rimuovi <td> e <tr> vuoti
+  container.querySelectorAll("td, tr, th").forEach(el => {
+    const text = el.textContent?.replace(/[\u00A0\u200B-\u200D\uFEFF\t\r\n ]/g, "").trim();
+    if (!text) {
+      el.remove();
+    }
+  });
 
   // Rimuovi elementi con solo testo =, :, [-], [+] o singole parentesi
   container.querySelectorAll("*").forEach(el => {
@@ -1087,29 +1102,22 @@ function cleanContent(container: HTMLElement): void {
     }
   });
 
-
-
-
-
   // Rimuovi elementi con attributi data-icon-name o jsexpands o jscollapse o data-icon, o con figli che sembrano icone
   container.querySelectorAll("*").forEach(el => {
-  if (el.hasAttribute("data-icon-name") || el.hasAttribute("data-icon") || el.hasAttribute("jscollapse") || el.hasAttribute("jsexpands")) {
-    el.remove();
-  } 
-  // Rimuovi SOLO gli elementi effettivi (non l'intero nodo se contiene icone)
-  else {
-    const iconDescendant = el.querySelector(":scope > [data-icon-name], :scope > [data-icon], :scope > svg");
-    if (iconDescendant) {
-      iconDescendant.remove(); // Rimuove solo l'icona, non l'intero el
+    if (el.hasAttribute("data-icon-name") || el.hasAttribute("data-icon") || el.hasAttribute("jscollapse") || el.hasAttribute("jsexpands")) {
+      el.remove();
+    } else {
+      const iconDescendant = el.querySelector(":scope > [data-icon-name], :scope > [data-icon], :scope > svg");
+      if (iconDescendant) {
+        iconDescendant.remove();
+      }
     }
-  }
-});
-
+  });
 
   // Rimuovi solo i tag <i> con classi che indicano icone (es: fa, fa-icon)
   container.querySelectorAll("i").forEach(el => {
     const className = el.className?.toLowerCase() || "";
-    if (className.includes("fa") || className.includes("fa-icon")) {
+    if (className.includes("fa") || className.includes("fa-icon") || className.includes("dropdown")) {
       el.remove();
     }
   });
@@ -1119,65 +1127,51 @@ function cleanContent(container: HTMLElement): void {
   container.querySelectorAll("*").forEach(el => {
     attributesToRemove.forEach(attr => el.removeAttribute(attr));
   });
-
-  
 }
+
 
 
 
 
 
 function extractTableLikeData(container: HTMLElement): string | null {
-  let tableData: string[] = [];
+  const keyValuePairs: string[][] = [];
 
-  // Cerca righe/celle isolate
-  const standaloneRows = container.querySelectorAll("tr, td, th");
-  if (standaloneRows.length > 0) {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    standaloneRows.forEach(node => {
-      const tag = node.tagName.toLowerCase();
+  // Trova tutte le righe (tr)
+  const trElements = container.querySelectorAll("tr");
 
-      if (tag === "tr" && currentRow.length > 0) {
-        rows.push(currentRow);
-        currentRow = [];
+  trElements.forEach(tr => {
+    const cells = Array.from(tr.querySelectorAll("td, th")).map(cell => cell.textContent?.trim() || "");
+
+    if (cells.length === 2) {
+      const [key, value] = cells;
+      if (key && value) {
+        keyValuePairs.push([key, value]);
       }
+      tr.remove(); // Rimuove l'intera riga dal DOM
+    }
+  });
 
-      if (tag === "td" || tag === "th") {
-        // Estrarre solo il testo (anche se ci sono tag annidati)
-        const text = node.textContent?.trim() || "";
-        currentRow.push(text);
-      }
+  if (keyValuePairs.length === 0) return null;
 
-      // Rimuove il nodo dal container
-      node.remove();
-    });
-
-    if (currentRow.length > 0) rows.push(currentRow);
-
-    if (rows.length > 0) tableData.push(formatTableData(rows));
-  }
-
-  // Se non è stato trovato nulla, restituisci null
-  if (tableData.length === 0) return null;
-
-  return tableData.join("\n\n").trim();
+  return formatKeyValue(keyValuePairs);
 }
+
 
 
 
 function formatKeyValue(rows: string[][]): string {
   // Funzione per controllare se il testo è un timestamp, url, email, ecc.
   const isSpecialCase = (text: string) => {
-    return /(\d{1,2}:\d{2}(:\d{2})?)/.test(text) ||      // Orari presenti nel testo
-           /\bhttps?:\/\//.test(text) ||                 // URL nel testo
-           /\S+@\S+\.\S+/.test(text) ||                  // Email nel testo
-           /\d{4}-\d{2}-\d{2}/.test(text) ||            // Date ISO nel testo
-           /\bUTC[+-]?\d{1,2}:\d{2}\b/.test(text) ||    // Timezone nel testo
-           /\/[\w\/\-:.]+/.test(text);                  // Path con / e :
+    return /(\d{1,2}:\d{2}(:\d{2})?)/.test(text) ||      
+           /\bhttps?:\/\//.test(text) ||                 
+           /\S+@\S+\.\S+/.test(text) ||                  
+           /\d{4}-\d{2}-\d{2}/.test(text) ||            
+           /\bUTC[+-]?\d{1,2}:\d{2}\b/.test(text) ||    
+           /\/[\w\/\-:.]+/.test(text);                  
   };
 
-  // Funzione per rimuovere virgolette solo se presenti entrambe
+  // Rimuove virgolette solo se entrambe presenti
   const removeSurroundingQuotes = (text: string) => {
     if ((text.startsWith('"') && text.endsWith('"')) || 
         (text.startsWith("'") && text.endsWith("'"))) {
@@ -1186,14 +1180,22 @@ function formatKeyValue(rows: string[][]): string {
     return text;
   };
 
+  // Pulizia e normalizzazione spazi e linee multiple
+  const cleanText = (text: string) => {
+    return text
+      .replace(/[\r\n]+/g, " ")      // Unifica le linee spezzate in una riga
+      .replace(/\s+/g, " ")          // Riduce spazi multipli a uno solo
+      .trim();
+  };
+
   // Pulisce le chiavi
   const cleanedKeys = rows
     .filter(r => r.length === 2)
     .map(([key, _]) => {
-      let cleanedKey = key.trim();
+      let cleanedKey = cleanText(key);
       if (!isSpecialCase(cleanedKey)) {
-        cleanedKey = removeSurroundingQuotes(cleanedKey);   // Rimuove solo se presenti entrambe
-        cleanedKey = cleanedKey.replace(/[:=]+$/, "");      // Rimuove : o = finali
+        cleanedKey = removeSurroundingQuotes(cleanedKey);
+        cleanedKey = cleanedKey.replace(/[:=]+$/, "");
       }
       return cleanedKey + ":";
     });
@@ -1204,16 +1206,17 @@ function formatKeyValue(rows: string[][]): string {
   return rows
     .filter(r => r.length === 2)
     .map(([key, value], index) => {
-      let cleanedValue = value.trim();
+      let cleanedValue = cleanText(value);
       if (!isSpecialCase(cleanedValue)) {
-        cleanedValue = cleanedValue.replace(/[,;]+$/, "");  
-        cleanedValue = removeSurroundingQuotes(cleanedValue);  // Rimuove solo se presenti entrambe
+        cleanedValue = cleanedValue.replace(/[,;]+$/, "");
+        cleanedValue = removeSurroundingQuotes(cleanedValue);
       }
 
       return `${cleanedKeys[index].padEnd(maxKeyLength, " ")} ${cleanedValue}`;
     })
     .join("\n");
 }
+
 
 
 
@@ -1231,32 +1234,46 @@ function formatTableData(rows: string[][]): string {
   if (columnCount === 2) {
     return formatKeyValue(cleanedRows);
   } else {
-    return formatMarkdownTable(cleanedRows, columnCount);
+    return formatMarkdownTable(cleanedRows);
   }
 }
 
 
-function formatMarkdownTable(rows: string[][], columnCount: number): string {
+function formatMarkdownTable(rows: string[][]): string {
+  if (rows.length === 0) return "";
+
+  // Calcola il numero massimo di colonne
+  const columnCount = Math.max(...rows.map(r => r.length));
+
+  // Pulisce le celle da \n e \r e normalizza spazi
+  const cleanedRows = rows.map(row =>
+    row.map(cell => (cell || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim())
+  );
+
   // Calcola la larghezza massima di ogni colonna
   const colWidths: number[] = Array(columnCount).fill(0);
-  rows.forEach(row => {
+  cleanedRows.forEach(row => {
     row.forEach((cell, index) => {
       colWidths[index] = Math.max(colWidths[index], cell.length);
     });
   });
 
-  // Funzione di formattazione di una riga
+  // Funzione per formattare una riga
   const formatRow = (row: string[]) => {
-    return "| " + row.map((cell, i) => cell.padEnd(colWidths[i], " ")).join(" | ") + " |";
+    const padded = row.map((cell, i) => {
+      const content = cell || "";
+      return content.padEnd(colWidths[i], " ");
+    });
+    return "| " + padded.join(" | ") + " |";
   };
 
-  // Costruisce header, separatore e corpo
-  const header = formatRow(rows[0]);
-  //const separator = "| " + colWidths.map(w => "-".repeat(w)).join(" | ") + " |";
-  const body = rows.slice(1).map(formatRow).join("\n");
+  // Formatta tutte le righe senza separatori
+  const formattedRows = cleanedRows.map(formatRow).join("\n");
 
-  return [header, body].filter(Boolean).join("\n");
+  return formattedRows;
 }
+
+
 
 
 function extractLabelKeyValue(container: HTMLElement): string | null {
@@ -1402,31 +1419,29 @@ function extractSplunkKeyValue(container) {
   // Rimuovi tutti gli span.key.level-*
   keyLevelSpans.forEach(levelSpan => levelSpan.remove());
 
+  if (keyValuePairs.length === 0) return null;
+
   return formatKeyValue(keyValuePairs);
 }
 
 
 
-function extractMultiElementTable(container: HTMLElement, childTag: string = "div"): string | null {
+function extractMultiElementTable(container: HTMLElement): string | null {
   const tableRows: string[][] = [];
-  
-  const parents = container.querySelectorAll("*");
-  parents.forEach(parent => {
-    if (!container.contains(parent)) return;
 
-    const children = Array.from(parent.children);
+  const trElements = container.querySelectorAll("tr");
+  trElements.forEach(tr => {
+    const cells = Array.from(tr.querySelectorAll("td, th")).map(cell =>
+      (cell.textContent || "").trim().replace(/\s+/g, " ")
+    );
 
-    // Controlla che ci siano almeno 2 figli, tutti dello stesso tipo di tag
-    if (children.length > 2 && children.every(child => child.tagName.toLowerCase() === childTag.toLowerCase())) {
-      const row: string[] = children.map(child => (child.textContent || "").trim());
-      if (row.some(cell => cell)) {  // Se almeno un dato presente
-        tableRows.push(row);
-      }
-
-      // Rimuove tutti i figli e il parent dal DOM
-      children.forEach(child => child.remove());
-      parent.remove();
+    // Aggiungi solo righe con almeno 3 colonne
+    if (cells.length >= 3) {
+      tableRows.push(cells);
     }
+
+    // Rimuove la riga dal DOM
+    tr.remove();
   });
 
   if (tableRows.length === 0) return null;
@@ -1435,6 +1450,40 @@ function extractMultiElementTable(container: HTMLElement, childTag: string = "di
 }
 
 
+
+function extractDtDdKeyValue(container) {
+  const keyValuePairs = [];
+
+  // Trova tutti gli elementi dt e dd
+  const elements = Array.from(container.querySelectorAll("dt, dd"));
+
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i];
+
+    if (el instanceof Element && el.tagName.toLowerCase() === "dt") {
+      const key = el.textContent.trim();
+
+      // Cerca il prossimo dd consecutivo
+      let next = elements[i + 1];
+      if (next instanceof Element && next.tagName.toLowerCase() === "dd") {
+        const value = next.textContent.trim();
+        if (key && value) {
+          keyValuePairs.push([key, value]);
+
+          // Rimuove dt e dd dal DOM
+          el.remove();
+          next.remove();
+        }
+
+        i++; // Salta dd già processato
+      }
+    }
+  }
+
+  if (keyValuePairs.length === 0) return null;
+
+  return formatKeyValue(keyValuePairs);
+}
 
 
 
