@@ -920,6 +920,18 @@ export const extractBestOrganization = (whois: string): string => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 // Funzione per inviare un messaggio al content script format-selection
 export const formatAndCopySelection = async (tabId: number, frameId: number): Promise<void> => {
   try {
@@ -965,11 +977,24 @@ export function formatSelectedText(lastValidSelection: Selection): string {
     finalText = finalText.concat(SplunkData.toString()+"\n\n");
   }
 
+  // Estrazione dei dati tag con role=gridcell preceduti da role=row
+  const gridcellData = extractGridcellKeyValue(div);
+  if (gridcellData !== null) {
+    console.log("Dati gridcell chiave-valore estratti:", gridcellData);
+    finalText = finalText.concat(gridcellData.toString()+"\n\n");
+  }
+
   // Estrazione dei dati tabellari
   const tableData = extractTableLikeData(div);
   if (tableData !== null) {
     console.log("Dati tabellari estratti:", tableData);
     finalText = finalText.concat(tableData.toString()+"\n\n");
+  }
+
+  const multiGridData = extractGridTable(div);
+  if (multiGridData !== null) {
+    console.log("Dati multi-grid chiave-valore estratti:", multiGridData);
+    finalText = finalText.concat(multiGridData.toString()+"\n\n");
   }
 
   
@@ -1117,7 +1142,7 @@ function cleanContent(container: HTMLElement): void {
   // Rimuovi solo i tag <i> con classi che indicano icone (es: fa, fa-icon)
   container.querySelectorAll("i").forEach(el => {
     const className = el.className?.toLowerCase() || "";
-    if (className.includes("fa") || className.includes("fa-icon") || className.includes("dropdown")) {
+    if (className.includes("fa") || className.includes("fa-icon") || className.includes("dropdown")|| className.includes("ms-layer")) {
       el.remove();
     }
   });
@@ -1155,6 +1180,70 @@ function extractTableLikeData(container: HTMLElement): string | null {
   if (keyValuePairs.length === 0) return null;
 
   return formatKeyValue(keyValuePairs);
+}
+
+function extractGridcellKeyValue(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
+
+  // Trova tutte le righe con role=row
+  const rowElements = container.querySelectorAll('[role="row"]');
+
+  rowElements.forEach(row => {
+    // Cerca i gridcell dentro la riga
+    const gridcells = Array.from(row.querySelectorAll('[role="gridcell"]')).filter(gc => gc.textContent?.trim());
+
+    // Considera solo righe con esattamente 2 gridcell
+    if (gridcells.length === 2) {
+      const key = (gridcells[0].textContent || "").trim();
+      const value = (gridcells[1].textContent || "").trim();
+
+      if (key && value) {
+        keyValuePairs.push([key, value]);
+        row.remove(); // Rimuove l'intera riga dal DOM
+      }
+    }
+    else if (gridcells.length === 1) {
+      // Prova a vedere se il singolo gridcell ha esattamente 2 figli (chiave-valore)
+      const children = Array.from(gridcells[0].children).filter(el => el.textContent?.trim());
+      if (children.length === 2) {
+        const key = (children[0].textContent || "").trim();
+        const value = (children[1].textContent || "").trim();
+        if (key && value) {
+          keyValuePairs.push([key, value]);
+          row.remove();
+        }
+      }
+    }
+  });
+
+  if (keyValuePairs.length === 0) return null;
+
+  return formatKeyValue(keyValuePairs);
+}
+
+function extractGridTable(container) {
+  const rows = [];
+
+  // Seleziona tutti gli elementi con role="row" all'interno del contenitore
+  const rowElements = container.querySelectorAll('[role="row"]');
+
+  rowElements.forEach(rowEl => {
+    // Seleziona tutti i figli con role="gridcell" all'interno della riga
+    const cells = Array.from(rowEl.querySelectorAll('[role="gridcell"]')).map(cell =>
+      (cell as Element).textContent?.trim() || ""
+    );
+
+    // Aggiunge la riga solo se contiene almeno una cella con testo
+    if (cells.length > 0 && cells.some(cell => cell !== '')) {
+      rows.push(cells);
+    }
+  });
+
+  // Se non ci sono righe valide, restituisce null
+  if (rows.length === 0) return null;
+
+  // Formatta i dati raccolti in una tabella Markdown
+  return formatTableData(rows);
 }
 
 
