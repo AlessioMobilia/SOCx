@@ -34,16 +34,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node + cache PNPM (la cache NON installa pnpm: lo abilitiamo con Corepack)
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      # ✅ Abilita pnpm tramite Corepack
+      - name: Enable Corepack and pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
+          pnpm -v
+          which pnpm
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
