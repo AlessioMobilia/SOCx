@@ -21,7 +21,7 @@ jobs:
       NODE_VERSION: '20'
       CHROME_TARGET: chrome-mv3
       EDGE_TARGET: edge-mv3
-      # scegli uno dei due in base al tuo progetto:
+      # scegli quello giusto per il tuo progetto:
       FIREFOX_TARGET: firefox-mv3  # oppure: firefox-mv2
 
       # percorsi dei file generati da Plasmo (--zip)
@@ -34,20 +34,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node + cache PNPM (la cache NON installa pnpm: lo abilitiamo con Corepack)
+      # come nell'esempio: installa pnpm PRIMA di setup-node
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          # se vuoi far partire subito l'install:
+          # run_install: true
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-
-      # ✅ Abilita pnpm tramite Corepack
-      - name: Enable Corepack and pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@9 --activate
-          pnpm -v
-          which pnpm
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
@@ -71,11 +70,11 @@ jobs:
       - name: Browser Platform Publisher
         uses: PlasmoHQ/bpp@v3.8.0
         with:
-          keys: ${{ secrets.SUBMIT_KEYS }}         # il tuo JSON credenziali
+          keys: ${{ secrets.SUBMIT_KEYS }}         # JSON credenziali (Chrome/Edge/Firefox)
           chrome-file: ${{ env.CHROME_ZIP }}
           edge-file: ${{ env.EDGE_ZIP }}
-          firefox-file: ${{ env.FIREFOX_XPI }}    # "file" è alias di "zip" anche per FF
-          source: ${{ env.FIREFOX_SOURCE_ZIP }}   # alias di sourceZip
+          firefox-file: ${{ env.FIREFOX_XPI }}    # accetta .zip per Firefox
+          source: ${{ env.FIREFOX_SOURCE_ZIP }}   # sorgente per AMO (opzionale ma consigliato)
           edge-notes: ${{ github.event.inputs.edge_notes }}
           version-file: package.json
           verbose: true
