@@ -61,10 +61,6 @@ jobs:
       - name: Build+zip Firefox
         run: pnpm dlx plasmo build --target=${{ env.FIREFOX_TARGET }} --zip
 
-      - name: (Opzionale) Crea source zip per AMO
-        run: |
-          mkdir -p dist
-          git archive --format=zip -o "${FIREFOX_SOURCE_ZIP}" HEAD
 
       - name: Validate SUBMIT_KEYS JSON
         run: node -e 'JSON.parse(process.env.SUBMIT_KEYS); console.log("SUBMIT_KEYS OK")'
@@ -79,7 +75,6 @@ jobs:
           chrome-file: ${{ env.CHROME_ZIP }}
           edge-file: ${{ env.EDGE_ZIP }}
           firefox-file: ${{ env.FIREFOX_XPI }}    # accetta .zip per Firefox
-          source: ${{ env.FIREFOX_SOURCE_ZIP }}   # sorgente per AMO (opzionale ma consigliato)
           edge-notes: ${{ github.event.inputs.edge_notes }}
           version-file: package.json
           verbose: true
