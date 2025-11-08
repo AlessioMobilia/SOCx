@@ -72,6 +72,11 @@ useEffect(() => {
     chrome.tabs.create({ url })
   }
 
+  const handleSubnetExtractorClick = () => {
+    const url = chrome.runtime.getURL("/tabs/subnet-extractor.html")
+    chrome.tabs.create({ url })
+  }
+
   const handleOpenSidePanelClick = () => {
     if ("sidePanel" in chrome && chrome.sidePanel?.open && windowId !== null) {
       chrome.sidePanel.open({ windowId })
@@ -90,6 +95,7 @@ useEffect(() => {
       isDarkMode={isDarkMode}
       iocHistory={iocHistory}
       onBulkCheckClick={handleBulkCheckClick}
+      onSubnetExtractorClick={handleSubnetExtractorClick}
       onOpenSidePanelClick={handleOpenSidePanelClick}
       onClearHistory={handleClearHistory}
     />

@@ -1,12 +1,13 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import React from "react";
 import { Container, Button, ListGroup } from "react-bootstrap";
-import { MdPlaylistAddCheck, MdNote, MdDelete, MdSettings } from "react-icons/md";
+import { MdPlaylistAddCheck, MdNote, MdDelete, MdSettings, MdAltRoute } from "react-icons/md";
 
 interface PopupUIProps {
   isDarkMode: boolean;
   iocHistory: { type: string; text: string; timestamp: string }[];
   onBulkCheckClick: () => void;
+  onSubnetExtractorClick: () => void;
   onOpenSidePanelClick: () => void;
   onClearHistory: () => void;
 }
@@ -15,6 +16,7 @@ const PopupUI: React.FC<PopupUIProps> = ({
   isDarkMode,
   iocHistory,
   onBulkCheckClick,
+  onSubnetExtractorClick,
   onOpenSidePanelClick,
   onClearHistory
 }) => {
@@ -35,6 +37,9 @@ const PopupUI: React.FC<PopupUIProps> = ({
       <div className="d-grid gap-2 mb-3">
         <Button variant="success" size="sm" onClick={onBulkCheckClick}>
           <MdPlaylistAddCheck className="me-1" /> Bulk Check
+        </Button>
+        <Button variant="info" size="sm" onClick={onSubnetExtractorClick}>
+          <MdAltRoute className="me-1" /> Subnet Extractor
         </Button>
         <Button variant="secondary" size="sm" onClick={onOpenSidePanelClick}>
           <MdNote className="me-1" /> Open Notepad

@@ -1,0 +1,57 @@
+@import url("../utility/config.css");
+
+.subnet-ip-list {
+  font-family: "Fira Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+.dark-mode .subnet-ip-list {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.light-mode .subnet-ip-list {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.subnet-details summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.subnet-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.subnet-export-box {
+  font-family: "Fira Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.85rem;
+  background-color: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  min-height: 140px;
+}
+
+.dark-mode .subnet-export-box {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f8f9fa;
+}
+
+.subnet-export-box:focus {
+  box-shadow: none;
+  border-color: var(--accent-color, #0d6efd);
+}
+
+.subnet-private {
+  border-color: rgba(220, 53, 69, 0.6) !important;
+}
+
+.subnet-private strong {
+  color: #dc3545;
+}

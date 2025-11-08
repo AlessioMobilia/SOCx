@@ -24,11 +24,31 @@ export const isAlreadyDefanged = (text: string): boolean => {
   return /\[\.\]|hxxp:\/\/|hxxps:\/\//i.test(text);
 };
 
+const IPV6_SEGMENT = "[0-9a-fA-F]{1,4}"
+const IPV4_BYTE =
+  "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
+const IPV4_ADDRESS = `(?:${IPV4_BYTE}\\.){3}${IPV4_BYTE}`
+const IPV6_REGEX_PARTS = [
+  `(?:${IPV6_SEGMENT}:){7}${IPV6_SEGMENT}`,
+  `(?:${IPV6_SEGMENT}:){1,6}:${IPV6_SEGMENT}`,
+  `(?:${IPV6_SEGMENT}:){1,5}(?::${IPV6_SEGMENT}){1,2}`,
+  `(?:${IPV6_SEGMENT}:){1,4}(?::${IPV6_SEGMENT}){1,3}`,
+  `(?:${IPV6_SEGMENT}:){1,3}(?::${IPV6_SEGMENT}){1,4}`,
+  `(?:${IPV6_SEGMENT}:){1,2}(?::${IPV6_SEGMENT}){1,5}`,
+  `${IPV6_SEGMENT}:(?::${IPV6_SEGMENT}){1,6}`,
+  `:(?::${IPV6_SEGMENT}){1,7}`,
+  "::",
+  `(?:${IPV6_SEGMENT}:){1,4}:${IPV4_ADDRESS}`,
+  `::(?:ffff(?::0{1,4}){0,1}:){0,1}${IPV4_ADDRESS}`,
+  `fe80:(?::${IPV6_SEGMENT}){0,4}%[0-9a-zA-Z]{1,}`
+]
+const IPV6_REGEX_SOURCE = `(?:${IPV6_REGEX_PARTS.join("|")})`
+const STRICT_IPV6_REGEX = new RegExp(`^${IPV6_REGEX_SOURCE}$`, "i")
+
 
 // Logic to identify the type of IOC
 export const identifyIOC = (text: string): string | null => {
   // Regex to validate IP, hash, domain, URL, email, MAC address, and ASN
-  const regexIPv6 = /(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::(?:ffff(?::0{1,4}){0,1}:){0,1}(?:[0-9]{1,3}\.){3}[0-9]{1,3}|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:[0-9]{1,3}\.){3}[0-9]{1,3}/g;
   const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
   const hashRegex = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/;
   const domainRegex = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
@@ -48,7 +68,7 @@ export const identifyIOC = (text: string): string | null => {
   }
 
   // Check if the input is an IP (IPv4 or IPv6)
-  if (ipRegex.test(text) || regexIPv6.test(text)) {
+  if (ipRegex.test(text) || STRICT_IPV6_REGEX.test(text)) {
     if (isPrivateIP(text)) {
       //showNotification("Error", text + " is a Private IP");
       return "Private IP";
@@ -99,9 +119,8 @@ export const isPrivateIP = (ip: string): boolean => {
   }
 
   // Controlla se è un IPv6
-  const regexIPv6 = /(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))/g;
   // Verifica se l'indirizzo è un IPv6 valido
-  if (ip.match(regexIPv6)) {
+  if (STRICT_IPV6_REGEX.test(ip)) {
     // Controlla se l'IPv6 è privato (fc00::/7)
     const prefix = ip.substring(0, 2).toLowerCase();
     return prefix === "fc" || prefix === "fd";
@@ -226,16 +245,7 @@ export const copyToClipboard = async (text: string): Promise<void> => {
 
 
 
-
-
-
-
-
-
-
-
-const IOC_IPV6_REGEX =
-  /([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])/g
+const IOC_IPV6_REGEX = new RegExp(IPV6_REGEX_SOURCE, "gi")
 const IOC_IPV4_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g
 const IOC_DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/g
 const IOC_URL_REGEX = /\bhttps?:\/\/[^\s,;\r\n]+\b/g
@@ -274,6 +284,263 @@ export const extractIOCs = (text: string, refanged: boolean = true): string[] | 
 
   return normalizedMatches.length > 0 ? normalizedMatches : null
 }
+
+export type ExtractedIPMap = {
+  ipv4: string[]
+  ipv6: string[]
+}
+
+const normalizeIPv4 = (ip: string): string => {
+  const parts = ip.trim().split(".")
+  if (parts.length !== 4) {
+    return ip.trim()
+  }
+
+  return parts
+    .map((part) => {
+      const parsed = Number(part)
+      return Number.isFinite(parsed) ? parsed.toString() : part
+    })
+    .join(".")
+}
+
+const expandIPv4SegmentToHex = (segment: string): string[] | null => {
+  const octets = segment.split(".").map((value) => parseInt(value, 10))
+  if (octets.length !== 4 || octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) {
+    return null
+  }
+
+  const high = ((octets[0] << 8) | octets[1]).toString(16)
+  const low = ((octets[2] << 8) | octets[3]).toString(16)
+  return [high, low]
+}
+
+const parseIPv6ToHextets = (input: string): number[] | null => {
+  const address = input.trim()
+  if (!address) {
+    return null
+  }
+
+  const doubleColonParts = address.split("::")
+  if (doubleColonParts.length > 2) {
+    return null
+  }
+
+  const expandSection = (section: string): string[] | null => {
+    if (!section) {
+      return []
+    }
+
+    const segments = section.split(":").filter((value) => value.length > 0)
+    const expanded: string[] = []
+
+    for (const value of segments) {
+      if (value.includes(".")) {
+        const ipv4Parts = expandIPv4SegmentToHex(value)
+        if (!ipv4Parts) {
+          return null
+        }
+        expanded.push(...ipv4Parts)
+      } else {
+        expanded.push(value)
+      }
+    }
+
+    return expanded
+  }
+
+  const left = expandSection(doubleColonParts[0] ?? "")
+  const right = expandSection(doubleColonParts[1] ?? "")
+
+  if (left === null || right === null) {
+    return null
+  }
+
+  const missing = 8 - (left.length + right.length)
+  if (missing < 0) {
+    return null
+  }
+
+  const hextets = [...left, ...Array(missing).fill("0"), ...right]
+
+  if (hextets.length !== 8) {
+    return null
+  }
+
+  const numericHextets: number[] = []
+  for (const chunk of hextets) {
+    const value = parseInt(chunk, 16)
+    if (Number.isNaN(value) || value < 0 || value > 0xffff) {
+      return null
+    }
+    numericHextets.push(value)
+  }
+
+  return numericHextets
+}
+
+const compressIPv6FromHextets = (hextets: number[]): string => {
+  const hexStrings = hextets.map((value) => value.toString(16))
+
+  let bestStart = -1
+  let bestLength = 0
+  let currentStart = -1
+  let currentLength = 0
+
+  hextets.forEach((value, index) => {
+    if (value === 0) {
+      if (currentStart === -1) {
+        currentStart = index
+        currentLength = 1
+      } else {
+        currentLength += 1
+      }
+    } else {
+      if (currentStart !== -1 && currentLength > bestLength) {
+        bestStart = currentStart
+        bestLength = currentLength
+      }
+      currentStart = -1
+      currentLength = 0
+    }
+  })
+
+  if (currentStart !== -1 && currentLength > bestLength) {
+    bestStart = currentStart
+    bestLength = currentLength
+  }
+
+  if (bestLength < 2) {
+    bestStart = -1
+  }
+
+  const parts: string[] = []
+  let index = 0
+
+  while (index < hexStrings.length) {
+    if (index === bestStart) {
+      parts.push("")
+      index += bestLength
+      if (index >= hexStrings.length) {
+        parts.push("")
+      }
+      continue
+    }
+    parts.push(hexStrings[index])
+    index += 1
+  }
+
+  let result = parts.join(":")
+  if (result.startsWith(":")) {
+    result = ":" + result
+  }
+  if (result.endsWith(":")) {
+    result = result + ":"
+  }
+  if (!result) {
+    return "::"
+  }
+  return result.replace(/:{3,}/, "::")
+}
+
+const canonicalizeIPv6 = (ip: string): string | null => {
+  const hextets = parseIPv6ToHextets(ip)
+  if (!hextets) {
+    return null
+  }
+  return compressIPv6FromHextets(hextets)
+}
+
+export const extractIPAddresses = (text: string): ExtractedIPMap => {
+  const matches = extractIOCs(text) ?? []
+  const ipv4Set = new Set<string>()
+  const ipv6Set = new Set<string>()
+
+  matches.forEach((ioc) => {
+    const type = identifyIOC(ioc)
+    if (type !== "IP" && type !== "Private IP") {
+      return
+    }
+
+    if (ioc.includes(":")) {
+      const normalized = canonicalizeIPv6(ioc.toLowerCase())
+      if (normalized) {
+        ipv6Set.add(normalized)
+      }
+    } else if (ioc.includes(".")) {
+      ipv4Set.add(normalizeIPv4(ioc))
+    }
+  })
+
+  return {
+    ipv4: Array.from(ipv4Set),
+    ipv6: Array.from(ipv6Set)
+  }
+}
+
+export const computeIPv4Subnet = (ip: string, prefix: number): string | null => {
+  const normalizedPrefix = Math.min(32, Math.max(0, prefix))
+  const octets = ip.split(".").map((value) => parseInt(value, 10))
+  if (octets.length !== 4 || octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) {
+    return null
+  }
+
+  const ipValue =
+    (octets[0] << 24) |
+    (octets[1] << 16) |
+    (octets[2] << 8) |
+    octets[3]
+
+  const mask = normalizedPrefix === 0 ? 0 : (~0 << (32 - normalizedPrefix)) >>> 0
+  const network = ipValue & mask
+
+  const networkOctets = [
+    (network >>> 24) & 0xff,
+    (network >>> 16) & 0xff,
+    (network >>> 8) & 0xff,
+    network & 0xff
+  ]
+
+  return `${networkOctets.join(".")}/${normalizedPrefix}`
+}
+
+const IPV6_BIT_LENGTH = 128n
+const IPV6_FULL_MASK = (1n << IPV6_BIT_LENGTH) - 1n
+
+const ipv6ToBigInt = (ip: string): bigint | null => {
+  const hextets = parseIPv6ToHextets(ip)
+  if (!hextets) {
+    return null
+  }
+
+  return hextets.reduce((acc, value) => (acc << 16n) + BigInt(value), 0n)
+}
+
+const bigIntToIPv6 = (value: bigint): string => {
+  const hextets: number[] = []
+  for (let i = 0; i < 8; i += 1) {
+    const shift = BigInt(7 - i) * 16n
+    const chunk = Number((value >> shift) & 0xffffn)
+    hextets.push(chunk)
+  }
+  return compressIPv6FromHextets(hextets)
+}
+
+export const computeIPv6Subnet = (ip: string, prefix: number): string | null => {
+  const normalizedPrefix = Math.min(128, Math.max(0, prefix))
+  const numeric = ipv6ToBigInt(ip)
+  if (numeric === null) {
+    return null
+  }
+
+  const hostMask = normalizedPrefix === 128 ? 0n : (1n << BigInt(128 - normalizedPrefix)) - 1n
+  const networkMask = IPV6_FULL_MASK ^ hostMask
+  const networkValue = numeric & networkMask
+  const networkString = bigIntToIPv6(networkValue)
+
+  return `${networkString}/${normalizedPrefix}`
+}
+
 
 
 
@@ -1702,5 +1969,3 @@ function extractRemainingText(container: HTMLElement, separator: string = "\n"):
 
   return texts.join(separator);
 }
-
-
