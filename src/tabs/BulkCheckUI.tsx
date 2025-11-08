@@ -26,6 +26,9 @@ interface BulkCheckUIProps {
   results: { [key: string]: any }
   isDarkMode: boolean
   onExport: (format: "csv" | "xlsx") => void
+  iocTypeSummary: { type: string; count: number }[]
+  ignoredTypes: string[]
+  onTypeToggle: (type: string) => void
 }
 
 const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
@@ -40,7 +43,10 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   message,
   results,
   isDarkMode,
-  onExport 
+  onExport,
+  iocTypeSummary,
+  ignoredTypes,
+  onTypeToggle
 }) => {
   const [vtCount, setVtCount] = useState<number>(0)
   const [abuseCount, setAbuseCount] = useState<number>(0)
@@ -67,14 +73,14 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
   let vtLevel: "low" | "medium" | "high" = "low";
   let abuseLevel: "low" | "medium" | "high" = "low";
 
-  // Controllo VirusTotal con soglie abbassate e bonus harmless
+  // Evaluate VirusTotal with relaxed thresholds and harmless bonus
   if (vt) {
     const stats = vt?.data?.attributes?.last_analysis_stats || {};
     const malicious = stats?.malicious || 0;
     const suspicious = stats?.suspicious || 0;
     const harmless = stats?.harmless || 0;
 
-    // Calcola bonus harmless limitato a massimo 5 punti
+    // Apply harmless bonus capped at 5 points
     const harmlessBonus = Math.min(harmless * 0.2, 5);
     const vtScore = (malicious * 3) + suspicious - harmlessBonus;
 
@@ -82,7 +88,7 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
     else if (vtScore >= 5) vtLevel = "medium";
   }
 
-  // Controllo AbuseIPDB con soglie abbassate
+  // Evaluate AbuseIPDB with relaxed thresholds
   if (abuse) {
     const abuseScore = abuse?.data?.abuseConfidenceScore || 0;
 
@@ -90,7 +96,7 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
     else if (abuseScore >= 20) abuseLevel = "medium";
   }
 
-  // Confronta i livelli e ritorna il più grave
+  // Return the highest severity between the two services
   const levels = ["low", "medium", "high"];
   return levels[Math.max(levels.indexOf(vtLevel), levels.indexOf(abuseLevel))] as "low" | "medium" | "high";
 };
@@ -127,6 +133,17 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
               className={themeClass}
             />
           </Form.Group>
+          <Card className={`mt-4 ${themeClass}`}>
+            <Card.Body>
+              <h5>📊 Daily Counters</h5>
+              <p>
+                VirusTotal: <Badge bg="info">{vtCount}</Badge>
+              </p>
+              <p>
+                AbuseIPDB: <Badge bg="danger">{abuseCount}</Badge>
+              </p>
+            </Card.Body>
+          </Card>
         </Col>
         <Col md={6}>
           <Form.Group>
@@ -137,24 +154,6 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
               onChange={onFileUpload}
               className={themeClass}
             />
-          </Form.Group>
-
-          <Form.Group className="mt-4">
-            <Form.Label>🛠️ Select Services</Form.Label>
-            <div className="d-flex gap-3">
-              {["VirusTotal", "AbuseIPDB"].map((service) => (
-                <Form.Check
-                  key={service}
-                  type="checkbox"
-                  label={service}
-                  checked={selectedServices.includes(service)}
-                  onChange={(e) =>
-                    onServiceToggle(service, e.target.checked)
-                  }
-                  className={isDarkMode ? "text-white" : "text-dark"}
-                />
-              ))}
-            </div>
           </Form.Group>
 
           <div className="mt-4 d-grid gap-2">
@@ -224,6 +223,91 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
               📋 Copy Formatted IOCs
             </Button>
           </div>
+
+          <Form.Group className="mt-4">
+            <Form.Label>🛠️ Select Services</Form.Label>
+            <div className="d-flex flex-wrap gap-3">
+              {["VirusTotal", "AbuseIPDB"].map((service) => {
+                const id = `service-${service.toLowerCase()}`
+                return (
+                  <Form.Check
+                    key={service}
+                    id={id}
+                    type="checkbox"
+                    className={`d-flex align-items-center ${
+                      isDarkMode ? "text-white" : "text-dark"
+                    }`}
+                  >
+                    <Form.Check.Input
+                      type="checkbox"
+                      checked={selectedServices.includes(service)}
+                      onChange={(e) =>
+                        onServiceToggle(service, e.target.checked)
+                      }
+                    />
+                    <Form.Check.Label
+                      htmlFor={id}
+                      style={{ cursor: "pointer" }}
+                      className="ms-2 mb-0"
+                    >
+                      {service}
+                    </Form.Check.Label>
+                  </Form.Check>
+                )
+              })}
+            </div>
+          </Form.Group>
+
+          {iocTypeSummary.length > 0 && (
+            <Card className={`mt-4 ${themeClass}`}>
+              <Card.Body>
+                <h5>🧭 Detected IOC Types</h5>
+                <div className="d-flex flex-wrap gap-2">
+                  {iocTypeSummary.map(({ type, count }) => (
+                    <Badge
+                      key={`summary-${type}`}
+                      bg="secondary"
+                      className="p-2"
+                    >
+                      {type}: {count}
+                    </Badge>
+                  ))}
+                </div>
+
+                <div className="mt-3">
+                  <Form.Label className="mb-2">Ignore IOC types</Form.Label>
+                  <div className="d-flex flex-column gap-2">
+                    {iocTypeSummary.map(({ type }) => {
+                      const checkboxId = `ignore-${type}`
+                      return (
+                        <Form.Check
+                          key={checkboxId}
+                          id={checkboxId}
+                          type="checkbox"
+                          className={`d-flex align-items-center ${
+                            isDarkMode ? "text-white" : "text-dark"
+                          }`}
+                        >
+                          <Form.Check.Input
+                            type="checkbox"
+                            checked={ignoredTypes.includes(type)}
+                            onChange={() => onTypeToggle(type)}
+                          />
+                          <Form.Check.Label
+                            htmlFor={checkboxId}
+                            style={{ cursor: "pointer" }}
+                            className="ms-2 mb-0"
+                          >
+                            Ignore {type}
+                          </Form.Check.Label>
+                        </Form.Check>
+                      )
+                    })}
+                  </div>
+                </div>
+              </Card.Body>
+            </Card>
+          )}
         </Col>
       </Row>
 
@@ -235,22 +319,6 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
           {message}
         </Alert>
       )}
-
-      <Row className="mb-4">
-        <Col>
-          <Card className={themeClass}>
-            <Card.Body>
-              <h5>📊 Daily Counters</h5>
-              <p>
-                VirusTotal: <Badge bg="info">{vtCount}</Badge>
-              </p>
-              <p>
-                AbuseIPDB: <Badge bg="danger">{abuseCount}</Badge>
-              </p>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
 
       {results && Object.keys(results).length > 0 && (
         <>

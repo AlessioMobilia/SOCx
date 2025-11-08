@@ -1,7 +1,7 @@
 // src/utils.ts
 import { sendToContentScript } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
-import * as XLSX from "xlsx"
+import * as XLSX from "xlsx-js-style"
 
 // Defang e Refang
 export const defang = (text: string): string => {
@@ -234,39 +234,46 @@ export const copyToClipboard = async (text: string): Promise<void> => {
 
 
 
+const IOC_IPV6_REGEX =
+  /([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])/g
+const IOC_IPV4_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g
+const IOC_DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/g
+const IOC_URL_REGEX = /\bhttps?:\/\/[^\s,;\r\n]+\b/g
+const IOC_MD5_REGEX = /\b[a-fA-F0-9]{32}\b/g
+const IOC_SHA1_REGEX = /\b[a-fA-F0-9]{40}\b/g
+const IOC_SHA256_REGEX = /\b[a-fA-F0-9]{64}\b/g
+const IOC_EMAIL_REGEX = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g
+const IOC_DEFANGED_URL_REGEX = /\bhxxps?:\/\/[^\s,;\r\n]+\b/g
+const IOC_DEFANGED_DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\[\.\])+[a-zA-Z]{2,}\b/g
+const IOC_DEFANGED_IP_REGEX = /\b(?:\d{1,3}\[\.\]){3}\d{1,3}\b/g
+const IOC_MAC_REGEX = /\b([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})\b/g
+const IOC_ASN_REGEX = /\bAS\d{1,5}(?:\.\d{1,5})?\b/gi
+
+const COMBINED_IOC_REGEX = new RegExp(
+  `(${IOC_IPV6_REGEX.source}|${IOC_IPV4_REGEX.source}|${IOC_DOMAIN_REGEX.source}|${IOC_URL_REGEX.source}|${IOC_MD5_REGEX.source}|${IOC_SHA1_REGEX.source}|${IOC_SHA256_REGEX.source}|${IOC_EMAIL_REGEX.source}|${IOC_DEFANGED_URL_REGEX.source}|${IOC_DEFANGED_DOMAIN_REGEX.source}|${IOC_DEFANGED_IP_REGEX.source}|${IOC_MAC_REGEX.source}|${IOC_ASN_REGEX.source})`,
+  "gi"
+)
+
 export const extractIOCs = (text: string, refanged: boolean = true): string[] | null => {
-  const regexIPv6 = /([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])/g;
-  const ipAddressRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
-  const domainRegex = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/g;
-  const urlRegex = /\bhttps?:\/\/[^\s,;\r\n]+\b/g;
-  const md5Regex = /\b[a-fA-F0-9]{32}\b/g;
-  const sha1Regex = /\b[a-fA-F0-9]{40}\b/g;
-  const sha256Regex = /\b[a-fA-F0-9]{64}\b/g;
-  const emailRegex = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
-  const defangedUrlRegex = /\bhxxps?:\/\/[^\s,;\r\n]+\b/g;
-  const defangedDomainRegex = /\b(?:[a-zA-Z0-9-]+\[\.\])+[a-zA-Z]{2,}\b/g;
-  const defangedIpRegex = /\b(?:\d{1,3}\[\.\]){3}\d{1,3}\b/g;
-  const macAddressRegex = /\b([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})\b/g;
-  const asnRegex = /\bAS\d{1,5}(?:\.\d{1,5})?\b/gi;
-  const combinedRegex = new RegExp(
-    `(${regexIPv6.source}|${ipAddressRegex.source}|${domainRegex.source}|${urlRegex.source}|${md5Regex.source}|${sha1Regex.source}|${sha256Regex.source}|${emailRegex.source}|${defangedUrlRegex.source}|${defangedDomainRegex.source}|${defangedIpRegex.source}|${macAddressRegex.source}|${asnRegex.source})`,
-    'gi'
-  );
-
-  // Find all matches with the combined regex
-  const matches = text.match(combinedRegex);
-
-  // Map the found IOCs and apply refanging
-  if (refanged && matches != null) {
-    return matches
-      .map((ioc) => refang(ioc).trim()) // Apply refanging and remove spaces
-      .filter(Boolean); // Filter out any empty values
-  } else if (matches != null) {
-    return matches.filter(Boolean);
-  } else {
-    return null;
+  if (!text) {
+    return null
   }
-};
+
+  COMBINED_IOC_REGEX.lastIndex = 0
+  const matches = text.match(COMBINED_IOC_REGEX)
+
+  if (!matches) {
+    return null
+  }
+
+  const normalizedMatches = refanged
+    ? matches
+        .map((ioc) => refang(ioc).trim())
+        .filter(Boolean)
+    : matches.filter(Boolean)
+
+  return normalizedMatches.length > 0 ? normalizedMatches : null
+}
 
 
 
@@ -344,7 +351,7 @@ export const formatAbuseIPDBData = (abuseData: any): string => {
     ([label, value]) => `- ${label.padEnd(labelWidth)} ${value}`
   );
 
-  return `IP Information (AbuseIPDB):\n${lines.join("\n")}`;
+  return `IP Information:\n${lines.join("\n")}`;
 };
 
 
@@ -395,7 +402,7 @@ export const formatVirusTotalData = (vtData: any): string => {
 
 
   Object.entries(info).forEach(([label, value]) =>
-    allFields.push({ section: isDomain ? "Domain Information (VirusTotal)" : isIp ? "IP Information (VirusTotal)" : "IOC Information (VirusTotal)", label, value })
+    allFields.push({ section: isDomain ? "Domain Information" : isIp ? "IP Information" : "IOC Information", label, value })
   );
 
   // Vendor stats
@@ -1695,8 +1702,5 @@ function extractRemainingText(container: HTMLElement, separator: string = "\n"):
 
   return texts.join(separator);
 }
-
-
-
 
 

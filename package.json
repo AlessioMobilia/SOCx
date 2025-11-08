@@ -1,7 +1,7 @@
 {
   "name": "so-cx",
   "displayName": "SOCx",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Simple OSINT Centralized eXtension",
   "author": "Alessio Mobilia",
   "privacy_policy": "https://socx.alessiomobilia.com/privacy.html",
@@ -12,17 +12,18 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.7.2",
-    "@plasmohq/messaging": "^0.7.1",
+    "@plasmohq/messaging": "^0.7.2",
     "@plasmohq/storage": "^1.15.0",
-    "bootstrap": "^5.3.6",
-    "plasmo": "0.90.5",
+    "bootstrap": "^5.3.8",
+    "plasmo": "^0.90.5",
     "react": "18.2.0",
     "react-bootstrap": "^2.10.10",
     "react-dom": "18.2.0",
     "react-icons": "^5.5.0",
     "stable": "^0.1.8",
+    "svgo": "^3.3.2",
     "tippy.js": "^6.3.7",
-    "xlsx": "^0.18.5"
+    "xlsx-js-style": "^1.2.0"
   },
   "extends": "plasmo/templates/tsconfig.base",
   "exclude": [
@@ -47,7 +48,6 @@
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "4.1.1",
-    "@parcel/transformer-react-refresh-wrap": "^2.15.2",
     "@types/chrome": "0.0.258",
     "@types/node": "20.11.5",
     "@types/react": "18.2.48",
@@ -83,5 +83,11 @@
     "ignoredBuiltDependencies": [
       "@swc/core"
     ]
+  },
+  "overrides": {
+    "esbuild": "^0.25.0",
+    "content-security-policy-parser": "^0.6.0",
+    "msgpackr": "^1.10.1",
+    "svelte": "^4.2.19"
   }
 }

@@ -1,0 +1,8 @@
+{
+  "target": "chrome",
+  "productId": "${{ secrets.CHROME_PRODUCT_ID }}",
+  "filePath": "./chrome.zip",
+  "clientId": "${{ secrets.CHROME_CLIENT_ID }}",
+  "clientSecret": "${{ secrets.CHROME_CLIENT_SECRET }}",
+  "refreshToken": "${{ secrets.CHROME_REFRESH_TOKEN }}"
+}

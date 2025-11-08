@@ -8,35 +8,47 @@ export const config: PlasmoCSConfig = {
 
 // Extract and format information from the page
 function extractAndFormatInfo(): string | null {
-  const container = document.querySelector(".col-md-6 .well");
-  if (!container) return null;
+  const container = document.querySelector(".col-md-6 .well")
+  if (!container) return null
 
   const getText = (selector: string): string =>
-    container.querySelector(selector)?.textContent?.trim() || "N/A";
+    container.querySelector(selector)?.textContent?.replace(/\s+/g, " ").trim() || "N/A"
 
-  const ip = getText("h3 > b");
-  const reportCount = getText("p > b");
-  const confidence = getText(".progress-bar > span");
+  const getCellText = (cell: Element | null): string => {
+    if (!cell) return "N/A"
+    const clone = cell.cloneNode(true) as HTMLElement
+    clone.querySelectorAll(".flag-emoji").forEach((node) => node.remove())
+    const text = clone.textContent?.replace(/\s+/g, " ").trim()
+    return text && text.length > 0 ? text : "N/A"
+  }
 
-  const rows = container.querySelectorAll("table tr");
-  const tableInfo: Record<string, string> = {};
+  const ip = getText("h3 > b")
+  const reportCount = getText("p > b")
+  const confidence = getText(".progress-bar > span")
+
+  const rows = container.querySelectorAll("table tr")
+  const tableInfo: Record<string, string> = {}
 
   rows.forEach((row) => {
-    const th = row.querySelector("th")?.textContent?.trim();
-    const td = row.querySelector("td")?.textContent?.trim();
-    if (th && td) tableInfo[th] = td;
-  });
+    const header = row.querySelector("th")?.textContent?.trim()
+    const value = getCellText(row.querySelector("td"))
+    if (header && value) {
+      tableInfo[header] = value
+    }
+  })
 
-  const isp = tableInfo["ISP"] || "N/A";
-  const usage = tableInfo["Usage Type"] || "N/A";
-  const asn = tableInfo["ASN"] || "N/A";
-  const hostname = tableInfo["Hostname(s)"] || "N/A";
-  const domain = tableInfo["Domain Name"] || "N/A";
-  const country = tableInfo["Country"] || "N/A";
-  const city = tableInfo["City"] || "N/A";
+  const field = (key: string, fallback = "N/A") => tableInfo[key] || fallback
 
-  let extraText = container.querySelector("div[style*='display: flex'] p")?.textContent?.trim() ?? "";
-  extraText = extraText.replace(/\s+/g, " ").trim(); // clean up extra whitespace and newlines
+  const isp = field("ISP")
+  const usage = field("Usage Type")
+  const asn = field("ASN")
+  const hostnames = field("Hostname(s)")
+  const domain = field("Domain Name")
+  const country = field("Country")
+  const city = field("City")
+
+  let extraText = container.querySelector("div[style*='display: flex'] p")?.textContent ?? ""
+  extraText = extraText.replace(/\s+/g, " ").trim()
 
   return `
 IP Information (AbuseIPDB):
@@ -46,10 +58,10 @@ Abuse Confidence: ${confidence}
 ISP:              ${isp}
 Usage:            ${usage}
 ASN:              ${asn}
-Hostnames:        ${hostname}
+Hostnames:        ${hostnames}
 Domain:           ${domain}
 Country:          ${country}
-City:             ${city}`.trim();
+City:             ${city}`.trim()
 }
 
 // Create the custom-styled copy button (no Bootstrap)

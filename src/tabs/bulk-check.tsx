@@ -1,16 +1,24 @@
 import React, { useEffect, useState } from "react"
 import BulkCheckUI from "./BulkCheckUI"
-import { extractIOCs } from "../utility/utils"
-import { exportResultsByEngine, exportResultsToExcel } from "../utility/utils"
+import {
+  extractIOCs,
+  exportResultsByEngine,
+  exportResultsToExcel,
+  identifyIOC
+} from "../utility/utils"
 import "./bulk-check.css"
 import { Storage } from "@plasmohq/storage"
 import { sendToBackground } from "@plasmohq/messaging"
 
 const storage = new Storage({ area: "local" })
+type IOCSummary = Record<string, string[]>
 
 const BulkCheck = () => {
   const [textareaValue, setTextareaValue] = useState("")
+  const [allIocs, setAllIocs] = useState<string[]>([])
   const [iocList, setIocList] = useState<string[]>([])
+  const [iocSummary, setIocSummary] = useState<IOCSummary>({})
+  const [ignoredTypes, setIgnoredTypes] = useState<string[]>([])
   const [results, setResults] = useState<{ [key: string]: any }>({})
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -22,8 +30,9 @@ const BulkCheck = () => {
     const loadData = async () => {
       const bulk = await storage.get<string[]>("bulkIOCList")
       if (bulk && Array.isArray(bulk)) {
-        setIocList(bulk)
+        setAllIocs(bulk)
         setTextareaValue(bulk.join("\n"))
+        applyExtractionResult(bulk)
       }
 
       const dark = await storage.get<boolean>("isDarkMode")
@@ -39,16 +48,75 @@ const BulkCheck = () => {
   }, [isDarkMode])
 
   useEffect(() => {
-    storage.set("bulkIOCList", iocList)
-  }, [iocList])
+    storage.set("bulkIOCList", allIocs)
+  }, [allIocs])
 
   useEffect(() => {
     storage.set("isDarkMode", isDarkMode)
   }, [isDarkMode])
 
+  const normalizeType = (type: string | null): string => {
+    if (!type) return "Unknown"
+    if (type === "Private IP") return "IP"
+    return type
+  }
+
+  const categorizeIocs = (iocs: string[]): IOCSummary => {
+    return iocs.reduce<IOCSummary>((acc, ioc) => {
+      const type = normalizeType(identifyIOC(ioc))
+      if (!acc[type]) {
+        acc[type] = []
+      }
+      acc[type].push(ioc)
+      return acc
+    }, {})
+  }
+
+  const filterByIgnored = (summary: IOCSummary, ignores: string[]): string[] => {
+    const ignoreSet = new Set(ignores)
+    return Object.entries(summary).reduce<string[]>((acc, [type, values]) => {
+      if (!ignoreSet.has(type)) {
+        acc.push(...values)
+      }
+      return acc
+    }, [])
+  }
+
+  const autoSelectServices = (summary: IOCSummary, ignores: string[]) => {
+    const ignoreSet = new Set(ignores)
+    const hasIp = Boolean(summary["IP"]?.length) && !ignoreSet.has("IP")
+    const hasOther = Object.entries(summary).some(
+      ([type, values]) => type !== "IP" && values.length > 0 && !ignoreSet.has(type)
+    )
+
+    const nextServices: string[] = []
+    if (hasOther) {
+      nextServices.push("VirusTotal")
+    }
+    if (hasIp) {
+      nextServices.push("AbuseIPDB")
+    }
+
+    setSelectedServices(nextServices)
+  }
+
+  const applyIgnoreFilter = (ignoreList: string[], summary: IOCSummary = iocSummary) => {
+    const filtered = filterByIgnored(summary, ignoreList)
+    setIocList(filtered)
+    autoSelectServices(summary, ignoreList)
+  }
+
+  const applyExtractionResult = (iocs: string[]) => {
+    const summary = categorizeIocs(iocs)
+    setIocSummary(summary)
+    setIgnoredTypes([])
+    applyIgnoreFilter([], summary)
+  }
+
   const updateIOCsFromText = (text: string) => {
-    const iocs = extractIOCs(text)
-    setIocList(iocs)
+    const iocs = extractIOCs(text) || []
+    setAllIocs(iocs)
+    applyExtractionResult(iocs)
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,7 +162,8 @@ const handleCheckBulk = async () => {
 
   const handleClearList = () => {
     setTextareaValue("")
-    setIocList([])
+    setAllIocs([])
+    applyExtractionResult([])
     storage.set("bulkIOCList", [])
   }
 
@@ -114,6 +183,16 @@ const handleCheckBulk = async () => {
 
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => !prev)
+  }
+
+  const handleTypeToggle = (type: string) => {
+    setIgnoredTypes((prev) => {
+      const next = prev.includes(type)
+        ? prev.filter((t) => t !== type)
+        : [...prev, type]
+      applyIgnoreFilter(next)
+      return next
+    })
   }
 
   const handleExport = (format: "csv" | "xlsx") => {
@@ -138,6 +217,14 @@ const handleCheckBulk = async () => {
       results={results}
       isDarkMode={isDarkMode}
       onExport={handleExport}
+      iocTypeSummary={Object.entries(iocSummary)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([type, values]) => ({
+          type,
+          count: values.length
+        }))}
+      ignoredTypes={ignoredTypes}
+      onTypeToggle={handleTypeToggle}
     />
   )
 }

@@ -22,6 +22,9 @@ export const config: PlasmoCSConfig = {
   all_frames: true
 }
 
+const MAX_SELECTION_LENGTH = 256
+const MAX_UNIQUE_WORDS = 2
+
   // inizializzazione sicura
   if (!(window as any)._formatScriptInitialized) {
     ;(window as any)._formatScriptInitialized = true
@@ -34,26 +37,58 @@ export const config: PlasmoCSConfig = {
 
     let currentButton: HTMLButtonElement | null = null
     let currentMagicButton: HTMLButtonElement | null = null
-    let oldSelection: string | null = null
+    let lastSelectionSignature: string | null = null
+    let repositionScheduled = false
 
     document.addEventListener("mouseup", debounce(handleSelection, 300))
     document.addEventListener("selectionchange", handleSelectionChange)
 
+    const clearSelectionUI = () => {
+      if (!currentButton && !currentMagicButton && !lastSelectionSignature) {
+        return
+      }
 
-    
+      currentButton?.remove()
+      currentMagicButton?.remove()
+      currentButton = currentMagicButton = null
+      lastSelectionSignature = null
+    }
+
     function handleSelectionChange() {
       const selection = window.getSelection()
-      if (!selection || selection.toString().trim() === "") {
-        currentButton?.remove()
-        currentMagicButton?.remove()
-        currentButton = currentMagicButton = null
-        oldSelection = null
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        clearSelectionUI()
       }
     }
 
     // Helper: Estimate caret position for input/textarea
     // Helper: Estimate caret position for input/textarea
-    function estimateCaretRect(inputEl) {
+    function estimateCaretRect(inputEl: Element | null): DOMRect | null {
+      if (!inputEl) return null
+      if (inputEl instanceof HTMLElement && inputEl.isContentEditable) {
+        const selection = inputEl.ownerDocument.getSelection()
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0).cloneRange()
+          range.collapse(false)
+          const rects = range.getClientRects()
+          if (rects.length > 0) {
+            return rects[rects.length - 1]
+          }
+          const fallbackRect = range.getBoundingClientRect()
+          if (fallbackRect.width || fallbackRect.height) {
+            return fallbackRect
+          }
+        }
+        return inputEl.getBoundingClientRect()
+      }
+
+      if (
+        !(inputEl instanceof HTMLInputElement) &&
+        !(inputEl instanceof HTMLTextAreaElement)
+      ) {
+        return inputEl.getBoundingClientRect()
+      }
+
       const mirrorDiv = document.createElement("div")
       const computedStyle = getComputedStyle(inputEl)
 
@@ -98,46 +133,98 @@ export const config: PlasmoCSConfig = {
       return rect
     }
 
+    const buildSelectionSignature = (
+      text: string,
+      rect: DOMRect | null
+    ): string => {
+      if (!rect) return `${text}-no-rect-${window.location.href}`
+      return `${text}-${Math.round(rect.top)}-${Math.round(rect.left)}-${window.location.href}`
+    }
+
+    const getSelectionRect = (selection: Selection | null): DOMRect | null => {
+      if (!selection) return null
+      if (selection.rangeCount > 0) {
+        const rangeRect = selection.getRangeAt(0).getBoundingClientRect()
+        if (rangeRect.width || rangeRect.height) {
+          return rangeRect
+        }
+      }
+
+      const activeEl = document.activeElement
+      if (
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        (activeEl instanceof HTMLElement && activeEl.isContentEditable)
+      ) {
+        return estimateCaretRect(activeEl)
+      }
+
+      return activeEl?.getBoundingClientRect() ?? null
+    }
+
     async function handleSelection() {
       const selection = window.getSelection()
-      const selectedText = selection?.toString().trim()
-      if (!selectedText || (selectedText === oldSelection && currentButton)) return
+      const selectedText = selection?.toString().trim() ?? ""
+      if (!selectedText) {
+        clearSelectionUI()
+        return
+      }
 
-      const uniqueWords = Array.from(new Set(selectedText.split(/\s+/).filter(Boolean)))
-      if (uniqueWords.length > 2) return
+      if (selectedText.length > MAX_SELECTION_LENGTH) {
+        clearSelectionUI()
+        return
+      }
 
-      oldSelection = selectedText
+      const uniqueWords = new Set(selectedText.split(/\s+/).filter(Boolean))
+      if (uniqueWords.size > MAX_UNIQUE_WORDS) {
+        clearSelectionUI()
+        return
+      }
+
       const iocs = extractIOCs(selectedText)
-      if (!iocs || iocs.length !== 1) return
+      if (!iocs || iocs.length !== 1) {
+        clearSelectionUI()
+        return
+      }
 
       const ioc = iocs[0]
       const type = identifyIOC(ioc)
-      if (!type) return
+      if (!type) {
+        clearSelectionUI()
+        return
+      }
 
       const vtSupported = ["IP", "Domain", "URL", "Hash"]
       const abuseSupported = ["IP"]
       const isSupported = vtSupported.includes(type) || abuseSupported.includes(type)
+      if (!isSupported) {
+        clearSelectionUI()
+        return
+      }
+
+      let rect: DOMRect | null = null
+      try {
+        rect = getSelectionRect(selection ?? null)
+      } catch (err) {
+        console.warn("Unable to derive selection rect:", err)
+        rect = null
+      }
+
+      const selectionSignature = buildSelectionSignature(selectedText, rect)
+      if (selectionSignature === lastSelectionSignature && currentButton) {
+        return
+      }
+      lastSelectionSignature = selectionSignature
 
       currentButton?.remove()
       currentMagicButton?.remove()
 
-      let rect = selection.getRangeAt(0).getBoundingClientRect()
-
-      if (rect.width === 0 && rect.height === 0) {
-        const activeEl = document.activeElement
-        if (
-          activeEl instanceof HTMLInputElement ||
-          activeEl instanceof HTMLTextAreaElement ||
-          (activeEl instanceof HTMLElement && activeEl.isContentEditable)
-        ) {
-          rect = estimateCaretRect(activeEl)
-        }
-      }
-
-      // Fallback se rect non valido
-      if (!rect || rect.top <= 0 || rect.left <= 0) {
+      if (!rect || (!rect.width && !rect.height && rect.top <= 0 && rect.left <= 0)) {
         const fallback = document.activeElement?.getBoundingClientRect()
-        if (!fallback || fallback.top <= 0 || fallback.left <= 0) return
+        if (!fallback) {
+          clearSelectionUI()
+          return
+        }
         rect = fallback
       }
 
@@ -181,16 +268,36 @@ export const config: PlasmoCSConfig = {
 
 
 
-    // Update button positions on scroll and resize
-    window.addEventListener("scroll", repositionButtons)
-    window.addEventListener("resize", repositionButtons)
+    const scheduleReposition = () => {
+      if (repositionScheduled) return
+      repositionScheduled = true
+
+      const run = () => {
+        repositionScheduled = false
+        repositionButtons()
+      }
+
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(run)
+      } else {
+        window.setTimeout(run, 16)
+      }
+    }
+
+    // Update button positions on scroll and resize without spamming layout thrashing
+    window.addEventListener("scroll", scheduleReposition, { passive: true })
+    window.addEventListener("resize", scheduleReposition)
 
     function repositionButtons() {
       const selection = window.getSelection?.()
-      if (!selection || selection.rangeCount === 0) return
-
-      const range = selection.getRangeAt(0)
-      const rect = range.getBoundingClientRect()
+      if (!selection) return
+      let rect: DOMRect | null = null
+      try {
+        rect = getSelectionRect(selection)
+      } catch (err) {
+        rect = null
+      }
+      if (!rect) return
 
       if (currentButton) {
         currentButton.style.left = `${rect.right + 3}px`
@@ -206,7 +313,7 @@ export const config: PlasmoCSConfig = {
 
     // Observe DOM changes to adjust button positions
     const observer = new MutationObserver(() => {
-      repositionButtons()
+      scheduleReposition()
     })
     observer.observe(document.body, {
       childList: true,
@@ -215,7 +322,7 @@ export const config: PlasmoCSConfig = {
       characterData: true
     })
 
-    setTimeout(() => repositionButtons(), 0)
+    scheduleReposition()
 
 
     function getIOCInfo(ioc: string): Promise<any> {
@@ -244,7 +351,7 @@ export const config: PlasmoCSConfig = {
 
 
     function debounce(fn: Function, delay: number) {
-      let timeout: NodeJS.Timeout
+      let timeout: ReturnType<typeof setTimeout>
       return (...args: any[]) => {
         clearTimeout(timeout)
         timeout = setTimeout(() => fn(...args), delay)

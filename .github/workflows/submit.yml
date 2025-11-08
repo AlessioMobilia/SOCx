@@ -1,34 +1,77 @@
-name: "Submit to Web Store"
+name: Publish browser extension
+
 on:
   workflow_dispatch:
+    inputs:
+      edge_notes:
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
+
+    env:
+      NODE_VERSION: '20'
+      CHROME_TARGET: chrome-mv3
+      EDGE_TARGET: edge-mv3
+      # scegli uno dei due in base al tuo progetto:
+      FIREFOX_TARGET: firefox-mv3  # oppure: firefox-mv2
+
+      # percorsi dei file generati da Plasmo (--zip)
+      CHROME_ZIP: build/chrome-mv3-prod.zip
+      EDGE_ZIP: build/edge-mv3-prod.zip
+      FIREFOX_XPI: build/firefox-mv3-prod.zip   # se usi mv2 -> firefox-mv2-prod.zip
+      FIREFOX_SOURCE_ZIP: dist/source_${{ github.sha }}.zip
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Cache pnpm modules
-        uses: actions/cache@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-
-      - uses: pnpm/action-setup@v2.2.4
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: latest
-          run_install: true
-      - name: Use Node.js 16.x
-        uses: actions/setup-node@v3.4.1
+          version: 9
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      # ---- Build & zip con Plasmo ----
+      - name: Build+zip Chrome
+        run: pnpm dlx plasmo build --target=${{ env.CHROME_TARGET }} --zip
+
+      - name: Build+zip Edge
+        run: pnpm dlx plasmo build --target=${{ env.EDGE_TARGET }} --zip
+
+      - name: Build+zip Firefox
+        run: pnpm dlx plasmo build --target=${{ env.FIREFOX_TARGET }} --zip
+
+      - name: (Opzionale) Crea source zip per AMO
+        run: |
+          mkdir -p dist
+          git archive --format=zip -o "${FIREFOX_SOURCE_ZIP}" HEAD
+
+      # ---- Pubblicazione con BPP ----
+      - name: Browser Platform Publisher
+        uses: PlasmoHQ/bpp@v3.8.0
         with:
-          node-version: 16.x
-          cache: "pnpm"
-      - name: Build the extension
-        run: pnpm build
-      - name: Package the extension into a zip artifact
-        run: pnpm package
-      - name: Browser Platform Publish
-        uses: PlasmoHQ/bpp@v3
-        with:
-          keys: ${{ secrets.SUBMIT_KEYS }}
-          artifact: build/chrome-mv3-prod.zip
+          keys: ${{ secrets.SUBMIT_KEYS }}         # il tuo JSON credenziali
+          chrome-file: ${{ env.CHROME_ZIP }}
+          edge-file: ${{ env.EDGE_ZIP }}
+          firefox-file: ${{ env.FIREFOX_XPI }}    # "file" è alias di "zip" anche per FF
+          source: ${{ env.FIREFOX_SOURCE_ZIP }}   # alias di sourceZip
+          edge-notes: ${{ github.event.inputs.edge_notes }}
+          version-file: package.json
+          verbose: true
