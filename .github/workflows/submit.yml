@@ -66,6 +66,11 @@ jobs:
           mkdir -p dist
           git archive --format=zip -o "${FIREFOX_SOURCE_ZIP}" HEAD
 
+      - name: Validate SUBMIT_KEYS JSON
+        run: node -e 'JSON.parse(process.env.SUBMIT_KEYS); console.log("SUBMIT_KEYS OK")'
+        env:
+          SUBMIT_KEYS: ${{ secrets.SUBMIT_KEYS }}
+
       # ---- Pubblicazione con BPP ----
       - name: Browser Platform Publisher
         uses: PlasmoHQ/bpp@v3.8.0
