@@ -89,7 +89,7 @@ const MAGIC_BUTTON_GAP = 10
       const viewportHeight = docEl.clientHeight
       const width = button.offsetWidth || 28
       const height = button.offsetHeight || 28
-      const clampedLeft = clampValue(
+      let clampedLeft = clampValue(
         targetLeft,
         BUTTON_MARGIN,
         Math.max(BUTTON_MARGIN, viewportWidth - width - BUTTON_MARGIN)
