@@ -1,6 +1,15 @@
 import {
-  copyToClipboard, extractIOCs, refang, defang, formatCVEs,
-  identifyIOC, isPrivateIP, showNotification, saveIOC, formatAndCopySelection
+  copyToClipboard,
+  extractIOCs,
+  refang,
+  defang,
+  formatCVEs,
+  identifyIOC,
+  isPrivateIP,
+  showNotification,
+  saveIOC,
+  formatAndCopySelection,
+  uniqueStrings
 } from "../utility/utils"
 import { servicesConfig } from "../utility/servicesConfig"
 import { defaultServices } from "../utility/defaultServices"
@@ -55,7 +64,7 @@ export async function handleMenuClick(info: any, tab: any) {
   }
 
   if (info.menuItemId === "AddToBulkCheck") {
-    await storage.set("bulkIOCList", iocList)
+    await storage.set("bulkIOCList", uniqueStrings(iocList ?? []))
     // Apri la pagina React (tabs/bulk-check.tsx)
     chrome.tabs.create({ url: chrome.runtime.getURL("tabs/bulk-check.html") })
     return

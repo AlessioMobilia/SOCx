@@ -127,6 +127,17 @@ const resolveStatusDescriptor = (
   }
 }
 
+const dedupeNormalizedSubnets = (entries: NormalizedSubnet[]): NormalizedSubnet[] => {
+  const seen = new Set<string>()
+  return entries.filter((entry) => {
+    if (seen.has(entry.subnet)) {
+      return false
+    }
+    seen.add(entry.subnet)
+    return true
+  })
+}
+
 const SubnetCheck = () => {
   const [textareaValue, setTextareaValue] = useState("")
   const [subnets, setSubnets] = useState<NormalizedSubnet[]>([])
@@ -270,21 +281,22 @@ const SubnetCheck = () => {
 
   const handleCheck = useCallback(async () => {
     const parsed = extractSubnetsFromText(textareaValue)
-    if (parsed.length === 0) {
+    const uniqueParsed = dedupeNormalizedSubnets(parsed)
+    if (uniqueParsed.length === 0) {
       setSubnets([])
       setResults({})
       setMessage("Add at least one valid subnet in the text area before running the check.")
       return
     }
 
-    setSubnets(parsed)
+    setSubnets(uniqueParsed)
     setResults({})
     setIsLoading(true)
     setMessage("Checking subnets on AbuseIPDB...")
 
     try {
       const body = {
-        subnets: parsed.map((entry) => entry.subnet),
+        subnets: uniqueParsed.map((entry) => entry.subnet),
         maxAgeInDays: LOOKBACK_DAYS,
         confidenceMinimum: confidenceMinimum > 0 ? confidenceMinimum : undefined
       }

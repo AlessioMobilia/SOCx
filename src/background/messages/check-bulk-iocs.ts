@@ -1,6 +1,6 @@
 // src/background/messages/check-bulk-iocs.ts
 import type { PlasmoMessaging } from "@plasmohq/messaging"
-import { identifyIOC, showNotification } from "../../utility/utils"
+import { identifyIOC, showNotification, uniqueStrings } from "../../utility/utils"
 import { checkVirusTotal, checkAbuseIPDB, checkIpapi, checkProxyCheck } from "../../utility/api"
 import { Storage } from "@plasmohq/storage"
 
@@ -14,6 +14,10 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     console.log("[Plasmo] check-bulk-iocs handler triggered")
 
     const { iocList, services, includeIpapi, includeProxyCheck } = req.body
+    const normalizedList = Array.isArray(iocList) ? uniqueStrings(iocList) : []
+    if (normalizedList.length === 0) {
+      return res.send({ results: {} })
+    }
     const results: Record<string, any> = {}
 
     const virusTotalApiKey = await storage.get<string>("virusTotalApiKey")
@@ -41,7 +45,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       return res.send({ results: {} })
     }
 
-    for (const ioc of iocList) {
+    for (const ioc of normalizedList) {
       const type = identifyIOC(ioc)
       const result: Record<string, any> = {}
       let privateIpcount = 0;

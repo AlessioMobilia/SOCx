@@ -24,6 +24,20 @@ export const isAlreadyDefanged = (text: string): boolean => {
   return /\[\.\]|hxxp:\/\/|hxxps:\/\//i.test(text);
 };
 
+export const uniqueStrings = (values: string[]): string[] => {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values) {
+    const normalized = value.trim()
+    if (!normalized || seen.has(normalized)) {
+      continue
+    }
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
+}
+
 const IPV6_SEGMENT = "[0-9a-fA-F]{1,4}"
 const IPV4_BYTE =
   "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
