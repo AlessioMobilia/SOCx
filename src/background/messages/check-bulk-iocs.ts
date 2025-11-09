@@ -19,8 +19,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
     const virusTotalApiKey = await storage.get<string>("virusTotalApiKey")
     const abuseIPDBApiKey = await storage.get<string>("abuseIPDBApiKey")
     const ipapiGlobal = (await storage.get<boolean>("ipapiEnrichmentEnabled")) === true
+    const proxyCheckApiKey = await storage.get<string>("proxyCheckApiKey")
     const proxyCheckGlobal = (await storage.get<boolean>("proxyCheckEnabled")) === true
-    const proxyCheckApiKey = proxyCheckGlobal ? await storage.get<string>("proxyCheckApiKey") : null
     const effectiveIpapi = typeof includeIpapi === "boolean" ? includeIpapi : ipapiGlobal
     const effectiveProxyCheck =
       typeof includeProxyCheck === "boolean" ? includeProxyCheck : proxyCheckGlobal

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { sendToBackground } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 
@@ -70,6 +70,7 @@ const BulkCheck = () => {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
   const [themeLoaded, setThemeLoaded] = useState(false)
+  const iocSummaryRef = useRef<IOCSummary>({})
 
   const autoSelectServices = useCallback(
     (summary: IOCSummary, ignores: string[]) => {
@@ -92,18 +93,24 @@ const BulkCheck = () => {
     []
   )
 
+  useEffect(() => {
+    iocSummaryRef.current = iocSummary
+  }, [iocSummary])
+
   const applyIgnoreFilter = useCallback(
-    (ignoreList: string[], summary: IOCSummary = iocSummary) => {
-      const filtered = filterByIgnored(summary, ignoreList)
+    (ignoreList: string[], summary?: IOCSummary) => {
+      const baseSummary = summary ?? iocSummaryRef.current
+      const filtered = filterByIgnored(baseSummary, ignoreList)
       setIocList(filtered)
-      autoSelectServices(summary, ignoreList)
+      autoSelectServices(baseSummary, ignoreList)
     },
-    [autoSelectServices, iocSummary]
+    [autoSelectServices]
   )
 
   const applyExtractionResult = useCallback(
     (iocs: string[]) => {
       const summary = categorizeIocs(iocs)
+      iocSummaryRef.current = summary
       setIocSummary(summary)
       setIgnoredTypes([])
       applyIgnoreFilter([], summary)
