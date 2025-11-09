@@ -1,13 +1,14 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import React from "react";
 import { Container, Button, ListGroup } from "react-bootstrap";
-import { MdPlaylistAddCheck, MdNote, MdDelete, MdSettings, MdAltRoute } from "react-icons/md";
+import { MdPlaylistAddCheck, MdNote, MdDelete, MdSettings, MdAltRoute, MdSecurity } from "react-icons/md";
 
 interface PopupUIProps {
   isDarkMode: boolean;
   iocHistory: { type: string; text: string; timestamp: string }[];
   onBulkCheckClick: () => void;
   onSubnetExtractorClick: () => void;
+  onSubnetCheckClick: () => void;
   onOpenSidePanelClick: () => void;
   onClearHistory: () => void;
 }
@@ -17,6 +18,7 @@ const PopupUI: React.FC<PopupUIProps> = ({
   iocHistory,
   onBulkCheckClick,
   onSubnetExtractorClick,
+  onSubnetCheckClick,
   onOpenSidePanelClick,
   onClearHistory
 }) => {
@@ -40,6 +42,9 @@ const PopupUI: React.FC<PopupUIProps> = ({
         </Button>
         <Button variant="info" size="sm" onClick={onSubnetExtractorClick}>
           <MdAltRoute className="me-1" /> Subnet Extractor
+        </Button>
+        <Button variant="warning" size="sm" onClick={onSubnetCheckClick}>
+          <MdSecurity className="me-1" /> Subnet Abuse Check
         </Button>
         <Button variant="secondary" size="sm" onClick={onOpenSidePanelClick}>
           <MdNote className="me-1" /> Open Notepad

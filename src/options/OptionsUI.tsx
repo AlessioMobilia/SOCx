@@ -20,12 +20,18 @@ interface OptionsUIProps {
   isDarkMode: boolean
   virusTotalApiKey: string
   abuseIPDBApiKey: string
+  proxyCheckApiKey: string
+  ipapiEnabled: boolean
+  proxyCheckEnabled: boolean
   selectedServices: { [key: string]: string[] }
   customServices: CustomService[]
   onDarkModeToggle: () => void
   onServiceChange: (type: string, service: string) => void
   onVirusTotalApiKeyChange: (val: string) => void
   onAbuseIPDBApiKeyChange: (val: string) => void
+  onProxyCheckApiKeyChange: (val: string) => void
+  onIpapiToggle: (value: boolean) => void
+  onProxyCheckToggle: (value: boolean) => void
   onTestKeys: () => void
   onAddCustomService: (s: CustomService) => void
   onRemoveCustomService: (index: number) => void
@@ -35,12 +41,18 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   isDarkMode,
   virusTotalApiKey,
   abuseIPDBApiKey,
+  proxyCheckApiKey,
+  ipapiEnabled,
+  proxyCheckEnabled,
   selectedServices,
   customServices,
   onDarkModeToggle,
   onServiceChange,
   onVirusTotalApiKeyChange,
   onAbuseIPDBApiKeyChange,
+  onProxyCheckApiKeyChange,
+  onIpapiToggle,
+  onProxyCheckToggle,
   onTestKeys,
   onAddCustomService,
   onRemoveCustomService
@@ -111,9 +123,70 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
             </InputGroup>
           </Form.Group>
 
-          <Button variant="outline-primary" onClick={onTestKeys}>
+          <Form.Group className="mb-3">
+            <Form.Label>ProxyCheck.io</Form.Label>
+            <InputGroup>
+              <Form.Control
+                type={inputType}
+                value={proxyCheckApiKey}
+                onChange={(e) => onProxyCheckApiKeyChange(e.target.value)}
+                placeholder="Enter your ProxyCheck API key"
+                className={themeClass}
+              />
+              <Button
+                variant={isDarkMode ? "outline-light" : "outline-secondary"}
+                onClick={() => setShowKeys((prev) => !prev)}
+              >
+                {showKeys ? <MdVisibilityOff /> : <MdVisibility />}
+              </Button>
+            </InputGroup>
+          </Form.Group>
+
+          <Button variant="outline-primary" onClick={onTestKeys} className="mt-3 mb-3">
             🧪 Test API Keys
           </Button>
+
+          <Form.Check
+            type="switch"
+            id="ipapi-switch"
+            className="mb-2"
+            label="Enable IPAPI enrichment (limit ~10,000 requests per day per IP)."
+            checked={ipapiEnabled}
+            onChange={(e) => {
+              const checked = e.target.checked
+              if (checked && proxyCheckEnabled) {
+                alert("Disable ProxyCheck enrichment before enabling IPAPI.")
+                return
+              }
+              onIpapiToggle(checked)
+            }}
+          />
+          <Form.Text className={isDarkMode ? "text-warning" : "text-muted"}>
+            Adds extra VPN/Proxy detection signals to Abuse lookups when enabled.
+          </Form.Text>
+
+          <Form.Check
+            type="switch"
+            id="proxycheck-switch"
+            className="mt-3"
+            label="Enable ProxyCheck enrichment (requires API key)."
+            checked={proxyCheckEnabled}
+            onChange={(e) => {
+              const checked = e.target.checked
+              if (checked) {
+                if (!proxyCheckApiKey) {
+                  alert("Enter a ProxyCheck API key first.")
+                  return
+                }
+                if (ipapiEnabled) {
+                  alert("Disable IPAPI enrichment before enabling ProxyCheck.")
+                  return
+                }
+              }
+              onProxyCheckToggle(checked)
+            }}
+            disabled={!proxyCheckApiKey && !proxyCheckEnabled}
+          />
         </Form>
 
         {/* Standard Services */}

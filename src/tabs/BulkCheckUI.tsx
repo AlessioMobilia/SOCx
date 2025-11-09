@@ -25,7 +25,9 @@ interface BulkCheckUIProps {
   message: string
   results: { [key: string]: any }
   isDarkMode: boolean
+  proxyCheckEnabled: boolean
   onExport: (format: "csv" | "xlsx") => void
+  onProxyCheckToggle: (value: boolean) => void
   iocTypeSummary: { type: string; count: number }[]
   ignoredTypes: string[]
   onTypeToggle: (type: string) => void
@@ -43,23 +45,28 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   message,
   results,
   isDarkMode,
+  proxyCheckEnabled,
   onExport,
+  onProxyCheckToggle,
   iocTypeSummary,
   ignoredTypes,
   onTypeToggle
 }) => {
   const [vtCount, setVtCount] = useState<number>(0)
   const [abuseCount, setAbuseCount] = useState<number>(0)
+  const [proxyCheckCount, setProxyCheckCount] = useState<number>(0)
 
   useEffect(() => {
     const loadCounters = async () => {
       const today = new Date().toISOString().split("T")[0]
       const keys = await chrome.storage.local.get([
         `VT_${today}`,
-        `Abuse_${today}`
+        `Abuse_${today}`,
+        `PROXYCHECK_${today}`
       ])
       setVtCount(keys[`VT_${today}`] || 0)
       setAbuseCount(keys[`Abuse_${today}`] || 0)
+      setProxyCheckCount(keys[`PROXYCHECK_${today}`] || 0)
     }
     loadCounters()
   }, [])
@@ -142,6 +149,9 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
               <p>
                 AbuseIPDB: <Badge bg="danger">{abuseCount}</Badge>
               </p>
+              <p>
+                ProxyCheck: <Badge bg="secondary">{proxyCheckCount}</Badge>
+              </p>
             </Card.Body>
           </Card>
         </Col>
@@ -155,6 +165,14 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
               className={themeClass}
             />
           </Form.Group>
+          <Form.Check
+            type="switch"
+            id="proxycheck-enrichment-toggle"
+            className="mt-3"
+            label="Enable ProxyCheck enrichment."
+            checked={proxyCheckEnabled}
+            onChange={(e) => onProxyCheckToggle(e.target.checked)}
+          />
 
           <div className="mt-4 d-grid gap-2">
             <Button

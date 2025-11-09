@@ -42,7 +42,7 @@ const IPV6_REGEX_PARTS = [
   `::(?:ffff(?::0{1,4}){0,1}:){0,1}${IPV4_ADDRESS}`,
   `fe80:(?::${IPV6_SEGMENT}){0,4}%[0-9a-zA-Z]{1,}`
 ]
-const IPV6_REGEX_SOURCE = `(?:${IPV6_REGEX_PARTS.join("|")})`
+export const IPV6_REGEX_SOURCE = `(?:${IPV6_REGEX_PARTS.join("|")})`
 const STRICT_IPV6_REGEX = new RegExp(`^${IPV6_REGEX_SOURCE}$`, "i")
 
 
@@ -541,6 +541,225 @@ export const computeIPv6Subnet = (ip: string, prefix: number): string | null => 
   return `${networkString}/${normalizedPrefix}`
 }
 
+export type NormalizedSubnet = {
+  subnet: string
+  version: 4 | 6
+  prefix: number
+}
+
+const parsePrefix = (value: string, max: number): number | null => {
+  if (!/^\d{1,3}$/.test(value.trim())) {
+    return null
+  }
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > max) {
+    return null
+  }
+  return parsed
+}
+
+export const normalizeSubnet = (input: string): NormalizedSubnet | null => {
+  const trimmed = input.trim()
+  if (!trimmed.includes("/")) {
+    return null
+  }
+
+  const [rawIp, rawPrefix] = trimmed.split("/")
+  if (!rawIp || !rawPrefix) {
+    return null
+  }
+
+  if (rawIp.includes(":")) {
+    const prefix = parsePrefix(rawPrefix, 128)
+    if (prefix === null) {
+      return null
+    }
+    const normalized = computeIPv6Subnet(rawIp, prefix)
+    if (!normalized) {
+      return null
+    }
+    return { subnet: normalized, version: 6, prefix }
+  }
+
+  const prefix = parsePrefix(rawPrefix, 32)
+  if (prefix === null) {
+    return null
+  }
+
+  const normalizedIp = normalizeIPv4(rawIp)
+  const normalized = computeIPv4Subnet(normalizedIp, prefix)
+  if (!normalized) {
+    return null
+  }
+
+  return { subnet: normalized, version: 4, prefix }
+}
+
+const IPV4_SUBNET_REGEX = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\s*\/\s*(3[0-2]|[12]?\d)\b/gi
+const IPV6_SUBNET_REGEX = new RegExp(
+  `${IPV6_REGEX_SOURCE}\\s*\\/\\s*(?:12[0-8]|1[01]?\\d|\\d?\\d)`,
+  "gi"
+)
+
+export const extractSubnetsFromText = (text: string): NormalizedSubnet[] => {
+  const payload = typeof text === "string" ? text : ""
+  const matches: string[] = []
+
+  const collectMatches = (regex: RegExp) => {
+    regex.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(payload)) !== null) {
+      matches.push(match[0].replace(/\s+/g, ""))
+    }
+  }
+
+  collectMatches(IPV4_SUBNET_REGEX)
+  collectMatches(IPV6_SUBNET_REGEX)
+
+  const seen = new Set<string>()
+  const result: NormalizedSubnet[] = []
+
+  for (const segment of matches) {
+    const normalized = normalizeSubnet(segment)
+    if (normalized && !seen.has(normalized.subnet)) {
+      seen.add(normalized.subnet)
+      result.push(normalized)
+    }
+  }
+
+  return result
+}
+
+const HOST_BITS = {
+  4: 32n,
+  6: 128n
+} as const
+
+export const estimateSubnetHostCount = (version: 4 | 6, prefix: number): bigint => {
+  const totalBits = HOST_BITS[version]
+  const boundedPrefix = Math.min(Math.max(prefix, 0), Number(totalBits))
+  const hostBits = totalBits - BigInt(boundedPrefix)
+  if (hostBits <= 0n) {
+    return 1n
+  }
+  return 1n << hostBits
+}
+
+export const formatHostCount = (count: bigint): string => {
+  const asString = count.toString()
+  if (count <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    return new Intl.NumberFormat().format(Number(count))
+  }
+  return asString.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+}
+
+export type SubnetCheckSummaryRow = {
+  subnet: string
+  version: 4 | 6
+  prefix: number
+  hostCount: string
+  reportedCount: number
+  distinctIpCount?: number | null
+  mostRecent: string | null
+  minAddress?: string
+  maxAddress?: string
+  isPrivate: boolean
+  statusText: string
+  statusKind: "pending" | "clean" | "flagged" | "error" | "private"
+  error?: string | null
+  isp?: string | null
+  country?: string | null
+  usageType?: string | null
+  domain?: string | null
+  hostnames?: string[] | null
+}
+
+export const formatSubnetCheckClipboard = (rows: SubnetCheckSummaryRow[]): string => {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return ""
+  }
+
+  const blocks = rows.map((row, index) => {
+    const parts = [
+      `#${index + 1} ${row.subnet} (IPv${row.version}/${row.prefix})`,
+      `Hosts: ${row.hostCount}`,
+      `Reported IPs: ${row.reportedCount}`,
+      `Most Recent Report: ${row.mostRecent ?? "N/A"}`,
+      `Status: ${row.statusText}`
+    ]
+
+    if (row.minAddress || row.maxAddress) {
+      parts.splice(1, 0, `Range: ${row.minAddress ?? "?"} → ${row.maxAddress ?? "?"}`)
+    }
+
+    if (row.country) {
+      parts.push(`Country: ${row.country}`)
+    }
+    if (row.isp) {
+      parts.push(`ISP: ${row.isp}`)
+    }
+    if (row.usageType) {
+      parts.push(`Usage Type: ${row.usageType}`)
+    }
+    if (row.domain) {
+      parts.push(`Domain: ${row.domain}`)
+    }
+    if (row.hostnames?.length) {
+      parts.push(`Hostnames: ${row.hostnames.join(", ")}`)
+    }
+
+    return parts.join("\n")
+  })
+
+  return blocks.join("\n\n")
+}
+
+export const exportSubnetCheckToExcel = (rows: SubnetCheckSummaryRow[]): void => {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return
+  }
+
+  const headers = [
+    "Subnet",
+    "Version",
+    "Prefix",
+    "Hosts",
+    "Reported IPs",
+    "Most Recent Report",
+    "Min Address",
+    "Max Address",
+    "Status",
+    "Country",
+    "ISP",
+    "Usage Type",
+    "Domain",
+    "Hostnames"
+  ]
+
+  const body = rows.map((row) => [
+    row.subnet,
+    `IPv${row.version}`,
+    `/${row.prefix}`,
+    row.hostCount,
+    row.reportedCount,
+    row.mostRecent ?? "N/A",
+    row.minAddress ?? "",
+    row.maxAddress ?? "",
+    row.statusText,
+    row.country ?? "",
+    row.isp ?? "",
+    row.usageType ?? "",
+    row.domain ?? "",
+    row.hostnames?.join(", ") ?? ""
+  ])
+
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...body])
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Subnet Check")
+  const filename = `subnet-check-${new Date().toISOString().split("T")[0]}.xlsx`
+  XLSX.writeFile(workbook, filename)
+}
+
 
 
 
@@ -556,8 +775,11 @@ export const parseAndFormatResults = (data: any): string => {
   const lines: string[] = [];
   console.log("Data:", data);
 
-  if (data?.AbuseIPDB?.data) {
-    lines.push(formatAbuseIPDBData(data.AbuseIPDB));
+  const ipIntelSignals = collectIpIntelSignals(data?.Ipapi, data?.ProxyCheck);
+  console.log("IP Intel Signals:", ipIntelSignals);
+
+  if (data?.AbuseIPDB?.data || ipIntelSignals.length > 0) {
+    lines.push(formatAbuseIPDBData(data?.AbuseIPDB, ipIntelSignals));
     lines.push(""); // Separazione
   }
 
@@ -579,47 +801,153 @@ export const parseAndFormatResults = (data: any): string => {
 
 
 
-export const formatAbuseIPDBData = (abuseData: any): string => {
+export const formatAbuseIPDBData = (
+  abuseData: any,
+  extraSignals: string[] = []
+): string => {
   const d = abuseData?.data;
   if (!d) return "";
 
+  const toSafe = (v: unknown): string | number =>
+    v === null || v === undefined || v === "" ? "N/A" : (v as any);
+
   const hostnames =
-    d.hostnames && d.hostnames.length > 0
+    Array.isArray(d?.hostnames) && d.hostnames.length > 0
       ? d.hostnames.join(", ")
       : undefined;
 
-  const isWhitelisted = d.isWhitelisted === true
-    ? "Yes"
-    : d.isWhitelisted === false
-    ? "No"
-    : "Unknown";
+  const isWhitelisted =
+    d?.isWhitelisted === true
+      ? "Yes"
+      : d?.isWhitelisted === false
+      ? "No"
+      : "Unknown";
 
-  // Prepara i dati
+  // --- campi principali ------------------------------------------------------
   const fields: Record<string, string | number> = {
-    "IP:": d.ipAddress,
-    "Abuse Score:": `${d.abuseConfidenceScore}%`,
-    "Total Reports:": d.totalReports,
-    "ISP:": d.isp,
-    "Country:": d.countryCode,
-    "Domain:": d.domain,
-    "Usage Type:": d.usageType,
-    "IP Version:": d.ipVersion === 6 ? "IPv6" : "IPv4",
-    "Is Tor:": d.isTor ? "Yes" : "No",
+    "IP:": toSafe(d?.ipAddress),
+    "Abuse Score:": `${toSafe(d?.abuseConfidenceScore)}%`,
+    "Total Reports:": toSafe(d?.totalReports),
+    "ISP:": toSafe(d?.isp),
+    "Country:": toSafe(d?.countryCode),
+    "Domain:": toSafe(d?.domain),
+    "Usage Type:": toSafe(d?.usageType),
+    "IP Version:": d?.ipVersion === 6 ? "IPv6" : "IPv4",
+    "Is Tor:": d?.isTor ? "Yes" : "No",
     "Is Whitelisted:": isWhitelisted,
     ...(hostnames ? { "Hostnames:": hostnames } : {}),
-    "Last Reported:": d.lastReportedAt ?? "N/A"
+    "Last Reported:": toSafe(d?.lastReportedAt ?? "N/A"),
   };
 
-  // Calcola la larghezza massima per allineare
+  // --- aggiunta extraSignals come campi equivalenti --------------------------
+  const normalizeAcronyms = (s: string) =>
+    s
+      .replace(/\bVpn\b/gi, "VPN")
+      .replace(/\bTor\b/gi, "TOR")
+      .replace(/\bUrl\b/gi, "URL")
+      .replace(/\bIp\b/gi, "IP");
+
+  for (const signal of extraSignals) {
+    const [rawKey, rawValue] = signal.split(":").map(s => s.trim());
+    const key = `${normalizeAcronyms(rawKey)}:`; // mantieni il ":"
+    const value = rawValue || "";
+    fields[key] = value;
+  }
+
+  // --- calcolo allineamento --------------------------------------------------
   const labelWidth = Math.max(...Object.keys(fields).map(k => k.length));
 
-  // Genera le righe allineate
+  // --- generazione righe -----------------------------------------------------
   const lines = Object.entries(fields).map(
     ([label, value]) => `- ${label.padEnd(labelWidth)} ${value}`
   );
 
-  return `IP Information:\n${lines.join("\n")}`;
+  return lines.join("\n");
 };
+
+
+
+const formatIpapiLabel = (key: string): string => {
+  return key
+    .replace(/^is_/i, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+const IPAPI_BOOLEAN_FIELDS = [
+  "is_bogon",
+  "is_mobile",
+  "is_satellite",
+  "is_crawler",
+  "is_datacenter",
+  "is_tor",
+  "is_proxy",
+  "is_vpn",
+  "is_abuser"
+]
+
+export const collectIpIntelSignals = (ipapiData: any, proxyData: any): string[] => {
+  const signals: string[] = []
+
+  const payload = ipapiData?.data ?? ipapiData
+  if (payload && typeof payload === "object") {
+    IPAPI_BOOLEAN_FIELDS.forEach((field) => {
+      if (payload[field] === true) {
+        const label = formatIpapiLabel(field)
+        signals.push(`${label}: true`)
+      }
+    })
+
+    if (payload?.vpn?.service) {
+      signals.push(`VPN Service: ${payload.vpn.service}`)
+    }
+  }
+
+  if (proxyData && typeof proxyData === "object") {
+    let proxyPayload = proxyData
+    const ipEntryKey = Object.keys(proxyData).find(
+      (key) => key.includes(".") && typeof proxyData[key] === "object"
+    )
+    if (ipEntryKey) {
+      proxyPayload = proxyData[ipEntryKey]
+    }
+
+    const detections = proxyPayload?.detections
+    const operator = proxyPayload?.operator
+    const detectionOrder = [
+      "proxy",
+      "vpn",
+      "tor",
+      "hosting",
+      "anonymous",
+      "scraper",
+      "compromised"
+    ]
+
+    detectionOrder.forEach((field) => {
+      if (detections?.[field] === true) {
+        const label = formatIpapiLabel(field)
+        signals.push(`${label}: true`)
+      }
+    })
+
+    if (typeof detections?.risk === "number" && detections.risk > 0) {
+      signals.push(`Risk Score: ${detections.risk}`)
+    }
+
+    if (operator?.name) {
+      signals.push(`Operator: ${operator.name}`)
+    }
+    if (operator?.anonymity) {
+      signals.push(`Anonymity: ${operator.anonymity}`)
+    }
+    if (operator?.popularity) {
+      signals.push(`Popularity: ${operator.popularity}`)
+    }
+  }
+
+  return signals
+}
 
 
 

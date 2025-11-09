@@ -7,15 +7,17 @@ import {
   saveIOC,
   formatVirusTotalData,
   formatAbuseIPDBData,
+  collectIpIntelSignals,
   formatSelectedText
 } from "../utility/utils"
 import { servicesConfig } from "../utility/servicesConfig"
 import { createButton, createMagicButton } from "../utility/buttonFactory"
 import { createTooltip } from "../utility/tooltipFactory"
 import "tippy.js/dist/tippy.css"
-import "./content.css"
+import { Storage } from "@plasmohq/storage"
 
 console.log("[Plasmo] Content script loaded");
+const storage = new Storage({ area: "local" })
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
@@ -232,12 +234,17 @@ const MAX_UNIQUE_WORDS = 2
         try {
           const response = await getIOCInfo(ioc)
           const data = response.results?.[Object.keys(response.results)[0]]
-          const info = type === "IP"
-            ? formatAbuseIPDBData(data?.AbuseIPDB) || "⚠️ No data from AbuseIPDB"
+          const ipSignals = collectIpIntelSignals(data?.Ipapi, data?.ProxyCheck)
+          const baseInfo = type === "IP"
+            ? formatAbuseIPDBData(data?.AbuseIPDB, ipSignals) || "⚠️ No data from AbuseIPDB"
             : formatVirusTotalData(data?.VirusTotal) || "⚠️ No data from VirusTotal"
+          const tooltipInfo =
+            type === "IP" && ipSignals.length > 0
+              ? `${baseInfo}\nEnriched Signals: ${ipSignals.join(", ")}`
+              : baseInfo
 
-          await createTooltip(info, button)
-          navigator.clipboard.writeText(info)
+          await createTooltip(baseInfo, button, ipSignals)
+          navigator.clipboard.writeText(baseInfo)
           if (!(await saveIOC(type, ioc))) {
             showNotification("Error", "Failed to save the IOC")
           }
@@ -325,16 +332,37 @@ const MAX_UNIQUE_WORDS = 2
     scheduleReposition()
 
 
+    const getEnrichmentPrefs = async () => {
+      try {
+        const prefs = await storage.getMany([
+          "ipapiEnrichmentEnabled",
+          "proxyCheckEnabled"
+        ])
+        const ipapiSetting = prefs.ipapiEnrichmentEnabled
+        const proxySetting = prefs.proxyCheckEnabled
+        return {
+          ipapi: Boolean(ipapiSetting),
+          proxy: Boolean(proxySetting)
+        }
+      } catch {
+        return { ipapi: false, proxy: false }
+      }
+    }
+
     function getIOCInfo(ioc: string): Promise<any> {
       const selectedServices = [identifyIOC(ioc) === "IP" ? "AbuseIPDB" : "VirusTotal"]
       console.log("Selected services:", selectedServices)
-      return sendToBackground({
-        name: "check-bulk-iocs",
-        body: {
-          iocList: [ioc],
-          services: selectedServices
-        }
-      })
+      return getEnrichmentPrefs().then((prefs) =>
+        sendToBackground({
+          name: "check-bulk-iocs",
+          body: {
+            iocList: [ioc],
+            services: selectedServices,
+            includeIpapi: prefs.ipapi,
+            includeProxyCheck: prefs.proxy
+          }
+        })
+      )
     }
 
 

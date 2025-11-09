@@ -6,6 +6,7 @@ import "../utility/config.css"
 import "../utility/colors.css"
 import { Storage } from "@plasmohq/storage"
 import { showNotification } from "~src/utility/utils"
+import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 const storage = new Storage({ area: "local" })
 
@@ -15,53 +16,57 @@ const Popup = () => {
   >([])
   const [windowId, setWindowId] = useState<number | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(true)
+  const [themeLoaded, setThemeLoaded] = useState(false)
 
-useEffect(() => {
-  const load = async () => {
-    try {
-      const history = await storage.get("iocHistory")
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const history = await storage.get("iocHistory")
 
-      if (Array.isArray(history)) {
-        setIocHistory(history)
-      } else if (typeof history === "string") {
-        try {
-          const parsed = JSON.parse(history)
-          if (Array.isArray(parsed)) {
-            setIocHistory(parsed)
-          } else {
-            await storage.remove("iocHistory") // ❌ Rimuovi se non è un array
+        if (Array.isArray(history)) {
+          setIocHistory(history)
+        } else if (typeof history === "string") {
+          try {
+            const parsed = JSON.parse(history)
+            if (Array.isArray(parsed)) {
+              setIocHistory(parsed)
+            } else {
+              await storage.remove("iocHistory")
+              setIocHistory([])
+            }
+          } catch {
+            await storage.remove("iocHistory")
             setIocHistory([])
           }
-        } catch {
-          await storage.remove("iocHistory") // ❌ Rimuovi se parse fallisce
+        } else {
+          await storage.remove("iocHistory")
           setIocHistory([])
         }
-      } else {
-        await storage.remove("iocHistory") // ❌ Rimuovi se non è un array o stringa
+
+        const theme = await ensureIsDarkMode()
+        setIsDarkMode(theme)
+      } catch (err) {
+        console.error("Errore caricando i dati:", err)
         setIocHistory([])
+      } finally {
+        setThemeLoaded(true)
       }
-
-      const theme = await storage.get<boolean>("isDarkMode")
-      setIsDarkMode(theme ?? false)
-    } catch (err) {
-      console.error("Errore caricando i dati:", err)
-      setIocHistory([])
     }
-  }
 
-  load()
+    load()
 
-  chrome.windows.getCurrent({ populate: false }, (window) => {
-    if (window.id !== undefined) {
-      setWindowId(window.id)
-    }
-  })
-}, [])
+    chrome.windows.getCurrent({ populate: false }, (window) => {
+      if (window.id !== undefined) {
+        setWindowId(window.id)
+      }
+    })
+  }, [])
 
 
   useEffect(() => {
-    storage.set("isDarkMode", isDarkMode)
-  }, [isDarkMode])
+    if (!themeLoaded) return
+    persistIsDarkMode(isDarkMode)
+  }, [isDarkMode, themeLoaded])
 
   useEffect(() => {
     document.body.className = isDarkMode ? "dark-mode" : "light-mode"
@@ -74,6 +79,11 @@ useEffect(() => {
 
   const handleSubnetExtractorClick = () => {
     const url = chrome.runtime.getURL("/tabs/subnet-extractor.html")
+    chrome.tabs.create({ url })
+  }
+
+  const handleSubnetCheckClick = () => {
+    const url = chrome.runtime.getURL("/tabs/subnet-check.html")
     chrome.tabs.create({ url })
   }
 
@@ -96,6 +106,7 @@ useEffect(() => {
       iocHistory={iocHistory}
       onBulkCheckClick={handleBulkCheckClick}
       onSubnetExtractorClick={handleSubnetExtractorClick}
+      onSubnetCheckClick={handleSubnetCheckClick}
       onOpenSidePanelClick={handleOpenSidePanelClick}
       onClearHistory={handleClearHistory}
     />

@@ -78,6 +78,32 @@ export const checkAbuseIPDB = async (ioc: string): Promise<any> => {
   return fetchAPIAbuse(url, apiKey)
 }
 
+type AbuseSubnetOptions = {
+  maxAgeInDays?: number
+  confidenceMinimum?: number
+}
+
+export const checkAbuseIPDBSubnet = async (
+  subnet: string,
+  options: AbuseSubnetOptions = {}
+): Promise<any> => {
+  const apiKey = await storage.get<string>("abuseIPDBApiKey")
+  if (!apiKey) {
+    throw new Error("AbuseIPDB API key not found.")
+  }
+
+  const url = new URL("https://api.abuseipdb.com/api/v2/check-block")
+  url.searchParams.set("network", subnet)
+  if (typeof options.maxAgeInDays === "number") {
+    url.searchParams.set("maxAgeInDays", String(options.maxAgeInDays))
+  }
+  if (typeof options.confidenceMinimum === "number") {
+    url.searchParams.set("confidenceMinimum", String(options.confidenceMinimum))
+  }
+
+  return fetchAPIAbuse(url.toString(), apiKey)
+}
+
 export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> => {
   try {
     const response = await fetch(url, {
@@ -88,14 +114,94 @@ export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> =
       }
     })
 
+    await incrementDailyCounter("Abuse")
+
     if (!response.ok) {
-      throw new Error(`API Request Error: ${response.statusText}`)
+      let errorDetails = response.statusText
+      try {
+        const text = await response.text()
+        if (text) {
+          errorDetails = text
+        }
+      } catch (err) {
+        console.warn("Unable to read AbuseIPDB error body:", err)
+      }
+      throw new Error(`API Request Error (${response.status}): ${errorDetails}`)
     }
 
-    await incrementDailyCounter("Abuse")
     return response.json()
   } catch (error) {
     console.error("Error during API request:", error)
+    throw error
+  }
+}
+
+// ---------------- IPAPI ----------------
+
+export const checkIpapi = async (ioc: string): Promise<any> => {
+  const url = `https://api.ipapi.is/?q=${encodeURIComponent(ioc)}`
+  return fetchIpapi(url)
+}
+
+const fetchIpapi = async (url: string): Promise<any> => {
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`IPAPI Request Error: ${response.statusText}`)
+    }
+
+    await incrementDailyCounter("IPAPI")
+    return response.json()
+  } catch (error) {
+    console.error("Error during IPAPI request:", error)
+    throw error
+  }
+}
+
+// ---------------- PROXYCHECK ----------------
+
+export const checkProxyCheck = async (ioc: string): Promise<any> => {
+  const apiKey = await storage.get<string>("proxyCheckApiKey")
+  if (!apiKey) {
+    throw new Error("ProxyCheck API key not found.")
+  }
+
+  const params = new URLSearchParams({
+    key: apiKey,
+    vpn: "1",
+    risk: "1",
+    asn: "1",
+    port: "1",
+    seen: "1"
+  })
+
+  const url = `https://proxycheck.io/v3/${encodeURIComponent(ioc)}?${params.toString()}`
+  return fetchProxyCheck(url)
+}
+
+const fetchProxyCheck = async (url: string): Promise<any> => {
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`ProxyCheck Request Error: ${response.statusText}`)
+    }
+
+    await incrementDailyCounter("PROXYCHECK")
+    return response.json()
+  } catch (error) {
+    console.error("Error during ProxyCheck request:", error)
     throw error
   }
 }
@@ -141,11 +247,13 @@ const cleanOldCounters = async (apiName: string, daysToKeep = 2): Promise<void> 
 
 export const getDailyCounters = async (): Promise<{ [key: string]: number }> => {
   const today = getTodayDate()
-  const keys = [`VT_${today}`, `Abuse_${today}`]
+  const keys = [`VT_${today}`, `Abuse_${today}`, `IPAPI_${today}`, `PROXYCHECK_${today}`]
 
   const counters = await Promise.all(keys.map((k) => storage.get<number>(k)))
   return {
     [keys[0]]: counters[0] || 0,
-    [keys[1]]: counters[1] || 0
+    [keys[1]]: counters[1] || 0,
+    [keys[2]]: counters[2] || 0,
+    [keys[3]]: counters[3] || 0
   }
 }

@@ -21,6 +21,7 @@ import {
   extractIPAddresses,
   isPrivateIP
 } from "../utility/utils"
+import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 type SubnetSummary = {
   subnet: string
@@ -102,6 +103,7 @@ const SubnetExtractor = () => {
   const [ipv4Prefix, setIpv4Prefix] = useState(DEFAULT_IPV4_PREFIX)
   const [ipv6Prefix, setIpv6Prefix] = useState(DEFAULT_IPV6_PREFIX)
   const [isDarkMode, setIsDarkMode] = useState(true)
+  const [themeLoaded, setThemeLoaded] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [summary, setSummary] = useState<SubnetSummary[]>([])
   const [status, setStatus] = useState<{ variant: StatusVariant; message: string } | null>(null)
@@ -144,7 +146,7 @@ const SubnetExtractor = () => {
       const savedInput = await storage.get<string>("subnetExtractorInput")
       const savedIpv4 = await storage.get<number>("subnetExtractorIpv4")
       const savedIpv6 = await storage.get<number>("subnetExtractorIpv6")
-      const savedTheme = await storage.get<boolean>("isDarkMode")
+      const savedTheme = await ensureIsDarkMode()
 
       if (typeof savedInput === "string") {
         setInputText(savedInput)
@@ -155,12 +157,10 @@ const SubnetExtractor = () => {
       if (typeof savedIpv6 === "number") {
         setIpv6Prefix(savedIpv6)
       }
-      if (typeof savedTheme === "boolean") {
-        setIsDarkMode(savedTheme)
-      }
+      setIsDarkMode(savedTheme)
     }
 
-    loadPreferences()
+    loadPreferences().finally(() => setThemeLoaded(true))
   }, [])
 
   useEffect(() => {
@@ -176,11 +176,30 @@ const SubnetExtractor = () => {
   }, [ipv6Prefix])
 
   useEffect(() => {
-    storage.set("isDarkMode", isDarkMode)
+    if (!themeLoaded) return
+    persistIsDarkMode(isDarkMode)
     if (typeof document !== "undefined") {
       document.body.className = isDarkMode ? "dark-mode" : "light-mode"
     }
-  }, [isDarkMode])
+  }, [isDarkMode, themeLoaded])
+
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
+      return
+    }
+    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area === "local" && Object.prototype.hasOwnProperty.call(changes, "isDarkMode")) {
+        const next = changes.isDarkMode?.newValue
+        if (typeof next === "boolean") {
+          setIsDarkMode(next)
+        }
+      }
+    }
+    chrome.storage.onChanged.addListener(listener)
+    return () => {
+      chrome.storage.onChanged.removeListener(listener)
+    }
+  }, [])
 
   useEffect(() => {
     const trimmed = inputText.trim()
@@ -306,6 +325,30 @@ const SubnetExtractor = () => {
       setStatus({
         variant: "danger",
         message: "Unable to copy the subnet list."
+      })
+    }
+  }
+
+  const handleSendToSubnetCheck = async () => {
+    if (summary.length === 0) {
+      setStatus({ variant: "warning", message: "Extract subnets before opening the AbuseIPDB check." })
+      return
+    }
+
+    try {
+      const payload = summary.map((entry) => entry.subnet)
+      await storage.set("subnetCheckPrefill", payload)
+      const url = chrome.runtime.getURL("/tabs/subnet-check.html")
+      chrome.tabs.create({ url })
+      setStatus({
+        variant: "success",
+        message: "Subnet list sent to the AbuseIPDB checker."
+      })
+    } catch (error) {
+      console.error("Failed to open subnet check:", error)
+      setStatus({
+        variant: "danger",
+        message: "Unable to open the subnet check page."
       })
     }
   }
@@ -510,6 +553,13 @@ const SubnetExtractor = () => {
               disabled={!hasExportableSubnets || isProcessing}
             >
               Export TXT
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSendToSubnetCheck}
+              disabled={!hasExportableSubnets || isProcessing}
+            >
+              AbuseIPDB Subnet Check
             </Button>
           </div>
 

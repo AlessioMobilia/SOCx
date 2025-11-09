@@ -9,6 +9,7 @@ import "../utility/colors.css"
 import { defaultServices } from "../utility/defaultServices"
 import type { CustomService } from "../utility/iocTypes"
 import { Storage } from "@plasmohq/storage"
+import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 const storage = new Storage({ area: "local" })
 
@@ -18,49 +19,12 @@ const Options = () => {
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [virusTotalApiKey, setVirusTotalApiKey] = useState("")
   const [abuseIPDBApiKey, setAbuseIPDBApiKey] = useState("")
+  const [proxyCheckApiKey, setProxyCheckApiKey] = useState("")
   const [selectedServices, setSelectedServices] = useState<{ [key: string]: string[] }>(defaultServices)
   const [customServices, setCustomServices] = useState<CustomService[]>([])
   const [isDarkMode, setIsDarkMode] = useState(true)
-
-  // Load from storage
-useEffect(() => {
-  const loadSettings = async () => {
-    try {
-      const vtKey = await storage.get("virusTotalApiKey")
-      const abKey = await storage.get("abuseIPDBApiKey")
-      const selectedRaw = await storage.get("selectedServices")
-      const custom = await storage.get("customServices")
-      const theme = await storage.get("isDarkMode")
-
-      if (vtKey) setVirusTotalApiKey(vtKey)
-      if (abKey) setAbuseIPDBApiKey(abKey)
-
-      // 🛠 Validate selectedServices as a plain object
-      if (
-        selectedRaw &&
-        typeof selectedRaw === "object" &&
-        !Array.isArray(selectedRaw)
-      ) {
-        setSelectedServices(selectedRaw)
-      } else {
-        console.warn("Invalid selectedServices in storage, resetting.")
-        await storage.remove("selectedServices")
-        setSelectedServices(defaultServices)
-      }
-
-      if (Array.isArray(custom)) setCustomServices(custom)
-      if (typeof theme === "boolean") setIsDarkMode(theme)
-    } catch (err) {
-      console.error("Failed to load settings:", err)
-      setSelectedServices(defaultServices)
-    }
-  }
-
-  loadSettings()
-  setSettingsLoaded(true)
-
-}, [])
-
+  const [ipapiEnabled, setIpapiEnabled] = useState(false)
+  const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
 
   // Auto-save
   useEffect(() => {
@@ -68,11 +32,23 @@ useEffect(() => {
     
     storage.set("virusTotalApiKey", virusTotalApiKey)
     storage.set("abuseIPDBApiKey", abuseIPDBApiKey)
+    storage.set("proxyCheckApiKey", proxyCheckApiKey)
     console.log("Saving selectedServices:", selectedServices)
     storage.set("selectedServices", selectedServices)
     storage.set("customServices", customServices)
-    storage.set("isDarkMode", isDarkMode)
-  }, [virusTotalApiKey, abuseIPDBApiKey, selectedServices, customServices, isDarkMode])
+    persistIsDarkMode(isDarkMode)
+    storage.set("ipapiEnrichmentEnabled", ipapiEnabled)
+    storage.set("proxyCheckEnabled", proxyCheckEnabled)
+  }, [
+    virusTotalApiKey,
+    abuseIPDBApiKey,
+    proxyCheckApiKey,
+    selectedServices,
+    customServices,
+    isDarkMode,
+    ipapiEnabled,
+    proxyCheckEnabled
+  ])
 
   useEffect(() => {
     document.body.className = isDarkMode ? "dark-mode" : "light-mode"
@@ -95,6 +71,56 @@ useEffect(() => {
   const handleRemoveCustomService = (index: number) => {
     setCustomServices((prev) => prev.filter((_, i) => i !== index))
   }
+
+  const loadSettings = async () => {
+    try {
+      const vtKey = await storage.get("virusTotalApiKey")
+      const abKey = await storage.get("abuseIPDBApiKey")
+      const proxyKey = await storage.get("proxyCheckApiKey")
+      const selectedRaw = await storage.get("selectedServices")
+      const custom = await storage.get("customServices")
+      const theme = await ensureIsDarkMode()
+      const ipapiSetting = await storage.get("ipapiEnrichmentEnabled")
+      const proxySetting = await storage.get("proxyCheckEnabled")
+
+      if (vtKey) setVirusTotalApiKey(vtKey)
+      if (abKey) setAbuseIPDBApiKey(abKey)
+      if (proxyKey) setProxyCheckApiKey(proxyKey)
+
+      if (
+        selectedRaw &&
+        typeof selectedRaw === "object" &&
+        !Array.isArray(selectedRaw)
+      ) {
+        setSelectedServices(selectedRaw)
+      } else {
+        console.warn("Invalid selectedServices in storage, resetting.")
+        await storage.remove("selectedServices")
+        setSelectedServices(defaultServices)
+      }
+
+      if (Array.isArray(custom)) setCustomServices(custom)
+      setIsDarkMode(theme)
+      const hasProxyKey = Boolean(proxyKey)
+      const desiredProxy =
+        typeof proxySetting === "boolean" ? proxySetting : hasProxyKey
+      const nextProxyEnabled = desiredProxy && hasProxyKey
+      const persistedIpapi =
+        typeof ipapiSetting === "boolean" ? ipapiSetting : false
+      const nextIpapiEnabled = nextProxyEnabled ? false : persistedIpapi
+      setProxyCheckEnabled(nextProxyEnabled)
+      setIpapiEnabled(nextIpapiEnabled)
+    } catch (err) {
+      console.error("Failed to load settings:", err)
+      setSelectedServices(defaultServices)
+    } finally {
+      setSettingsLoaded(true)
+    }
+  }
+
+  useEffect(() => {
+    loadSettings()
+  }, [])
 
   const handleTestKeys = async () => {
     const results: string[] = []
@@ -167,7 +193,44 @@ useEffect(() => {
       results.push("⚠️ AbuseIPDB: Key not entered")
     }
 
+    if (proxyCheckApiKey) {
+      await testFetch(
+        "ProxyCheck",
+        `https://proxycheck.io/v3/8.8.8.8?key=${proxyCheckApiKey}&vpn=1`,
+        {},
+        results
+      )
+    } else {
+      results.push("⚠️ ProxyCheck: Key not entered")
+    }
+
     alert(results.join("\n"))
+  }
+
+  const handleProxyCheckKeyChange = (value: string) => {
+    setProxyCheckApiKey(value)
+    const hasKey = Boolean(value)
+    setProxyCheckEnabled(hasKey)
+    if (hasKey) {
+      setIpapiEnabled(false)
+    }
+  }
+
+  const handleIpapiToggle = (value: boolean) => {
+    setIpapiEnabled(value)
+    if (value) {
+      setProxyCheckEnabled(false)
+    }
+  }
+
+  const handleProxyCheckToggle = (value: boolean) => {
+    if (value && !proxyCheckApiKey) {
+      return
+    }
+    setProxyCheckEnabled(value)
+    if (value) {
+      setIpapiEnabled(false)
+    }
   }
 
   return (
@@ -175,12 +238,18 @@ useEffect(() => {
       isDarkMode={isDarkMode}
       virusTotalApiKey={virusTotalApiKey}
       abuseIPDBApiKey={abuseIPDBApiKey}
+      proxyCheckApiKey={proxyCheckApiKey}
+      ipapiEnabled={ipapiEnabled}
+      proxyCheckEnabled={proxyCheckEnabled}
       selectedServices={selectedServices}
       customServices={customServices}
       onDarkModeToggle={() => setIsDarkMode((prev) => !prev)}
       onServiceChange={handleServiceChange}
       onVirusTotalApiKeyChange={setVirusTotalApiKey}
       onAbuseIPDBApiKeyChange={setAbuseIPDBApiKey}
+      onProxyCheckApiKeyChange={handleProxyCheckKeyChange}
+      onIpapiToggle={handleIpapiToggle}
+      onProxyCheckToggle={handleProxyCheckToggle}
       onTestKeys={handleTestKeys}
       onAddCustomService={handleAddCustomService}
       onRemoveCustomService={handleRemoveCustomService}

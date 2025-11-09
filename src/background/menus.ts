@@ -1,14 +1,8 @@
 import { servicesConfig } from "../utility/servicesConfig"
-import { Storage } from "@plasmohq/storage"
-
-const storage = new Storage()
+import { ensureIsDarkMode } from "../utility/theme"
 
 export const setupContextMenus = async () => {
-  const isDarkMode = await storage.get<boolean>("isDarkMode")
-
-  if (isDarkMode === undefined) {
-    await storage.set("isDarkMode", false)
-  }
+  await ensureIsDarkMode()
 
   const baseMenus = [
     { id: "MagicIOC", title: "MAGIC IOC" },

@@ -1,7 +1,7 @@
 // src/background/messages/check-bulk-iocs.ts
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { identifyIOC, showNotification } from "../../utility/utils"
-import { checkVirusTotal, checkAbuseIPDB } from "../../utility/api"
+import { checkVirusTotal, checkAbuseIPDB, checkIpapi, checkProxyCheck } from "../../utility/api"
 import { Storage } from "@plasmohq/storage"
 
 console.log("[Plasmo] check-bulk-iocs handler loaded")
@@ -13,11 +13,17 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   try {
     console.log("[Plasmo] check-bulk-iocs handler triggered")
 
-    const { iocList, services } = req.body
+    const { iocList, services, includeIpapi, includeProxyCheck } = req.body
     const results: Record<string, any> = {}
 
     const virusTotalApiKey = await storage.get<string>("virusTotalApiKey")
     const abuseIPDBApiKey = await storage.get<string>("abuseIPDBApiKey")
+    const ipapiGlobal = (await storage.get<boolean>("ipapiEnrichmentEnabled")) === true
+    const proxyCheckGlobal = (await storage.get<boolean>("proxyCheckEnabled")) === true
+    const proxyCheckApiKey = proxyCheckGlobal ? await storage.get<string>("proxyCheckApiKey") : null
+    const effectiveIpapi = typeof includeIpapi === "boolean" ? includeIpapi : ipapiGlobal
+    const effectiveProxyCheck =
+      typeof includeProxyCheck === "boolean" ? includeProxyCheck : proxyCheckGlobal
 
     for (const service of services) {
       if (service === "VirusTotal" && !virusTotalApiKey) {
@@ -28,6 +34,11 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         showNotification("Error", "Missing AbuseIPDB API key.")
         return res.send({ results: {} })
       }
+    }
+
+    if (effectiveProxyCheck && !proxyCheckApiKey) {
+      showNotification("Error", "ProxyCheck API key is missing.")
+      return res.send({ results: {} })
     }
 
     for (const ioc of iocList) {
@@ -47,6 +58,22 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         if (services.includes("AbuseIPDB") && type === "IP") {
           try {
             result.AbuseIPDB = await checkAbuseIPDB(ioc)
+            if (effectiveIpapi) {
+              try {
+                result.Ipapi = await checkIpapi(ioc)
+              } catch (err) {
+                console.warn("IPAPI error:", err)
+                result.Ipapi = { error: "Fetch failed" }
+              }
+            }
+            if (effectiveProxyCheck) {
+              try {
+                result.ProxyCheck = await checkProxyCheck(ioc)
+              } catch (err) {
+                console.warn("ProxyCheck error:", err)
+                result.ProxyCheck = { error: "Fetch failed" }
+              }
+            }
           } catch (err) {
             console.warn("AbuseIPDB error:", err)
             result.AbuseIPDB = { error: "Fetch failed" }
