@@ -13,6 +13,7 @@ import {
 import { servicesConfig } from "../utility/servicesConfig"
 import { createButton, createMagicButton } from "../utility/buttonFactory"
 import { createTooltip } from "../utility/tooltipFactory"
+import { estimateCaretRect } from "../utility/caret"
 import "tippy.js/dist/tippy.css"
 import { Storage } from "@plasmohq/storage"
 
@@ -26,33 +27,6 @@ export const config: PlasmoCSConfig = {
 
 const MAX_SELECTION_LENGTH = 256
 const MAX_UNIQUE_WORDS = 2
-const MIRROR_STYLE_PROPS = [
-  "boxSizing",
-  "width",
-  "height",
-  "overflowX",
-  "overflowY",
-  "borderTopWidth",
-  "borderRightWidth",
-  "borderBottomWidth",
-  "borderLeftWidth",
-  "paddingTop",
-  "paddingRight",
-  "paddingBottom",
-  "paddingLeft",
-  "fontStyle",
-  "fontVariant",
-  "fontWeight",
-  "fontStretch",
-  "fontSize",
-  "fontFamily",
-  "lineHeight",
-  "textAlign",
-  "textTransform",
-  "textIndent",
-  "letterSpacing",
-  "wordSpacing"
-] as const
 const BUTTON_OFFSET = 6
 const BUTTON_MARGIN = 8
 const MAGIC_BUTTON_GAP = 10
@@ -96,26 +70,69 @@ const MAGIC_BUTTON_GAP = 10
     const clampValue = (value: number, min: number, max: number) =>
       Math.min(Math.max(value, min), max)
 
+    const getDeepActiveElement = (): Element | null => {
+      let active: Element | null = document.activeElement
+      while (active instanceof HTMLElement && active.shadowRoot?.activeElement) {
+        active = active.shadowRoot.activeElement
+      }
+      return active
+    }
+
     const placeFixedButton = (
       button: HTMLButtonElement,
       targetLeft: number,
-      targetTop: number
+      targetTop: number,
+      selectionRect?: DOMRect
     ) => {
       const docEl = document.documentElement
       const viewportWidth = docEl.clientWidth
       const viewportHeight = docEl.clientHeight
       const width = button.offsetWidth || 28
       const height = button.offsetHeight || 28
-      const clampedLeft = clampValue(
+      let clampedLeft = clampValue(
         targetLeft,
         BUTTON_MARGIN,
         Math.max(BUTTON_MARGIN, viewportWidth - width - BUTTON_MARGIN)
       )
-      const clampedTop = clampValue(
+      let clampedTop = clampValue(
         targetTop,
         BUTTON_MARGIN,
         Math.max(BUTTON_MARGIN, viewportHeight - height - BUTTON_MARGIN)
       )
+      if (selectionRect) {
+        const overlapsHorizontally =
+          clampedLeft < selectionRect.right && clampedLeft + width > selectionRect.left
+
+        if (overlapsHorizontally) {
+          const rightCandidate = selectionRect.right + BUTTON_OFFSET
+          const leftCandidate = selectionRect.left - BUTTON_OFFSET - width
+          const canPlaceRight = rightCandidate + width <= viewportWidth - BUTTON_MARGIN
+          const canPlaceLeft = leftCandidate >= BUTTON_MARGIN
+
+          if (canPlaceRight || canPlaceLeft) {
+            clampedLeft = clampValue(
+              canPlaceRight ? rightCandidate : leftCandidate,
+              BUTTON_MARGIN,
+              Math.max(BUTTON_MARGIN, viewportWidth - width - BUTTON_MARGIN)
+            )
+          } else {
+            const aboveCandidate = selectionRect.top - BUTTON_OFFSET - height
+            const belowCandidate = selectionRect.bottom + BUTTON_OFFSET
+            const canPlaceAbove = aboveCandidate >= BUTTON_MARGIN
+            const canPlaceBelow =
+              belowCandidate + height <= viewportHeight - BUTTON_MARGIN
+
+            if (canPlaceAbove || canPlaceBelow) {
+              clampedTop = clampValue(
+                canPlaceAbove ? aboveCandidate : belowCandidate,
+                BUTTON_MARGIN,
+                Math.max(BUTTON_MARGIN, viewportHeight - height - BUTTON_MARGIN)
+              )
+            }
+          }
+        }
+      }
+
       button.style.position = "fixed"
       button.style.left = `${clampedLeft}px`
       button.style.top = `${clampedTop}px`
@@ -133,38 +150,55 @@ const MAGIC_BUTTON_GAP = 10
         : rect.left - BUTTON_OFFSET - width
     }
 
-    function positionButtonGroup(rect: DOMRect) {
+    const getVerticalAnchor = (rect: DOMRect, button: HTMLButtonElement | null) => {
+      const height = button?.offsetHeight || 28
+      return rect.top + (rect.height - height) / 2
+    }
+
+    function positionButtonGroup(geometry: SelectionGeometry) {
+      const anchorRect = geometry.caret ?? geometry.bounds
+      const selectionRect = geometry.bounds ?? geometry.caret
+      if (!anchorRect || !selectionRect) {
+        return
+      }
+
       if (currentButton && currentMagicButton) {
         const primaryWidth = currentButton.offsetWidth || 28
         const magicWidth = currentMagicButton.offsetWidth || 28
+        const primaryTop = getVerticalAnchor(anchorRect, currentButton)
+        const magicTop = getVerticalAnchor(anchorRect, currentMagicButton)
         const docEl = document.documentElement
         const totalWidth = primaryWidth + MAGIC_BUTTON_GAP + magicWidth
-        const availableRight = docEl.clientWidth - rect.right - BUTTON_MARGIN
-        const availableLeft = rect.left - BUTTON_MARGIN
+        const availableRight = docEl.clientWidth - selectionRect.right - BUTTON_MARGIN
+        const availableLeft = selectionRect.left - BUTTON_MARGIN
         const placeRight =
           availableRight >= totalWidth + BUTTON_OFFSET || availableRight >= availableLeft
 
         if (placeRight) {
           const primaryPlacement = placeFixedButton(
             currentButton,
-            rect.right + BUTTON_OFFSET,
-            rect.top
+            selectionRect.right + BUTTON_OFFSET,
+            primaryTop,
+            selectionRect
           )
           placeFixedButton(
             currentMagicButton,
             primaryPlacement.left + primaryPlacement.width + MAGIC_BUTTON_GAP,
-            rect.top
+            magicTop,
+            selectionRect
           )
         } else {
           const primaryPlacement = placeFixedButton(
             currentButton,
-            rect.left - BUTTON_OFFSET - primaryWidth,
-            rect.top
+            selectionRect.left - BUTTON_OFFSET - primaryWidth,
+            primaryTop,
+            selectionRect
           )
           placeFixedButton(
             currentMagicButton,
             primaryPlacement.left - magicWidth - MAGIC_BUTTON_GAP,
-            rect.top
+            magicTop,
+            selectionRect
           )
         }
         return
@@ -173,130 +207,98 @@ const MAGIC_BUTTON_GAP = 10
       if (currentButton) {
         placeFixedButton(
           currentButton,
-          getSingleButtonLeft(rect, currentButton.offsetWidth || 28),
-          rect.top
+          getSingleButtonLeft(selectionRect, currentButton.offsetWidth || 28),
+          getVerticalAnchor(anchorRect, currentButton),
+          selectionRect
         )
       }
 
       if (currentMagicButton) {
         placeFixedButton(
           currentMagicButton,
-          getSingleButtonLeft(rect, currentMagicButton.offsetWidth || 28),
-          rect.top
+          getSingleButtonLeft(selectionRect, currentMagicButton.offsetWidth || 28),
+          getVerticalAnchor(anchorRect, currentMagicButton),
+          selectionRect
         )
       }
     }
 
-    // Helper: Estimate caret position for input/textarea
-    // Helper: Estimate caret position for input/textarea
-    function estimateCaretRect(inputEl: Element | null): DOMRect | null {
-      if (!inputEl) return null
-      if (inputEl instanceof HTMLElement && inputEl.isContentEditable) {
-        const selection = inputEl.ownerDocument.getSelection()
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0).cloneRange()
-          range.collapse(false)
-          const rects = range.getClientRects()
-          if (rects.length > 0) {
-            return rects[rects.length - 1]
-          }
-          const fallbackRect = range.getBoundingClientRect()
-          if (fallbackRect.width || fallbackRect.height) {
-            return fallbackRect
-          }
-        }
-        return inputEl.getBoundingClientRect()
-      }
-
-      if (
-        !(inputEl instanceof HTMLInputElement) &&
-        !(inputEl instanceof HTMLTextAreaElement)
-      ) {
-        return inputEl.getBoundingClientRect()
-      }
-
-      const doc = inputEl.ownerDocument ?? document
-      const computedStyle =
-        doc.defaultView?.getComputedStyle(inputEl) ?? getComputedStyle(inputEl)
-      const mirrorDiv = doc.createElement("div")
-
-      for (const prop of MIRROR_STYLE_PROPS) {
-        mirrorDiv.style.setProperty(prop, computedStyle.getPropertyValue(prop))
-      }
-
-      mirrorDiv.style.position = "absolute"
-      mirrorDiv.style.visibility = "hidden"
-      mirrorDiv.style.whiteSpace =
-        inputEl instanceof HTMLTextAreaElement ? "pre-wrap" : "pre"
-      mirrorDiv.style.wordWrap = "break-word"
-      mirrorDiv.style.wordBreak = "break-word"
-      mirrorDiv.style.left = "-9999px"
-      mirrorDiv.style.top = "0"
-      mirrorDiv.style.overflow = "hidden"
-
-      const selectionEnd =
-        typeof inputEl.selectionEnd === "number"
-          ? inputEl.selectionEnd
-          : inputEl.value.length
-      const textBeforeCaret = inputEl.value.substring(0, selectionEnd)
-
-      mirrorDiv.textContent =
-        inputEl instanceof HTMLInputElement
-          ? textBeforeCaret.replace(/\s/g, "\u00a0")
-          : textBeforeCaret
-
-      const marker = doc.createElement("span")
-      marker.textContent = "\u200b"
-      mirrorDiv.appendChild(marker)
-      doc.body.appendChild(mirrorDiv)
-
-      mirrorDiv.scrollTop = inputEl.scrollTop
-      mirrorDiv.scrollLeft = inputEl.scrollLeft
-
-      const markerRect = marker.getBoundingClientRect()
-      const mirrorRect = mirrorDiv.getBoundingClientRect()
-      const inputRect = inputEl.getBoundingClientRect()
-      doc.body.removeChild(mirrorDiv)
-
-      const caretLeft =
-        inputRect.left + (markerRect.left - mirrorRect.left) - inputEl.scrollLeft
-      const caretTop =
-        inputRect.top + (markerRect.top - mirrorRect.top) - inputEl.scrollTop
-      const lineHeight =
-        parseFloat(computedStyle.lineHeight) ||
-        markerRect.height ||
-        parseFloat(computedStyle.fontSize) ||
-        16
-
-      return new DOMRect(caretLeft, caretTop, 0, lineHeight)
+    type SelectionGeometry = {
+      caret: DOMRect | null
+      bounds: DOMRect | null
     }
 
     const buildSelectionSignature = (
       text: string,
-      rect: DOMRect | null
+      geometry: SelectionGeometry | null
     ): string => {
+      const rect = geometry?.bounds ?? geometry?.caret
       if (!rect) return `${text}-no-rect-${window.location.href}`
       return `${text}-${Math.round(rect.top)}-${Math.round(rect.left)}-${window.location.href}`
     }
 
-    const getSelectionRect = (selection: Selection | null): DOMRect | null => {
-      if (selection?.rangeCount) {
-        const rangeRect = selection.getRangeAt(0).getBoundingClientRect()
-        if (rangeRect.width || rangeRect.height) {
-          return rangeRect
-        }
+    const getFocusRect = (selection: Selection): DOMRect | null => {
+      const focusNode = selection.focusNode
+      if (!focusNode) {
+        return null
       }
 
-      const activeEl = document.activeElement
-      if (
-        activeEl instanceof HTMLInputElement ||
-        activeEl instanceof HTMLTextAreaElement ||
-        (activeEl instanceof HTMLElement && activeEl.isContentEditable)
-      ) {
-        return estimateCaretRect(activeEl)
+      try {
+        const focusRange = document.createRange()
+        focusRange.setStart(focusNode, selection.focusOffset)
+        focusRange.collapse(true)
+        const focusRects = focusRange.getClientRects()
+        if (focusRects.length > 0) {
+          return focusRects[focusRects.length - 1]
+        }
+        const collapsedRect = focusRange.getBoundingClientRect()
+        if (collapsedRect.width || collapsedRect.height) {
+          return collapsedRect
+        }
+      } catch (err) {
+        console.warn("Unable to compute focus rect:", err)
       }
 
       return null
+    }
+
+    const getSelectionGeometry = (selection: Selection | null): SelectionGeometry | null => {
+      let caretRect: DOMRect | null = null
+      let boundsRect: DOMRect | null = null
+      const activeEl = getDeepActiveElement()
+      if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) {
+        const caretEstimate = estimateCaretRect(activeEl) ?? activeEl.getBoundingClientRect()
+        caretRect = caretEstimate
+        boundsRect = caretEstimate
+        return { caret: caretRect, bounds: boundsRect }
+      }
+
+      if (activeEl instanceof HTMLElement && activeEl.isContentEditable) {
+        caretRect = estimateCaretRect(activeEl)
+        boundsRect = caretRect ?? activeEl.getBoundingClientRect()
+      }
+
+      if (selection?.rangeCount) {
+        if (!caretRect) {
+          caretRect = getFocusRect(selection)
+        }
+
+        const range = selection.getRangeAt(0)
+        const rangeRect = range.getBoundingClientRect()
+        if (rangeRect.width || rangeRect.height) {
+          boundsRect = rangeRect
+        }
+      }
+
+      if (!caretRect && boundsRect) {
+        caretRect = boundsRect
+      }
+
+      if (!caretRect && !boundsRect) {
+        return null
+      }
+
+      return { caret: caretRect, bounds: boundsRect }
     }
 
     async function handleSelection() {
@@ -339,15 +341,15 @@ const MAGIC_BUTTON_GAP = 10
         return
       }
 
-      let rect: DOMRect | null = null
+      let geometry: SelectionGeometry | null = null
       try {
-        rect = getSelectionRect(selection ?? null)
+        geometry = getSelectionGeometry(selection ?? null)
       } catch (err) {
         console.warn("Unable to derive selection rect:", err)
-        rect = null
+        geometry = null
       }
 
-      const selectionSignature = buildSelectionSignature(selectedText, rect)
+      const selectionSignature = buildSelectionSignature(selectedText, geometry)
       if (selectionSignature === lastSelectionSignature && currentButton) {
         return
       }
@@ -356,14 +358,19 @@ const MAGIC_BUTTON_GAP = 10
       currentButton?.remove()
       currentMagicButton?.remove()
 
-      if (!rect || (!rect.width && !rect.height && rect.top <= 0 && rect.left <= 0)) {
+      const anchorRect = geometry?.caret ?? geometry?.bounds
+      if (
+        !anchorRect ||
+        (!anchorRect.width && !anchorRect.height && anchorRect.top <= 0 && anchorRect.left <= 0)
+      ) {
         const activeEl = document.activeElement
         if (
           activeEl instanceof HTMLInputElement ||
           activeEl instanceof HTMLTextAreaElement ||
           (activeEl instanceof HTMLElement && activeEl.isContentEditable)
         ) {
-          rect = estimateCaretRect(activeEl) ?? activeEl.getBoundingClientRect()
+          const caretRect = estimateCaretRect(activeEl) ?? activeEl.getBoundingClientRect()
+          geometry = { caret: caretRect, bounds: caretRect }
         } else {
           clearSelectionUI()
           return
@@ -405,7 +412,9 @@ const MAGIC_BUTTON_GAP = 10
         currentMagicButton = magicButton
       }
 
-      positionButtonGroup(rect)
+      if (geometry) {
+        positionButtonGroup(geometry)
+      }
     }
 
 
@@ -434,15 +443,15 @@ const MAGIC_BUTTON_GAP = 10
     function repositionButtons() {
       const selection = window.getSelection?.()
       if (!selection) return
-      let rect: DOMRect | null = null
+      let geometry: SelectionGeometry | null = null
       try {
-        rect = getSelectionRect(selection)
+        geometry = getSelectionGeometry(selection)
       } catch (err) {
-        rect = null
+        geometry = null
       }
-      if (!rect) return
+      if (!geometry) return
 
-      positionButtonGroup(rect)
+      positionButtonGroup(geometry)
     }
 
     // Observe DOM changes to adjust button positions

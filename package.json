@@ -1,7 +1,7 @@
 {
   "name": "so-cx",
   "displayName": "SOCx",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Simple OSINT Centralized eXtension",
   "author": "Alessio Mobilia",
   "privacy_policy": "https://socx.alessiomobilia.com/privacy.html",

@@ -1,7 +1,13 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 import { checkAbuseIPDBSubnet, checkAbuseIPDB } from "../../utility/api"
-import { NormalizedSubnet, normalizeSubnet, showNotification, isPrivateIP } from "../../utility/utils"
+import {
+  NormalizedSubnet,
+  normalizeSubnet,
+  showNotification,
+  isPrivateIP,
+  uniqueStrings
+} from "../../utility/utils"
 
 const storage = new Storage({ area: "local" })
 
@@ -31,7 +37,8 @@ const handler: PlasmoMessaging.MessageHandler<RequestBody, { results: Record<str
     }
 
     const { subnets, maxAgeInDays, confidenceMinimum } = req.body ?? {}
-    if (!Array.isArray(subnets) || subnets.length === 0) {
+    const incomingSubnets = Array.isArray(subnets) ? uniqueStrings(subnets) : []
+    if (incomingSubnets.length === 0) {
       return res.send({ results: {} })
     }
 
@@ -42,7 +49,7 @@ const handler: PlasmoMessaging.MessageHandler<RequestBody, { results: Record<str
       ? Math.min(Math.max(Math.round(confidenceMinimum), 0), 100)
       : undefined
 
-    const normalized: NormalizedSubnet[] = subnets
+    const normalized: NormalizedSubnet[] = incomingSubnets
       .map((value) => (typeof value === "string" ? normalizeSubnet(value) : null))
       .filter((value): value is NormalizedSubnet => Boolean(value))
 

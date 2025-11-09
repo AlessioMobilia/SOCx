@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { sendToBackground } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 
@@ -9,7 +9,8 @@ import {
   extractIOCs,
   exportResultsByEngine,
   exportResultsToExcel,
-  identifyIOC
+  identifyIOC,
+  uniqueStrings
 } from "../utility/utils"
 
 type IOCSummary = Record<string, string[]>
@@ -70,6 +71,7 @@ const BulkCheck = () => {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
   const [themeLoaded, setThemeLoaded] = useState(false)
+  const iocSummaryRef = useRef<IOCSummary>({})
 
   const autoSelectServices = useCallback(
     (summary: IOCSummary, ignores: string[]) => {
@@ -92,18 +94,24 @@ const BulkCheck = () => {
     []
   )
 
+  useEffect(() => {
+    iocSummaryRef.current = iocSummary
+  }, [iocSummary])
+
   const applyIgnoreFilter = useCallback(
-    (ignoreList: string[], summary: IOCSummary = iocSummary) => {
-      const filtered = filterByIgnored(summary, ignoreList)
+    (ignoreList: string[], summary?: IOCSummary) => {
+      const baseSummary = summary ?? iocSummaryRef.current
+      const filtered = filterByIgnored(baseSummary, ignoreList)
       setIocList(filtered)
-      autoSelectServices(summary, ignoreList)
+      autoSelectServices(baseSummary, ignoreList)
     },
-    [autoSelectServices, iocSummary]
+    [autoSelectServices]
   )
 
   const applyExtractionResult = useCallback(
     (iocs: string[]) => {
       const summary = categorizeIocs(iocs)
+      iocSummaryRef.current = summary
       setIocSummary(summary)
       setIgnoredTypes([])
       applyIgnoreFilter([], summary)
@@ -113,9 +121,10 @@ const BulkCheck = () => {
 
   const updateIOCsFromText = useCallback(
     (text: string) => {
-      const iocs = extractIOCs(text) || []
-      setAllIocs(iocs)
-      applyExtractionResult(iocs)
+      const extracted = extractIOCs(text) || []
+      const unique = uniqueStrings(extracted)
+      setAllIocs(unique)
+      applyExtractionResult(unique)
     },
     [applyExtractionResult]
   )
@@ -196,7 +205,8 @@ const BulkCheck = () => {
   }, [applyExtractionResult])
 
   const handleCheckBulk = useCallback(async () => {
-    if (iocList.length === 0) {
+    const requestList = uniqueStrings(iocList)
+    if (requestList.length === 0) {
       setMessage("Please enter at least one IOC.")
       if (typeof window !== "undefined") {
         window.alert("Please enter at least one IOC.")
@@ -211,7 +221,7 @@ const BulkCheck = () => {
       const response = await sendToBackground<{ results?: BulkCheckResults }>({
         name: "check-bulk-iocs",
         body: {
-          iocList,
+          iocList: requestList,
           services: selectedServices,
           includeIpapi: false,
           includeProxyCheck: proxyCheckEnabled
@@ -233,9 +243,10 @@ const BulkCheck = () => {
       try {
         const bulk = await storage.get<string[]>("bulkIOCList")
         if (Array.isArray(bulk) && bulk.length > 0) {
-          setAllIocs(bulk)
-          setTextareaValue(bulk.join("\n"))
-          applyExtractionResult(bulk)
+          const uniqueStored = uniqueStrings(bulk)
+          setAllIocs(uniqueStored)
+          setTextareaValue(uniqueStored.join("\n"))
+          applyExtractionResult(uniqueStored)
         }
 
         const dark = await ensureIsDarkMode()
