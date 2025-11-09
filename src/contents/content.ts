@@ -26,6 +26,36 @@ export const config: PlasmoCSConfig = {
 
 const MAX_SELECTION_LENGTH = 256
 const MAX_UNIQUE_WORDS = 2
+const MIRROR_STYLE_PROPS = [
+  "boxSizing",
+  "width",
+  "height",
+  "overflowX",
+  "overflowY",
+  "borderTopWidth",
+  "borderRightWidth",
+  "borderBottomWidth",
+  "borderLeftWidth",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "fontStyle",
+  "fontVariant",
+  "fontWeight",
+  "fontStretch",
+  "fontSize",
+  "fontFamily",
+  "lineHeight",
+  "textAlign",
+  "textTransform",
+  "textIndent",
+  "letterSpacing",
+  "wordSpacing"
+] as const
+const BUTTON_OFFSET = 6
+const BUTTON_MARGIN = 8
+const MAGIC_BUTTON_GAP = 10
 
   // inizializzazione sicura
   if (!(window as any)._formatScriptInitialized) {
@@ -63,6 +93,100 @@ const MAX_UNIQUE_WORDS = 2
       }
     }
 
+    const clampValue = (value: number, min: number, max: number) =>
+      Math.min(Math.max(value, min), max)
+
+    const placeFixedButton = (
+      button: HTMLButtonElement,
+      targetLeft: number,
+      targetTop: number
+    ) => {
+      const docEl = document.documentElement
+      const viewportWidth = docEl.clientWidth
+      const viewportHeight = docEl.clientHeight
+      const width = button.offsetWidth || 28
+      const height = button.offsetHeight || 28
+      const clampedLeft = clampValue(
+        targetLeft,
+        BUTTON_MARGIN,
+        Math.max(BUTTON_MARGIN, viewportWidth - width - BUTTON_MARGIN)
+      )
+      const clampedTop = clampValue(
+        targetTop,
+        BUTTON_MARGIN,
+        Math.max(BUTTON_MARGIN, viewportHeight - height - BUTTON_MARGIN)
+      )
+      button.style.position = "fixed"
+      button.style.left = `${clampedLeft}px`
+      button.style.top = `${clampedTop}px`
+      return { left: clampedLeft, top: clampedTop, width, height }
+    }
+
+    const getSingleButtonLeft = (rect: DOMRect, width: number): number => {
+      const docEl = document.documentElement
+      const availableRight = docEl.clientWidth - rect.right - BUTTON_MARGIN
+      const availableLeft = rect.left - BUTTON_MARGIN
+      const placeRight =
+        availableRight >= width + BUTTON_OFFSET || availableRight >= availableLeft
+      return placeRight
+        ? rect.right + BUTTON_OFFSET
+        : rect.left - BUTTON_OFFSET - width
+    }
+
+    function positionButtonGroup(rect: DOMRect) {
+      if (currentButton && currentMagicButton) {
+        const primaryWidth = currentButton.offsetWidth || 28
+        const magicWidth = currentMagicButton.offsetWidth || 28
+        const docEl = document.documentElement
+        const totalWidth = primaryWidth + MAGIC_BUTTON_GAP + magicWidth
+        const availableRight = docEl.clientWidth - rect.right - BUTTON_MARGIN
+        const availableLeft = rect.left - BUTTON_MARGIN
+        const placeRight =
+          availableRight >= totalWidth + BUTTON_OFFSET || availableRight >= availableLeft
+
+        if (placeRight) {
+          const primaryPlacement = placeFixedButton(
+            currentButton,
+            rect.right + BUTTON_OFFSET,
+            rect.top
+          )
+          placeFixedButton(
+            currentMagicButton,
+            primaryPlacement.left + primaryPlacement.width + MAGIC_BUTTON_GAP,
+            rect.top
+          )
+        } else {
+          const primaryPlacement = placeFixedButton(
+            currentButton,
+            rect.left - BUTTON_OFFSET - primaryWidth,
+            rect.top
+          )
+          placeFixedButton(
+            currentMagicButton,
+            primaryPlacement.left - magicWidth - MAGIC_BUTTON_GAP,
+            rect.top
+          )
+        }
+        return
+      }
+
+      if (currentButton) {
+        placeFixedButton(
+          currentButton,
+          getSingleButtonLeft(rect, currentButton.offsetWidth || 28),
+          rect.top
+        )
+      }
+
+      if (currentMagicButton) {
+        placeFixedButton(
+          currentMagicButton,
+          getSingleButtonLeft(rect, currentMagicButton.offsetWidth || 28),
+          rect.top
+        )
+      }
+    }
+
     // Helper: Estimate caret position for input/textarea
     // Helper: Estimate caret position for input/textarea
     function estimateCaretRect(inputEl: Element | null): DOMRect | null {
@@ -91,48 +215,60 @@ const MAX_UNIQUE_WORDS = 2
         return inputEl.getBoundingClientRect()
       }
 
-      const mirrorDiv = document.createElement("div")
-      const computedStyle = getComputedStyle(inputEl)
+      const doc = inputEl.ownerDocument ?? document
+      const computedStyle =
+        doc.defaultView?.getComputedStyle(inputEl) ?? getComputedStyle(inputEl)
+      const mirrorDiv = doc.createElement("div")
 
-      for (const prop of computedStyle) {
+      for (const prop of MIRROR_STYLE_PROPS) {
         mirrorDiv.style.setProperty(prop, computedStyle.getPropertyValue(prop))
       }
 
       mirrorDiv.style.position = "absolute"
       mirrorDiv.style.visibility = "hidden"
-      mirrorDiv.style.whiteSpace = "pre-wrap"
+      mirrorDiv.style.whiteSpace =
+        inputEl instanceof HTMLTextAreaElement ? "pre-wrap" : "pre"
       mirrorDiv.style.wordWrap = "break-word"
-      mirrorDiv.style.boxSizing = computedStyle.boxSizing
-      mirrorDiv.style.padding = computedStyle.padding
-      mirrorDiv.style.border = computedStyle.border
+      mirrorDiv.style.wordBreak = "break-word"
       mirrorDiv.style.left = "-9999px"
+      mirrorDiv.style.top = "0"
+      mirrorDiv.style.overflow = "hidden"
 
-      const text = inputEl.value.substring(0, inputEl.selectionEnd || 0)
-      mirrorDiv.textContent = text
+      const selectionEnd =
+        typeof inputEl.selectionEnd === "number"
+          ? inputEl.selectionEnd
+          : inputEl.value.length
+      const textBeforeCaret = inputEl.value.substring(0, selectionEnd)
 
-      const span = document.createElement("span")
-      span.textContent = "\u200b" // zero-width space
-      mirrorDiv.appendChild(span)
-      document.body.appendChild(mirrorDiv)
+      mirrorDiv.textContent =
+        inputEl instanceof HTMLInputElement
+          ? textBeforeCaret.replace(/\s/g, "\u00a0")
+          : textBeforeCaret
 
-      const spanRect = span.getBoundingClientRect()
-      const inputRect = inputEl.getBoundingClientRect()
+      const marker = doc.createElement("span")
+      marker.textContent = "\u200b"
+      mirrorDiv.appendChild(marker)
+      doc.body.appendChild(mirrorDiv)
+
+      mirrorDiv.scrollTop = inputEl.scrollTop
+      mirrorDiv.scrollLeft = inputEl.scrollLeft
+
+      const markerRect = marker.getBoundingClientRect()
       const mirrorRect = mirrorDiv.getBoundingClientRect()
+      const inputRect = inputEl.getBoundingClientRect()
+      doc.body.removeChild(mirrorDiv)
 
-      const rect = {
-        top: inputRect.top + (spanRect.top - mirrorRect.top) - inputEl.scrollTop,
-        left: inputRect.left + (spanRect.left - mirrorRect.left) - inputEl.scrollLeft,
-        width: 0,
-        height: spanRect.height || 16,
-        right: inputRect.left + (spanRect.left - mirrorRect.left) - inputEl.scrollLeft,
-        bottom: inputRect.top + (spanRect.top - mirrorRect.top) + (spanRect.height || 16) - inputEl.scrollTop,
-        x: inputRect.left + (spanRect.left - mirrorRect.left) - inputEl.scrollLeft,
-        y: inputRect.top + (spanRect.top - mirrorRect.top) - inputEl.scrollTop,
-        toJSON: () => rect
-      }
+      const caretLeft =
+        inputRect.left + (markerRect.left - mirrorRect.left) - inputEl.scrollLeft
+      const caretTop =
+        inputRect.top + (markerRect.top - mirrorRect.top) - inputEl.scrollTop
+      const lineHeight =
+        parseFloat(computedStyle.lineHeight) ||
+        markerRect.height ||
+        parseFloat(computedStyle.fontSize) ||
+        16
 
-      document.body.removeChild(mirrorDiv)
-      return rect
+      return new DOMRect(caretLeft, caretTop, 0, lineHeight)
     }
 
     const buildSelectionSignature = (
@@ -144,8 +280,7 @@ const MAX_UNIQUE_WORDS = 2
     }
 
     const getSelectionRect = (selection: Selection | null): DOMRect | null => {
-      if (!selection) return null
-      if (selection.rangeCount > 0) {
+      if (selection?.rangeCount) {
         const rangeRect = selection.getRangeAt(0).getBoundingClientRect()
         if (rangeRect.width || rangeRect.height) {
           return rangeRect
@@ -161,7 +296,7 @@ const MAX_UNIQUE_WORDS = 2
         return estimateCaretRect(activeEl)
       }
 
-      return activeEl?.getBoundingClientRect() ?? null
+      return null
     }
 
     async function handleSelection() {
@@ -222,12 +357,17 @@ const MAX_UNIQUE_WORDS = 2
       currentMagicButton?.remove()
 
       if (!rect || (!rect.width && !rect.height && rect.top <= 0 && rect.left <= 0)) {
-        const fallback = document.activeElement?.getBoundingClientRect()
-        if (!fallback) {
+        const activeEl = document.activeElement
+        if (
+          activeEl instanceof HTMLInputElement ||
+          activeEl instanceof HTMLTextAreaElement ||
+          (activeEl instanceof HTMLElement && activeEl.isContentEditable)
+        ) {
+          rect = estimateCaretRect(activeEl) ?? activeEl.getBoundingClientRect()
+        } else {
           clearSelectionUI()
           return
         }
-        rect = fallback
       }
 
       const button = isSupported ? createButton(ioc, async () => {
@@ -256,20 +396,16 @@ const MAX_UNIQUE_WORDS = 2
 
       if (button) {
         document.body.appendChild(button)
-        button.style.position = "fixed"
-        button.style.left = `${rect.right + 5}px`
-        button.style.top = `${rect.top}px`
         currentButton = button
       }
 
       const magicButton = createMagicButton(ioc, () => requestIOCInfo(ioc))
       if (magicButton) {
         document.body.appendChild(magicButton)
-        magicButton.style.position = "fixed"
-        magicButton.style.left = `${rect.right + (button?.offsetWidth || 30) + 10}px`
-        magicButton.style.top = `${rect.top}px`
         currentMagicButton = magicButton
       }
+
+      positionButtonGroup(rect)
     }
 
 
@@ -306,16 +442,7 @@ const MAX_UNIQUE_WORDS = 2
       }
       if (!rect) return
 
-      if (currentButton) {
-        currentButton.style.left = `${rect.right + 3}px`
-        currentButton.style.top = `${rect.top}px`
-      }
-
-      if (currentMagicButton) {
-        const offset = currentButton ? currentButton.clientWidth + 10 : 10
-        currentMagicButton.style.left = `${rect.right + offset}px`
-        currentMagicButton.style.top = `${rect.top}px`
-      }
+      positionButtonGroup(rect)
     }
 
     // Observe DOM changes to adjust button positions

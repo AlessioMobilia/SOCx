@@ -23,6 +23,7 @@ export function createButton(ioc: string, onClick: () => void): HTMLButtonElemen
   button.style.cursor = "pointer"
   button.id = "IOCButton_SOCx"
 
+  button.addEventListener("mousedown", (event) => event.preventDefault())
   button.addEventListener("click", onClick)
   return button
 }
@@ -41,6 +42,7 @@ export function createMagicButton(ioc: string, onClick: () => void): HTMLButtonE
   button.style.backgroundColor = "#FFC107"
   button.id = "MagicButton_SOCx"
 
+  button.addEventListener("mousedown", (event) => event.preventDefault())
   button.addEventListener("click", onClick)
   return button
 }
