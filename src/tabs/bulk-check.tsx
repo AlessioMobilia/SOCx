@@ -71,7 +71,32 @@ const BulkCheck = () => {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
   const [themeLoaded, setThemeLoaded] = useState(false)
+  const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
   const iocSummaryRef = useRef<IOCSummary>({})
+
+  const getCounterKeys = useCallback(() => {
+    const today = new Date().toISOString().split("T")[0]
+    return {
+      vt: `VT_${today}`,
+      abuse: `Abuse_${today}`,
+      proxy: `PROXYCHECK_${today}`
+    }
+  }, [])
+
+  const refreshDailyCounters = useCallback(async () => {
+    if (typeof chrome === "undefined" || !chrome.storage?.local?.get) {
+      return
+    }
+    const keys = getCounterKeys()
+    const values = await new Promise<Record<string, number>>((resolve) => {
+      chrome.storage.local.get([keys.vt, keys.abuse, keys.proxy], (items) => resolve(items))
+    })
+    setDailyCounters({
+      vt: Number(values[keys.vt]) || 0,
+      abuse: Number(values[keys.abuse]) || 0,
+      proxy: Number(values[keys.proxy]) || 0
+    })
+  }, [getCounterKeys])
 
   const autoSelectServices = useCallback(
     (summary: IOCSummary, ignores: string[]) => {
@@ -98,11 +123,33 @@ const BulkCheck = () => {
     iocSummaryRef.current = iocSummary
   }, [iocSummary])
 
+  useEffect(() => {
+    refreshDailyCounters()
+  }, [refreshDailyCounters])
+
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
+      return
+    }
+    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area !== "local") {
+        return
+      }
+      const keys = getCounterKeys()
+      if (changes[keys.vt] || changes[keys.abuse] || changes[keys.proxy]) {
+        refreshDailyCounters()
+      }
+    }
+    chrome.storage.onChanged.addListener(listener)
+    return () => chrome.storage.onChanged.removeListener(listener)
+  }, [getCounterKeys, refreshDailyCounters])
+
   const applyIgnoreFilter = useCallback(
     (ignoreList: string[], summary?: IOCSummary) => {
       const baseSummary = summary ?? iocSummaryRef.current
       const filtered = filterByIgnored(baseSummary, ignoreList)
-      setIocList(filtered)
+      const deduped = uniqueStrings(filtered)
+      setIocList(deduped)
       autoSelectServices(baseSummary, ignoreList)
     },
     [autoSelectServices]
@@ -160,6 +207,23 @@ const BulkCheck = () => {
     },
     [updateIOCsFromText]
   )
+
+  const handleRefreshIocs = useCallback(() => {
+    const extracted = extractIOCs(textareaValue) || []
+    const unique = uniqueStrings(extracted)
+    const refreshedText = unique.join("\n")
+
+    setTextareaValue(refreshedText)
+    setAllIocs(unique)
+    applyExtractionResult(unique)
+
+    if (unique.length === 0) {
+      setMessage("No valid IOCs detected in the provided text.")
+    } else {
+      setMessage(`Detected ${unique.length} unique IOC${unique.length === 1 ? "" : "s"}.`)
+    }
+    refreshDailyCounters()
+  }, [applyExtractionResult, refreshDailyCounters, textareaValue])
 
   const handleServiceToggle = useCallback((service: string, checked: boolean) => {
     setSelectedServices((prev) => {
@@ -235,8 +299,9 @@ const BulkCheck = () => {
       setMessage("Error during bulk check.")
     } finally {
       setIsLoading(false)
+      refreshDailyCounters()
     }
-  }, [iocList, proxyCheckEnabled, selectedServices])
+  }, [iocList, proxyCheckEnabled, refreshDailyCounters, selectedServices])
 
   useEffect(() => {
     const loadData = async () => {
@@ -324,6 +389,8 @@ const BulkCheck = () => {
       iocTypeSummary={iocTypeSummary}
       ignoredTypes={ignoredTypes}
       onTypeToggle={handleTypeToggle}
+      onRefreshIocs={handleRefreshIocs}
+      dailyCounters={dailyCounters}
     />
   )
 }

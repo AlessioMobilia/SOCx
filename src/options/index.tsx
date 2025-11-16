@@ -1,6 +1,6 @@
 // src/options/Options.tsx
 
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OptionsUI from "./OptionsUI"
 import "./options.css"
@@ -25,6 +25,35 @@ const Options = () => {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [ipapiEnabled, setIpapiEnabled] = useState(false)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
+  const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
+
+  const getCounterKeys = useCallback(() => {
+    const today = new Date().toISOString().split("T")[0]
+    return {
+      vt: `VT_${today}`,
+      abuse: `Abuse_${today}`,
+      proxy: `PROXYCHECK_${today}`
+    }
+  }, [])
+
+  const refreshDailyCounters = useCallback(async () => {
+    try {
+      const keys = getCounterKeys()
+      const [vt, abuse, proxy] = await Promise.all([
+        storage.get<number>(keys.vt),
+        storage.get<number>(keys.abuse),
+        storage.get<number>(keys.proxy)
+      ])
+      setDailyCounters({
+        vt: vt ?? 0,
+        abuse: abuse ?? 0,
+        proxy: proxy ?? 0
+      })
+    } catch (error) {
+      console.warn("Unable to load daily counters:", error)
+      setDailyCounters({ vt: 0, abuse: 0, proxy: 0 })
+    }
+  }, [getCounterKeys])
 
   // Auto-save
   useEffect(() => {
@@ -53,6 +82,27 @@ const Options = () => {
   useEffect(() => {
     document.body.className = isDarkMode ? "dark-mode" : "light-mode"
   }, [isDarkMode])
+
+  useEffect(() => {
+    refreshDailyCounters()
+  }, [refreshDailyCounters])
+
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
+      return
+    }
+    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area !== "local") {
+        return
+      }
+      const keys = getCounterKeys()
+      if (changes[keys.vt] || changes[keys.abuse] || changes[keys.proxy]) {
+        refreshDailyCounters()
+      }
+    }
+    chrome.storage.onChanged.addListener(listener)
+    return () => chrome.storage.onChanged.removeListener(listener)
+  }, [getCounterKeys, refreshDailyCounters])
 
   const handleServiceChange = (type: string, service: string) => {
     const updated = { ...selectedServices }
@@ -253,6 +303,7 @@ const Options = () => {
       onTestKeys={handleTestKeys}
       onAddCustomService={handleAddCustomService}
       onRemoveCustomService={handleRemoveCustomService}
+      dailyCounters={dailyCounters}
     />
   )
 }

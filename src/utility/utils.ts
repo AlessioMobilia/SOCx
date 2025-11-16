@@ -695,7 +695,7 @@ export const formatSubnetCheckClipboard = (rows: SubnetCheckSummaryRow[]): strin
 
   const blocks = rows.map((row, index) => {
     const parts = [
-      `#${index + 1} ${row.subnet} (IPv${row.version}/${row.prefix})`,
+      `## ${row.subnet} (IPv${row.version}/${row.prefix})`,
       `Hosts: ${row.hostCount}`,
       `Reported IPs: ${row.reportedCount}`,
       `Most Recent Report: ${row.mostRecent ?? "N/A"}`,
@@ -770,7 +770,7 @@ export const exportSubnetCheckToExcel = (rows: SubnetCheckSummaryRow[]): void =>
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...body])
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, "Subnet Check")
-  const filename = `subnet-check-${new Date().toISOString().split("T")[0]}.xlsx`
+  const filename = `SOCx_subnets_${new Date().toISOString().split("T")[0]}.xlsx`
   XLSX.writeFile(workbook, filename)
 }
 
@@ -845,10 +845,10 @@ export const formatAbuseIPDBData = (
     "ISP:": toSafe(d?.isp),
     "Country:": toSafe(d?.countryCode),
     "Domain:": toSafe(d?.domain),
-    "Usage Type:": toSafe(d?.usageType),
-    "IP Version:": d?.ipVersion === 6 ? "IPv6" : "IPv4",
-    "Is Tor:": d?.isTor ? "Yes" : "No",
-    "Is Whitelisted:": isWhitelisted,
+    "Usage:": toSafe(d?.usageType),
+    "Version:": d?.ipVersion === 6 ? "IPv6" : "IPv4",
+    "Tor:": d?.isTor ? "Yes" : "No",
+    "Whitelisted:": isWhitelisted,
     ...(hostnames ? { "Hostnames:": hostnames } : {}),
     "Last Reported:": toSafe(d?.lastReportedAt ?? "N/A"),
   };

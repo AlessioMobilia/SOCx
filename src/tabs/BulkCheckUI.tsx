@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React from "react"
 import {
   Container,
   Button,
@@ -31,6 +31,12 @@ interface BulkCheckUIProps {
   iocTypeSummary: { type: string; count: number }[]
   ignoredTypes: string[]
   onTypeToggle: (type: string) => void
+  onRefreshIocs: () => void
+  dailyCounters: {
+    vt: number
+    abuse: number
+    proxy: number
+  }
 }
 
 const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
@@ -50,27 +56,10 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   onProxyCheckToggle,
   iocTypeSummary,
   ignoredTypes,
-  onTypeToggle
+  onTypeToggle,
+  onRefreshIocs,
+  dailyCounters
 }) => {
-  const [vtCount, setVtCount] = useState<number>(0)
-  const [abuseCount, setAbuseCount] = useState<number>(0)
-  const [proxyCheckCount, setProxyCheckCount] = useState<number>(0)
-
-  useEffect(() => {
-    const loadCounters = async () => {
-      const today = new Date().toISOString().split("T")[0]
-      const keys = await chrome.storage.local.get([
-        `VT_${today}`,
-        `Abuse_${today}`,
-        `PROXYCHECK_${today}`
-      ])
-      setVtCount(keys[`VT_${today}`] || 0)
-      setAbuseCount(keys[`Abuse_${today}`] || 0)
-      setProxyCheckCount(keys[`PROXYCHECK_${today}`] || 0)
-    }
-    loadCounters()
-  }, [])
-
   const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
 
 const getRiskLevel = (result: any): "low" | "medium" | "high" => {
@@ -130,7 +119,32 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
       <Row className="mb-3">
         <Col md={6}>
           <Form.Group>
-            <Form.Label>📋 Enter IOCs</Form.Label>
+            <Form.Label className="d-flex align-items-center justify-content-between">
+              <span>📋 Enter IOCs</span>
+              <Button
+                size="sm"
+                variant={isDarkMode ? "outline-light" : "outline-secondary"}
+                className="rounded-circle d-inline-flex align-items-center justify-content-center"
+                style={{
+                  width: 36,
+                  height: 36,
+                  padding: 0,
+                  lineHeight: 1
+                }}
+                onClick={onRefreshIocs}
+                disabled={isLoading || !textareaValue.trim()}
+                title="Refresh IOC list"
+                aria-label="Refresh IOC list"
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ fontSize: "1.2rem", lineHeight: 1, transform: "translateY(-1px)" }}
+                >
+                  ⟳
+                </span>
+                <span className="visually-hidden">Refresh IOC list</span>
+              </Button>
+            </Form.Label>
             <Form.Control
               as="textarea"
               rows={15}
@@ -144,13 +158,13 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
             <Card.Body>
               <h5>📊 Daily Counters</h5>
               <p>
-                VirusTotal: <Badge bg="info">{vtCount}</Badge>
+                VirusTotal: <Badge bg="info">{dailyCounters.vt}</Badge>
               </p>
               <p>
-                AbuseIPDB: <Badge bg="danger">{abuseCount}</Badge>
+                AbuseIPDB: <Badge bg="danger">{dailyCounters.abuse}</Badge>
               </p>
               <p>
-                ProxyCheck: <Badge bg="secondary">{proxyCheckCount}</Badge>
+                ProxyCheck: <Badge bg="secondary">{dailyCounters.proxy}</Badge>
               </p>
             </Card.Body>
           </Card>
@@ -223,9 +237,9 @@ const getRiskLevel = (result: any): "low" | "medium" | "high" => {
                   })
                   .map(([ioc, result]) => {
                     const content = parseAndFormatResults(result).trim()
-                    return `=== ${ioc} ===\n\n${content}\n-------------------\n\n`
+                    return `## ${ioc}\n${content}\n---\n\n`
                   })
-                  .join("\n\n");
+                  .join("\n");
 
                 if (formatted) {
                   navigator.clipboard

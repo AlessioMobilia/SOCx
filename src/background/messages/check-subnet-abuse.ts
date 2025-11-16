@@ -1,8 +1,8 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 import { checkAbuseIPDBSubnet, checkAbuseIPDB } from "../../utility/api"
+import type { NormalizedSubnet } from "../../utility/utils"
 import {
-  NormalizedSubnet,
   normalizeSubnet,
   showNotification,
   isPrivateIP,
@@ -49,17 +49,26 @@ const handler: PlasmoMessaging.MessageHandler<RequestBody, { results: Record<str
       ? Math.min(Math.max(Math.round(confidenceMinimum), 0), 100)
       : undefined
 
-    const normalized: NormalizedSubnet[] = incomingSubnets
+    const normalizedEntries: NormalizedSubnet[] = incomingSubnets
       .map((value) => (typeof value === "string" ? normalizeSubnet(value) : null))
       .filter((value): value is NormalizedSubnet => Boolean(value))
 
-    if (normalized.length === 0) {
+    const seen = new Set<string>()
+    const uniqueNormalized = normalizedEntries.filter((entry) => {
+      if (seen.has(entry.subnet)) {
+        return false
+      }
+      seen.add(entry.subnet)
+      return true
+    })
+
+    if (uniqueNormalized.length === 0) {
       return res.send({ results: {} })
     }
 
     const results: Record<string, SubnetCheckPayload> = {}
 
-    for (const entry of normalized) {
+    for (const entry of uniqueNormalized) {
       const baseAddress = entry.subnet.split("/")[0] ?? ""
       if (isPrivateIP(baseAddress)) {
         results[entry.subnet] = {

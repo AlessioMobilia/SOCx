@@ -19,7 +19,8 @@ import {
   computeIPv4Subnet,
   computeIPv6Subnet,
   extractIPAddresses,
-  isPrivateIP
+  isPrivateIP,
+  uniqueStrings
 } from "../utility/utils"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
@@ -305,6 +306,51 @@ const SubnetExtractor = () => {
     setIpv6Prefix(nextValue)
   }
 
+  const handleRefreshInput = () => {
+    const trimmed = inputText.trim()
+    if (!trimmed) {
+      setInputText("")
+      setSummary([])
+      setTotals({ ipv4: 0, ipv6: 0 })
+      setStatus({ variant: "warning", message: "Add at least one IPv4 or IPv6 address before refreshing." })
+      return
+    }
+
+    try {
+      const ips = extractIPAddresses(trimmed)
+      const uniqueIpv4 = uniqueStrings(ips.ipv4)
+      const uniqueIpv6 = uniqueStrings(ips.ipv6)
+      if (uniqueIpv4.length === 0 && uniqueIpv6.length === 0) {
+        setInputText("")
+        setSummary([])
+        setTotals({ ipv4: 0, ipv6: 0 })
+        setStatus({ variant: "warning", message: "No valid IPv4 or IPv6 addresses were detected." })
+        return
+      }
+
+      const sections: string[] = []
+      if (uniqueIpv4.length > 0) {
+        sections.push(uniqueIpv4.join("\n"))
+      }
+      if (uniqueIpv6.length > 0) {
+        sections.push(uniqueIpv6.join("\n"))
+      }
+      setInputText(sections.join("\n"))
+      setStatus({
+        variant: "success",
+        message: `Detected ${uniqueIpv4.length + uniqueIpv6.length} unique IP${
+          uniqueIpv4.length + uniqueIpv6.length === 1 ? "" : "s"
+        }.`
+      })
+    } catch (error) {
+      console.error("Refresh failed:", error)
+      setStatus({
+        variant: "danger",
+        message: "Unable to refresh the input. Please try again."
+      })
+    }
+  }
+
   const handleCopyAll = async () => {
     if (!hasExportableSubnets) {
       setStatus({
@@ -442,7 +488,32 @@ const SubnetExtractor = () => {
       <Row className="g-4">
         <Col md={6}>
           <Form.Group>
-            <Form.Label>Paste IP Addresses</Form.Label>
+            <Form.Label className="d-flex align-items-center justify-content-between">
+              <span>Paste IP Addresses</span>
+              <Button
+                size="sm"
+                variant={isDarkMode ? "outline-light" : "outline-secondary"}
+                className="rounded-circle d-inline-flex align-items-center justify-content-center"
+                style={{
+                  width: 36,
+                  height: 36,
+                  padding: 0,
+                  lineHeight: 1
+                }}
+                onClick={handleRefreshInput}
+                disabled={isProcessing || !inputText.trim()}
+                title="Refresh and deduplicate input"
+                aria-label="Refresh and deduplicate input"
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ fontSize: "1.2rem", lineHeight: 1, transform: "translateY(-1px)" }}
+                >
+                  ⟳
+                </span>
+                <span className="visually-hidden">Refresh and deduplicate input</span>
+              </Button>
+            </Form.Label>
             <Form.Control
               as="textarea"
               rows={16}

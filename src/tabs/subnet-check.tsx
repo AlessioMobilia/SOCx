@@ -15,9 +15,8 @@ import {
 } from "react-bootstrap"
 import "bootstrap/dist/css/bootstrap.min.css"
 import "./bulk-check.css"
+import type { NormalizedSubnet, SubnetCheckSummaryRow } from "../utility/utils"
 import {
-  NormalizedSubnet,
-  SubnetCheckSummaryRow,
   estimateSubnetHostCount,
   exportSubnetCheckToExcel,
   extractSubnetsFromText,
@@ -247,6 +246,28 @@ const SubnetCheck = () => {
     setTextareaValue(event.target.value)
   }, [])
 
+  const collectUniqueSubnets = useCallback(() => {
+    const parsed = extractSubnetsFromText(textareaValue)
+    return dedupeNormalizedSubnets(parsed)
+  }, [textareaValue])
+
+  const handleRefreshSubnets = useCallback(() => {
+    const uniqueParsed = collectUniqueSubnets()
+    if (uniqueParsed.length === 0) {
+      setTextareaValue("")
+      setSubnets([])
+      setResults({})
+      setMessage("No valid subnets detected in the provided text.")
+      return
+    }
+
+    const normalizedText = uniqueParsed.map((entry) => entry.subnet).join("\n")
+    setTextareaValue(normalizedText)
+    setSubnets([])
+    setResults({})
+    setMessage(`Detected ${uniqueParsed.length} unique subnet${uniqueParsed.length === 1 ? "" : "s"}.`)
+  }, [collectUniqueSubnets])
+
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) {
@@ -280,8 +301,7 @@ const SubnetCheck = () => {
   }, [])
 
   const handleCheck = useCallback(async () => {
-    const parsed = extractSubnetsFromText(textareaValue)
-    const uniqueParsed = dedupeNormalizedSubnets(parsed)
+    const uniqueParsed = collectUniqueSubnets()
     if (uniqueParsed.length === 0) {
       setSubnets([])
       setResults({})
@@ -301,7 +321,10 @@ const SubnetCheck = () => {
         confidenceMinimum: confidenceMinimum > 0 ? confidenceMinimum : undefined
       }
 
-      const response = await sendToBackground<{ results?: Record<string, SubnetCheckResult> }>({
+      const response = await sendToBackground<
+        { subnets: string[]; maxAgeInDays: number; confidenceMinimum?: number },
+        { results?: Record<string, SubnetCheckResult> }
+      >({
         name: "check-subnet-abuse",
         body
       })
@@ -315,7 +338,7 @@ const SubnetCheck = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [confidenceMinimum, refreshAbuseCounter, textareaValue])
+  }, [collectUniqueSubnets, confidenceMinimum, refreshAbuseCounter])
 
   const summarizedResults = useMemo<SubnetCheckSummaryRow[]>(
     () =>
@@ -427,7 +450,32 @@ const SubnetCheck = () => {
       <Row className="g-4">
         <Col md={6}>
           <Form.Group>
-            <Form.Label>📋 Enter IPv4/IPv6 Subnets</Form.Label>
+            <Form.Label className="d-flex align-items-center justify-content-between">
+              <span>📋 Enter IPv4/IPv6 Subnets</span>
+              <Button
+                size="sm"
+                variant={isDarkMode ? "outline-light" : "outline-secondary"}
+                className="rounded-circle d-inline-flex align-items-center justify-content-center"
+                style={{
+                  width: 36,
+                  height: 36,
+                  padding: 0,
+                  lineHeight: 1
+                }}
+                onClick={handleRefreshSubnets}
+                disabled={isLoading || !textareaValue.trim()}
+                title="Refresh subnet list"
+                aria-label="Refresh subnet list"
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ fontSize: "1.2rem", lineHeight: 1, transform: "translateY(-1px)" }}
+                >
+                  ⟳
+                </span>
+                <span className="visually-hidden">Refresh subnet list</span>
+              </Button>
+            </Form.Label>
             <Form.Control
               as="textarea"
               rows={16}
@@ -499,12 +547,8 @@ const SubnetCheck = () => {
             >
               Copy Report
             </Button>
-            <Button
-              variant={isDarkMode ? "outline-light" : "outline-secondary"}
-              onClick={handleExportResults}
-              disabled={summarizedResults.length === 0}
-            >
-              Export XLSX
+            <Button variant="outline-success" onClick={handleExportResults} disabled={summarizedResults.length === 0}>
+              📘 Export Excel (.xlsx)
             </Button>
           </div>
 

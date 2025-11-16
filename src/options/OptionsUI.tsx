@@ -4,7 +4,8 @@ import {
   Table,
   Form,
   Button,
-  InputGroup
+  InputGroup,
+  Badge
 } from "react-bootstrap"
 import {
   MdDarkMode,
@@ -35,6 +36,11 @@ interface OptionsUIProps {
   onTestKeys: () => void
   onAddCustomService: (s: CustomService) => void
   onRemoveCustomService: (index: number) => void
+  dailyCounters: {
+    vt: number
+    abuse: number
+    proxy: number
+  }
 }
 
 const OptionsUI: React.FC<OptionsUIProps> = ({
@@ -55,7 +61,8 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   onProxyCheckToggle,
   onTestKeys,
   onAddCustomService,
-  onRemoveCustomService
+  onRemoveCustomService,
+  dailyCounters
 }) => {
   const [showKeys, setShowKeys] = useState(false)
   const [newType, setNewType] = useState<IOCType>("IP")
@@ -86,7 +93,12 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
         <Card.Title>🔑 API Keys</Card.Title>
         <Form>
           <Form.Group className="mb-3">
-            <Form.Label>VirusTotal</Form.Label>
+            <Form.Label className="d-flex justify-content-between align-items-center gap-2">
+              <span>VirusTotal</span>
+              <Badge bg="info" pill>
+                Today: {dailyCounters.vt}
+              </Badge>
+            </Form.Label>
             <InputGroup>
               <Form.Control
                 type={inputType}
@@ -105,7 +117,12 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           </Form.Group>
 
           <Form.Group className="mb-3">
-            <Form.Label>AbuseIPDB</Form.Label>
+            <Form.Label className="d-flex justify-content-between align-items-center gap-2">
+              <span>AbuseIPDB</span>
+              <Badge bg="danger" pill>
+                Today: {dailyCounters.abuse}
+              </Badge>
+            </Form.Label>
             <InputGroup>
               <Form.Control
                 type={inputType}
@@ -124,7 +141,12 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           </Form.Group>
 
           <Form.Group className="mb-3">
-            <Form.Label>ProxyCheck.io</Form.Label>
+            <Form.Label className="d-flex justify-content-between align-items-center gap-2">
+              <span>ProxyCheck.io</span>
+              <Badge bg="secondary" pill>
+                Today: {dailyCounters.proxy}
+              </Badge>
+            </Form.Label>
             <InputGroup>
               <Form.Control
                 type={inputType}

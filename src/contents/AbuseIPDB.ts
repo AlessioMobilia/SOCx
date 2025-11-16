@@ -53,15 +53,15 @@ function extractAndFormatInfo(): string | null {
   return `
 IP Information (AbuseIPDB):
 ${extraText ? `${extraText}\n\n` : ""}IP:               ${ip}
-Reports:          ${reportCount}
-Abuse Confidence: ${confidence}
-ISP:              ${isp}
-Usage:            ${usage}
-ASN:              ${asn}
-Hostnames:        ${hostnames}
-Domain:           ${domain}
-Country:          ${country}
-City:             ${city}`.trim()
+- Reports:          ${reportCount}
+- Abuse Confidence: ${confidence}
+- ISP:              ${isp}
+- Usage:            ${usage}
+- ASN:              ${asn}
+- Hostnames:        ${hostnames}
+- Domain:           ${domain}
+- Country:          ${country}
+- City:             ${city}`.trim()
 }
 
 // Create the custom-styled copy button (self-contained styles)
