@@ -30,6 +30,7 @@ const MAX_UNIQUE_WORDS = 2
 const BUTTON_OFFSET = 6
 const BUTTON_MARGIN = 8
 const MAGIC_BUTTON_GAP = 10
+const availableServices = servicesConfig.availableServices as Record<string, string[]>
 
   // inizializzazione sicura
   if (!(window as any)._formatScriptInitialized) {
@@ -377,7 +378,8 @@ const MAGIC_BUTTON_GAP = 10
       const vtSupported = ["IP", "Domain", "URL", "Hash"]
       const abuseSupported = ["IP"]
       const isSupported = vtSupported.includes(type) || abuseSupported.includes(type)
-      if (!isSupported) {
+      const hasConfiguredServices = Boolean(availableServices[type]?.length)
+      if (!isSupported && !hasConfiguredServices) {
         clearSelectionUI()
         return
       }
@@ -447,7 +449,7 @@ const MAGIC_BUTTON_GAP = 10
         currentButton = button
       }
 
-      const magicButton = createMagicButton(ioc, () => requestIOCInfo(ioc))
+      const magicButton = hasConfiguredServices ? createMagicButton(ioc, () => requestIOCInfo(ioc)) : null
       if (magicButton) {
         document.body.appendChild(magicButton)
         currentMagicButton = magicButton
