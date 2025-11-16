@@ -64,17 +64,21 @@ Country:          ${country}
 City:             ${city}`.trim()
 }
 
-// Create the custom-styled copy button (no Bootstrap)
+// Create the custom-styled copy button (self-contained styles)
 function createCopyButton() {
   const container = document.querySelector(".col-md-6 .well")
   if (!container || document.getElementById("IOCAbuseButton")) return
 
   const button = document.createElement("button")
   button.id = "IOCAbuseButton"
-  button.textContent = "📋 Copy AbuseIPDB Info"
-
-  // Scoped button styling using the custom CSS defined above
-  button.classList.add("socx-extension-container")
+  button.textContent = "📋 SOCx - Copy Abuse Info"
+  button.className = "btn btn-block btn-primary"
+  button.style.display = "inline-flex"
+  button.style.alignItems = "center"
+  button.style.justifyContent = "center"
+  button.style.width = "100%"
+  button.onmouseenter = () => (button.style.filter = "brightness(0.95)")
+  button.onmouseleave = () => (button.style.filter = "")
 
   button.addEventListener("click", () => {
     const info = extractAndFormatInfo()
@@ -91,12 +95,17 @@ function createCopyButton() {
     }
   })
 
-  // Wrap the button in a container with the `.socx-extension-container` class
-  const extensionContainer = document.createElement("div")
-  button.classList.add("socx-button")
-  extensionContainer.classList.add("socx-extension-container")
-  extensionContainer.appendChild(button)
-  container.appendChild(extensionContainer)
+  // Wrap the button to control placement within the page
+  const wrapper = document.createElement("div")
+  wrapper.id = "IOCAbuseWrapper"
+  wrapper.style.marginTop = "12px"
+  wrapper.style.display = "flex"
+  wrapper.style.justifyContent = "flex-end"
+  wrapper.style.flexWrap = "wrap"
+  wrapper.appendChild(button)
+
+  // Prefer appending near the end of the info box
+  container.appendChild(wrapper)
 }
 
 // Wait for content to dynamically load
