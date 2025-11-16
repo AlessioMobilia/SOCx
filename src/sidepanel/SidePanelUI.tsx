@@ -6,7 +6,6 @@ import { MdDownload, MdDelete, MdBuild, MdBugReport } from "react-icons/md"
 interface SidePanelUIProps {
   note: string
   isDarkMode: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement>
   onTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
   onSaveTxt: () => void
   onClearNote: () => void
@@ -17,7 +16,6 @@ interface SidePanelUIProps {
 const SidePanelUI: React.FC<SidePanelUIProps> = ({
   note,
   isDarkMode,
-  textareaRef,
   onTextChange,
   onSaveTxt,
   onClearNote,
@@ -33,7 +31,6 @@ const SidePanelUI: React.FC<SidePanelUIProps> = ({
       <Form.Group className="mb-3">
         <Form.Control
           as="textarea"
-          ref={textareaRef}
           value={note}
           onChange={onTextChange}
           placeholder="Write here..."

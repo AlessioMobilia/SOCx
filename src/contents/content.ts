@@ -301,6 +301,31 @@ const MAGIC_BUTTON_GAP = 10
       return { caret: caretRect, bounds: boundsRect }
     }
 
+    const sanitizeToken = (raw: string): string => raw.replace(/^\W+|\W+$/g, "")
+
+    const extractTokenFromSelection = (sel: Selection | null): string | null => {
+      if (!sel) return null
+      const tryNode = (node: Node | null, offset: number): string | null => {
+        if (node && node.nodeType === Node.TEXT_NODE) {
+          const text = (node as Text).data || ""
+          const idx = clampValue(offset, 0, text.length)
+          let start = idx
+          let end = idx
+          const isAllowed = (ch: string) => /[A-Za-z0-9_:\.\-\/\%]/.test(ch)
+          while (start > 0 && isAllowed(text[start - 1])) start--
+          while (end < text.length && isAllowed(text[end])) end++
+          const token = text.slice(start, end)
+          return token ? sanitizeToken(token) : null
+        }
+        return null
+      }
+      return (
+        tryNode(sel.focusNode, sel.focusOffset) ||
+        tryNode(sel.anchorNode, sel.anchorOffset) ||
+        null
+      )
+    }
+
     async function handleSelection() {
       const selection = window.getSelection()
       const selectedText = selection?.toString().trim() ?? ""
@@ -314,21 +339,37 @@ const MAGIC_BUTTON_GAP = 10
         return
       }
 
-      const uniqueWords = new Set(selectedText.split(/\s+/).filter(Boolean))
-      if (uniqueWords.size > MAX_UNIQUE_WORDS) {
-        clearSelectionUI()
-        return
+      // No longer hard-fail on multiple words; we will try to pick IOC at caret
+
+      let ioc: string | null = null
+      let type: string | null = null
+      // 1) Exact selection is a valid IOC
+      const directType = identifyIOC(selectedText)
+      if (directType) {
+        ioc = selectedText
+        type = directType
+      } else {
+        // 2) Try token at caret
+        const token = extractTokenFromSelection(selection)
+        if (token) {
+          const tokType = identifyIOC(token)
+          if (tokType) {
+            ioc = token
+            type = tokType
+          }
+        }
       }
 
-      const iocs = extractIOCs(selectedText)
-      if (!iocs || iocs.length !== 1) {
-        clearSelectionUI()
-        return
+      // 3) Fallback to first IOC found in selection
+      if (!ioc) {
+        const iocs = extractIOCs(selectedText)
+        if (iocs && iocs.length > 0) {
+          ioc = iocs[0]
+          type = identifyIOC(ioc)
+        }
       }
 
-      const ioc = iocs[0]
-      const type = identifyIOC(ioc)
-      if (!type) {
+      if (!ioc || !type) {
         clearSelectionUI()
         return
       }
@@ -436,8 +477,9 @@ const MAGIC_BUTTON_GAP = 10
       }
     }
 
-    // Update button positions on scroll and resize without spamming layout thrashing
+    // Update button positions on any scroll (including nested containers) and resize
     window.addEventListener("scroll", scheduleReposition, { passive: true })
+    document.addEventListener("scroll", scheduleReposition, { passive: true, capture: true })
     window.addEventListener("resize", scheduleReposition)
 
     function repositionButtons() {
