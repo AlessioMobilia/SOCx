@@ -1576,6 +1576,10 @@ export function formatSelectedText(lastValidSelection: Selection): string {
 
   const range = lastValidSelection.getRangeAt(0);
   const fragment = range.cloneContents();
+  const rawSelectionText =
+    (typeof lastValidSelection.toString === "function" ? lastValidSelection.toString() : "") ||
+    fragment.textContent ||
+    "";
 
   const div = document.createElement("div");
   div.appendChild(fragment);
@@ -1585,86 +1589,360 @@ export function formatSelectedText(lastValidSelection: Selection): string {
   cleanContent(div);
 
   console.log("Selected HTML after cleanup:", div.innerHTML);
-  let finalText = "";
+  const orderedBlocks: string[] = [];
+  const seenBlocks = new Set<string>();
+  const seenCanonicalBlocks = new Set<string>();
+  const seenAggressiveBlocks = new Set<string>();
 
-  const SplunkData = extractSplunkKeyValue(div);
-  if (SplunkData !== null) {
-    console.log("Dati Splunk estratti:", SplunkData);
-    finalText = finalText.concat(SplunkData.toString()+"\n\n");
+  const appendBlock = (block: string | string[] | null, label: string) => {
+    if (!block) {
+      return;
+    }
+
+    const values = Array.isArray(block) ? block : [block];
+
+    values.forEach((value) => {
+      const normalized = normalizeOutputBlock(value);
+      if (!normalized) {
+        return;
+      }
+
+      const canonical = canonicalizeOutputBlock(normalized);
+      const aggressive = aggressiveCanonicalizeOutputBlock(normalized);
+      if (
+        seenBlocks.has(normalized) ||
+        seenCanonicalBlocks.has(canonical) ||
+        (aggressive && seenAggressiveBlocks.has(aggressive))
+      ) {
+        return;
+      }
+
+      console.log(`Dati ${label} estratti:`, normalized);
+      seenBlocks.add(normalized);
+      seenCanonicalBlocks.add(canonical);
+      if (aggressive) {
+        seenAggressiveBlocks.add(aggressive);
+      }
+      orderedBlocks.push(normalized);
+    });
+  };
+
+  appendBlock(extractJsonBlocks(div), "JSON");
+  appendBlock(extractSplunkKeyValue(div), "Splunk");
+  appendBlock(extractGridcellKeyValue(div), "gridcell");
+  appendBlock(extractTableLikeData(div), "table-like");
+  appendBlock(extractGridTable(div), "grid-table");
+  appendBlock(extractMultiElementTable(div), "multi-table");
+  appendBlock(extractListBlocks(div), "lists");
+  appendBlock(extractAnchorValueRows(div), "anchor value");
+  appendBlock(extractInlineRowKeyValue(div), "inline key-value");
+  appendBlock(extractPairDivKeyValue(div), "div key-value");
+  appendBlock(extractDtDdKeyValue(div), "dt/dl");
+  appendBlock(extractLabelKeyValue(div), "label key-value");
+  appendBlock(extractSpanKeyValue(div), "span key-value");
+  const strictTextKeyValue = extractTextKeyValue(div);
+  appendBlock(strictTextKeyValue, "text key-value");
+  if (!strictTextKeyValue) {
+    appendBlock(extractTextKeyValue(div, { removeNodes: false, allowSimpleLines: true }), "loose text key-value");
   }
 
-  // Estrazione dei dati tag con role=gridcell preceduti da role=row
-  const gridcellData = extractGridcellKeyValue(div);
-  if (gridcellData !== null) {
-    console.log("Dati gridcell chiave-valore estratti:", gridcellData);
-    finalText = finalText.concat(gridcellData.toString()+"\n\n");
+  const remainingText = extractRemainingText(div);
+  appendBlock(remainingText, strictTextKeyValue ? "remaining text (fallback)" : "remaining text");
+
+  if (orderedBlocks.length === 0) {
+    const fallback = normalizeOutputBlock(rawSelectionText || div.textContent || "");
+    if (fallback) {
+      orderedBlocks.push(fallback);
+    }
   }
 
-  // Estrazione dei dati tabellari
-  const tableData = extractTableLikeData(div);
-  if (tableData !== null) {
-    console.log("Dati tabellari estratti:", tableData);
-    finalText = finalText.concat(tableData.toString()+"\n\n");
-  }
-
-  const multiGridData = extractGridTable(div);
-  if (multiGridData !== null) {
-    console.log("Dati multi-grid chiave-valore estratti:", multiGridData);
-    finalText = finalText.concat(multiGridData.toString()+"\n\n");
-  }
-
-  
-  const tableDatas = extractMultiElementTable(div);
-  if (tableDatas !== null) {
-    console.log("Dati tabellari estratti:", tableDatas);
-    finalText = finalText.concat(tableDatas.toString()+"\n\n");
-  }
-
-
-
-  // Estrazione dei dati chiave-valore da div o tag consecutivi dentro un altro tag
-  const keyValuePairsDiv = extractPairDivKeyValue(div);
-  if (keyValuePairsDiv !== null) {
-    console.log("Dati chiave-valore da div estratti:", keyValuePairsDiv);
-    finalText = finalText.concat(keyValuePairsDiv.toString()+"\n\n");
-  }
-
-
-
-  const dtdldata = extractDtDdKeyValue(div);
-  if (dtdldata !== null) {
-    console.log("Dati dt dl chiave-valore estratti:", dtdldata);
-    finalText = finalText.concat(dtdldata.toString()+"\n\n");
-  }
-
-  // Estrazione delle chiavi-valori con dei label
-  const labelData = extractLabelKeyValue(div);
-  if (labelData !== null) {
-    console.log("Dati label chiave-valore estratti:", labelData);
-    finalText = finalText.concat(labelData.toString()+"\n\n");
-  }
-
-
-  const spanData = extractSpanKeyValue(div);
-  if (spanData !== null) {
-    console.log("Dati span chiave-valore estratti:", spanData);
-    finalText = finalText.concat(spanData.toString()+"\n\n");
-  }
-
-  // Estrazione dei dati chiave-valore da testo semplice
-  const keyValueData = extractTextKeyValue(div);
-  if (keyValueData !== null) {
-    console.log("Dati chiave-valore estratti:", keyValueData);
-    finalText = finalText.concat(keyValueData.toString()+"\n\n"); 
-  }
-
-  // Estrazione delle chiavi-valori span
-  console.log("Final html content:", div.innerHTML);
-  //let remainingText = extractRemainingText(div);
-  //finalText = remainingText.trim() + "\n\n" + finalText;
-    
+  const finalText = orderedBlocks.join("\n\n").trim();
   console.log("Final formatted text:", finalText);
   return finalText;
+}
+
+const JSON_ATTRIBUTE_CANDIDATES = ["data-json", "data-clipboard-text", "data-raw", "data-payload", "data-copy-text"];
+const JSON_SELECTOR_CANDIDATES = ["pre", "code", "textarea", "[data-json]", "[data-testid*='json']", "[data-component*='json']", "[class*='json']"];
+
+function normalizeOutputBlock(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  const replaced = value.replace(/\u00A0/g, " ").replace(/\r/g, "");
+  const trimmed = replaced.trim();
+
+  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
+    return trimmed;
+  }
+
+  const lines = replaced.split("\n").map((line) => line.replace(/\t/g, "    ").replace(/[ ]+$/g, ""));
+  const filtered = lines.filter((line, index, array) => {
+    if (line.trim() !== "") {
+      return true;
+    }
+    const previous = array[index - 1];
+    return previous && previous.trim() !== "";
+  });
+
+  return filtered.join("\n").trim();
+}
+
+function canonicalizeOutputBlock(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const isCodeFence = /^```/.test(trimmed) && /```$/.test(trimmed);
+  if (isCodeFence) {
+    return trimmed;
+  }
+
+  return trimmed
+    .replace(/\s+/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .toLowerCase();
+}
+
+function aggressiveCanonicalizeOutputBlock(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^```/.test(trimmed) && /```$/.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  return trimmed.replace(/\s+/g, "").toLowerCase();
+}
+
+function extractJsonBlocks(container: HTMLElement): string[] | null {
+  const candidates = new Set<string>();
+
+  const tryAddCandidate = (value?: string | null) => {
+    if (!value) {
+      return;
+    }
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 2) {
+      return;
+    }
+    if (looksLikeJsonStructure(trimmed)) {
+      candidates.add(trimmed);
+    }
+  };
+
+  tryAddCandidate(container.textContent);
+
+  JSON_SELECTOR_CANDIDATES.forEach((selector) => {
+    container.querySelectorAll<HTMLElement>(selector).forEach((el) => {
+      tryAddCandidate(el.textContent);
+    });
+  });
+
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    JSON_ATTRIBUTE_CANDIDATES.forEach((attr) => {
+      if (el.hasAttribute(attr)) {
+        tryAddCandidate(el.getAttribute(attr));
+      }
+    });
+  });
+
+  const formattedBlocks: string[] = [];
+  candidates.forEach((candidate) => {
+    const parsedBlocks = parseJsonFromSource(candidate);
+    parsedBlocks.forEach((block) => formattedBlocks.push(block));
+  });
+
+  return formattedBlocks.length > 0 ? formattedBlocks : null;
+}
+
+function looksLikeJsonStructure(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const startsWith = trimmed[0];
+  const endsWith = trimmed[trimmed.length - 1];
+  return (startsWith === "{" && endsWith === "}") || (startsWith === "[" && endsWith === "]");
+}
+
+function parseJsonFromSource(source: string): string[] {
+  const trimmed = source.trim();
+  const blocks: string[] = [];
+
+  if (looksLikeJsonStructure(trimmed)) {
+    const parsed = safeParseJsonString(trimmed);
+    if (parsed !== null) {
+      blocks.push(formatJsonBlock(parsed));
+      return blocks;
+    }
+  }
+
+  const lines = trimmed.split(/\r?\n+/).map((line) => line.trim()).filter(Boolean);
+  let parsedLine = false;
+  lines.forEach((line) => {
+    if (!looksLikeJsonStructure(line)) {
+      return;
+    }
+    const parsed = safeParseJsonString(line);
+    if (parsed !== null) {
+      parsedLine = true;
+      blocks.push(formatJsonBlock(parsed));
+    }
+  });
+  if (parsedLine) {
+    return blocks;
+  }
+
+  const looseBlocks = extractLooseJsonBlocks(trimmed);
+  looseBlocks.forEach((block) => {
+    const parsed = safeParseJsonString(block);
+    if (parsed !== null) {
+      blocks.push(formatJsonBlock(parsed));
+    }
+  });
+
+  return blocks;
+}
+
+function extractLooseJsonBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  let inString: string | null = null;
+  let escaped = false;
+  let start = -1;
+  const stack: string[] = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inString) {
+      if (char === "\\" && !escaped) {
+        escaped = true;
+        continue;
+      }
+      if (char === inString && !escaped) {
+        inString = null;
+      } else {
+        escaped = false;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      inString = char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "{" || char === "[") {
+      if (stack.length === 0) {
+        start = i;
+      }
+      stack.push(char === "{" ? "}" : "]");
+    } else if ((char === "}" || char === "]") && stack.length > 0) {
+      const expected = stack.pop();
+      if (expected === char && stack.length === 0 && start !== -1) {
+        const block = text.slice(start, i + 1).trim();
+        if (looksLikeJsonStructure(block)) {
+          blocks.push(block);
+        }
+        start = -1;
+      }
+    }
+  }
+
+  return blocks;
+}
+
+function safeParseJsonString(value: string): unknown {
+  const attempts = new Set<string>();
+  attempts.add(value);
+  attempts.add(removeTrailingCommas(value));
+  attempts.add(normalizeSingleQuotes(value));
+  attempts.add(quoteUnquotedJsonKeys(value));
+  attempts.add(quoteUnquotedJsonKeys(removeTrailingCommas(value)));
+  attempts.add(quoteUnquotedJsonKeys(normalizeSingleQuotes(value)));
+  attempts.add(
+    quoteUnquotedJsonKeys(
+      removeTrailingCommas(normalizeSingleQuotes(value))
+    )
+  );
+
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt);
+    } catch (error) {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function removeTrailingCommas(value: string): string {
+  return value.replace(/,\s*([}\]])/g, "$1");
+}
+
+function normalizeSingleQuotes(value: string): string {
+  if (!/'/.test(value)) {
+    return value;
+  }
+
+  const convert = (match: string, prefix: string, content: string) => {
+    const escaped = content.replace(/"/g, '\\"');
+    return `${prefix}"${escaped}"`;
+  };
+
+  return value
+    .replace(/([{\[,]\s*)'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*:)/g, convert)
+    .replace(/(:\s*)'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*([,}\]]))/g, convert)
+    .replace(/([[\s,])'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*([,\]]))/g, convert);
+}
+
+function quoteUnquotedJsonKeys(value: string): string {
+  return value.replace(/([{,]\s*)([A-Za-z0-9_\-]+)\s*:(?!\/\/)/g, '$1"$2":');
+}
+
+function formatJsonBlock(value: unknown): string {
+  return `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
+}
+
+function extractListBlocks(container: HTMLElement): string | null {
+  const lines: string[] = [];
+  const lists = container.querySelectorAll("ul, ol");
+
+  lists.forEach((list) => {
+    if (!container.contains(list)) {
+      return;
+    }
+
+    const children = Array.from(list.children).filter(
+      (child): child is HTMLElement => child.tagName.toLowerCase() === "li"
+    );
+
+    if (children.length === 0) {
+      return;
+    }
+
+    const isOrdered = list.tagName.toLowerCase() === "ol";
+    let index = 1;
+
+    children.forEach((child) => {
+      const text = child.textContent?.replace(/\s+/g, " ").trim();
+      if (!text) {
+        return;
+      }
+      lines.push(isOrdered ? `${index}. ${text}` : `- ${text}`);
+      index += 1;
+    });
+
+    list.remove();
+  });
+
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 function cleanContent(container: HTMLElement): void {
@@ -1680,7 +1958,11 @@ function cleanContent(container: HTMLElement): void {
 
   // Rimuovi elementi hidden (con attributo hidden o stile display: none)
   container.querySelectorAll("*").forEach(el => {
-    if (el.hasAttribute("hidden") || getComputedStyle(el).display === "none") {
+    if (
+      el.hasAttribute("hidden") ||
+      el.getAttribute("aria-hidden") === "true" ||
+      getComputedStyle(el).display === "none"
+    ) {
       el.remove();
     }
   });
@@ -1689,7 +1971,7 @@ function cleanContent(container: HTMLElement): void {
   container.querySelectorAll("*").forEach(el => {
     const id = el.id?.toLowerCase() || "";
     const className = el.className?.toLowerCase() || "";
-    if (id.includes("tooltip")) {
+    if (id.includes("tooltip") || className.includes("tooltip")) {
       el.remove();
     }
   });
@@ -2083,45 +2365,112 @@ function extractSpanKeyValue(container: HTMLElement): string | null {
   return formatKeyValue(keyValuePairs);
 }
 
-function extractTextKeyValue(container: HTMLElement): string | null {
+function extractTextKeyValue(
+  container: HTMLElement,
+  options: { removeNodes?: boolean; allowSimpleLines?: boolean } = {}
+): string | null {
   const keyValuePairs: string[][] = [];
   const textNodes = Array.from(container.querySelectorAll("*"));
-  const lines = (container.textContent || "").split("\n");
+  const structuredLines = collectStructuredLines(container);
+  const fallbackLines = (container.textContent || "")
+    .split(/\r\n|\n|\r/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const lines = structuredLines.length > 0 ? structuredLines : fallbackLines;
 
   const isSpecialCase = (text: string) => (
-    /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) ||        // Orario solo
-    /^https?:\/\/\S+$/.test(text) ||                // URL solo
-    /^\S+@\S+\.\S+$/.test(text) ||                  // Email solo
-    /^\d{4}-\d{2}-\d{2}$/.test(text) ||             // Data ISO solo
-    /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) ||         // Timezone solo
-    /^\/[\w\/\-:.]+$/.test(text)                    // Path solo
+    /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) ||
+    /^https?:\/\/\S+$/.test(text) ||
+    /^\S+@\S+\.\S+$/.test(text) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(text) ||
+    /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) ||
+    /^\/[\w\/\-:.]+$/.test(text)
   );
 
   lines.forEach(line => {
     const trimmedLine = line.trim();
-      if (trimmedLine === "") return;
+    if (trimmedLine === "") return;
 
-    const match = trimmedLine.match(/^([^\s:=][^:=]*)\s*[:=]\s*(.+)$/);
-    if (match) {
-      const key = match[1].trim();
-      const value = match[2].trim();
+    const parsed = parseKeyValueLine(trimmedLine);
+    if (parsed) {
+      const [key, value] = parsed;
 
-      // Salta solo se l'intera riga è speciale (es. solo timestamp, URL, ecc.)
       if (isSpecialCase(trimmedLine)) return;
 
       keyValuePairs.push([key, value]);
 
-      textNodes.forEach(node => {
-        if (node.textContent?.includes(trimmedLine) || node.textContent?.includes(key) || node.textContent?.includes(value)) {
-          node.remove();
+      if (options.removeNodes !== false) {
+        textNodes.forEach(node => {
+          if (node.textContent?.includes(trimmedLine) || node.textContent?.includes(key) || node.textContent?.includes(value)) {
+            node.remove();
+          }
+        });
+      }
+    } else if (options.allowSimpleLines) {
+      const simpleMatch = trimmedLine.match(/^([A-Za-z][\w\s-]{0,80})\s+(.+)$/);
+      if (simpleMatch) {
+        const keyCandidate = simpleMatch[1].trim();
+        const valueCandidate = simpleMatch[2].trim();
+        if (keyCandidate && valueCandidate && !isSpecialCase(trimmedLine)) {
+          keyValuePairs.push([keyCandidate, valueCandidate]);
         }
-      });
+      }
     }
   });
 
   if (keyValuePairs.length === 0) return null;
 
   return formatKeyValue(keyValuePairs);
+}
+
+const GENERIC_KEY_VALUE_PATTERNS: RegExp[] = [
+  /^-?\s*(.+?)\s*[:：=]\s*(.+)$/,
+  /^-?\s*(.+?)\t+(.+)$/,
+  /^-?\s*(.+?)\s+-{1,3}\s+(.+)$/,
+  /^-?\s*(.+?)\s+\|\s+(.+)$/,
+  /^-?\s*(.+?)(?:\s*\.{2,}\s+)(.+)$/
+];
+
+const sanitizeKeyCandidate = (key: string): string => {
+  return key.replace(/[\s.:=-]+$/, "").replace(/^\s*[-•]+/, "").trim();
+};
+
+const isValidKeyCandidate = (key: string): boolean => {
+  if (!key) {
+    return false;
+  }
+  if (key.length > 80) {
+    return false;
+  }
+  const firstChar = key.trim().charAt(0);
+  if (!/[A-Za-z]/.test(firstChar)) {
+    return false;
+  }
+  return true;
+};
+
+function parseKeyValueLine(line: string): [string, string] | null {
+  for (const pattern of GENERIC_KEY_VALUE_PATTERNS) {
+    const match = line.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const key = sanitizeKeyCandidate(match[1] ?? "");
+    const value = (match[2] ?? "").trim();
+
+    if (!key || !value) {
+      continue;
+    }
+
+    if (!isValidKeyCandidate(key)) {
+      continue;
+    }
+
+    return [key, value];
+  }
+
+  return null;
 }
 
 // Funzione per estrarre coppie chiave-valore da Splunk
@@ -2236,24 +2585,27 @@ function extractPairDivKeyValue(container: HTMLElement): string | null {
     if (children.length === 2) {
       const key = (children[0].textContent || "").trim();
       const value = (children[1].textContent || "").trim();
+      let extracted = false;
 
       if (key && value) {
         // Caso normale: chiave e valore entrambi presenti
         keyValuePairs.push([key, value]);
         lastKey = key;
+        extracted = true;
       } else if (!key && value && lastKey) {
         // Chiave vuota, valore pieno: consideralo come secondo valore della chiave precedente
         keyValuePairs.push([lastKey, value]);
+        extracted = true;
       } else if (key && !value) {
-        // Chiave piena, valore vuoto: consideralo come N/A
-        keyValuePairs.push([key, "N/A"]);
+        // Se la chiave non ha valore, lascia la riga al DOM per tentativi successivi
         lastKey = key;
       }
 
-      // Rimuove i figli e il parent dal DOM
-      children[0].remove();
-      children[1].remove();
-      parent.remove();
+      if (extracted) {
+        children[0].remove();
+        children[1].remove();
+        parent.remove();
+      }
     }
   });
 
@@ -2264,50 +2616,231 @@ function extractPairDivKeyValue(container: HTMLElement): string | null {
   return formatKeyValue(keyValuePairs);
 }
 
+const INLINE_LABEL_PATTERN = /[:：]\s*$/;
 
-function extractRemainingText(container: HTMLElement, separator: string = "\n"): string {
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
-  const texts: string[] = [];
+const getInlineNodeText = (node: Node): string => {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent?.replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim() ?? "";
+  }
 
+  if (node instanceof HTMLElement) {
+    return node.textContent?.replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim() ?? "";
+  }
+
+  return "";
+};
+
+const normalizeLabelKey = (key: string): string => {
+  return key.replace(/[:：\s]+$/, "").trim();
+};
+
+function extractAnchorValueRows(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
+  const candidates = container.querySelectorAll<HTMLElement>("p, div, li");
+
+  candidates.forEach((node) => {
+    if (!container.contains(node)) {
+      return;
+    }
+
+    if (node.closest("table, thead, tbody, tfoot, tr, dl")) {
+      return;
+    }
+
+    const elementChildren = Array.from(node.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement
+    );
+
+    if (elementChildren.length < 2 || elementChildren.length > 4) {
+      return;
+    }
+
+    const labelEl = elementChildren[0];
+    const valueEls = elementChildren.slice(1);
+
+    const labelText = getInlineNodeText(labelEl);
+    if (!labelText || labelText.length > 80) {
+      return;
+    }
+
+    const labelQualifies =
+      labelEl.matches("a, strong, span") ||
+      labelEl.hasAttribute("href") ||
+      /filter-option|title|label/i.test(labelEl.className);
+
+    if (!labelQualifies) {
+      return;
+    }
+
+    const values = valueEls
+      .map((child) => {
+        const text = getInlineNodeText(child);
+        return text;
+      })
+      .filter(Boolean);
+
+    if (values.length === 0) {
+      return;
+    }
+
+    const containsAnotherLabel = values.some((text) => INLINE_LABEL_PATTERN.test(text ?? ""));
+    if (containsAnotherLabel) {
+      return;
+    }
+
+    const valueText = values.join(" ").trim();
+    if (!valueText) {
+      return;
+    }
+
+    keyValuePairs.push([normalizeLabelKey(labelText), valueText]);
+    node.remove();
+  });
+
+  return keyValuePairs.length > 0 ? formatKeyValue(keyValuePairs) : null;
+}
+
+function extractInlineRowKeyValue(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
+  const parents = container.querySelectorAll<HTMLElement>("*");
+
+  parents.forEach((parent) => {
+    if (!container.contains(parent)) {
+      return;
+    }
+
+    if (parent.closest("table, thead, tbody, tfoot, tr, dl")) {
+      return;
+    }
+
+    const elementChildren = Array.from(parent.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement
+    );
+
+    if (elementChildren.length < 2 || elementChildren.length > 6) {
+      return;
+    }
+
+    const labelChild = elementChildren.find((child) => {
+      const text = getInlineNodeText(child);
+      return text && INLINE_LABEL_PATTERN.test(text);
+    });
+
+    if (!labelChild) {
+      return;
+    }
+
+    const keyText = getInlineNodeText(labelChild);
+    if (!keyText || keyText.length > 80) {
+      return;
+    }
+
+    const labelIndex = elementChildren.indexOf(labelChild);
+    const valueCandidates = elementChildren.slice(labelIndex + 1);
+
+    const values: string[] = [];
+    let consumedNodes: Node[] = [];
+
+    if (valueCandidates.length > 0) {
+      const containsAnotherLabel = valueCandidates.some((child) => INLINE_LABEL_PATTERN.test(getInlineNodeText(child)));
+      if (containsAnotherLabel) {
+        return;
+      }
+
+      valueCandidates.forEach((child) => {
+        const text = getInlineNodeText(child);
+        if (text) {
+          values.push(text);
+        }
+        consumedNodes.push(child);
+      });
+    }
+
+    if (values.length === 0) {
+      let sibling: ChildNode | null = labelChild.nextSibling;
+      while (sibling) {
+        const text = getInlineNodeText(sibling);
+        if (text && INLINE_LABEL_PATTERN.test(text)) {
+          break;
+        }
+
+        if (text) {
+          values.push(text);
+        }
+
+        consumedNodes.push(sibling);
+        sibling = sibling.nextSibling;
+      }
+    }
+
+    if (values.length === 0) {
+      return;
+    }
+
+    keyValuePairs.push([normalizeLabelKey(keyText), values.join(" ")]);
+
+    consumedNodes.forEach((node) => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    });
+    labelChild.remove();
+  });
+
+  return keyValuePairs.length > 0 ? formatKeyValue(keyValuePairs) : null;
+}
+function collectStructuredLines(container: HTMLElement): string[] {
+  const doc = container.ownerDocument ?? document;
+  const walker = doc.createTreeWalker(container, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
+  const lines: string[] = [];
   let currentLine = "";
-  let isInsideLi = false;
+
+  const flushLine = () => {
+    const normalized = currentLine.trim();
+    if (normalized) {
+      lines.push(normalized);
+    }
+    currentLine = "";
+  };
 
   while (walker.nextNode()) {
     const node = walker.currentNode;
 
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.trim();
-      if (text) {
-        currentLine += (currentLine ? " " : "") + text;
+      const rawText = node.textContent ?? "";
+      if (!rawText) {
+        continue;
       }
+
+      const segments = rawText.split(/[\r\n]+/);
+      segments.forEach((segment, index) => {
+        const text = segment.replace(/\s+/g, " ").trim();
+        if (text) {
+          currentLine += (currentLine ? " " : "") + text;
+        }
+        if (index < segments.length - 1) {
+          flushLine();
+        }
+      });
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const element = node as Element;
       const tag = element.tagName.toLowerCase();
 
       if (tag === "li") {
-        // Se siamo in un <li>, gestiamo come nuova riga con - puntato
-        if (currentLine) {
-          texts.push(currentLine);  // Salva riga precedente
-        }
-        currentLine = "-";  // Inizia nuova riga con -
-        isInsideLi = true;
-      } else if (["strong", "b", "i", "em", "u"].includes(tag)) {
-        // Elementi di formattazione: continuare, testo sarà aggiunto dal testo figlio
+        flushLine();
+        currentLine = "-";
+      } else if (["strong", "b", "i", "em", "u", "span"].includes(tag)) {
         continue;
-      } else {
-        // Elemento non di formattazione: salva riga attuale se presente
-        if (currentLine) {
-          texts.push(currentLine);
-          currentLine = "";
-        }
-        isInsideLi = false;
+      } else if (["p", "div", "section", "article", "header", "footer", "br", "table", "tr", "pre", "code"].includes(tag)) {
+        flushLine();
       }
     }
   }
 
-  if (currentLine) {
-    texts.push(currentLine);
-  }
+  flushLine();
+  return lines;
+}
 
-  return texts.join(separator);
+function extractRemainingText(container: HTMLElement, separator: string = "\n"): string {
+  return collectStructuredLines(container).join(separator).trim();
 }
