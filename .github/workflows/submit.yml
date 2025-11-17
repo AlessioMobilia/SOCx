@@ -22,12 +22,12 @@ jobs:
       CHROME_TARGET: chrome-mv3
       EDGE_TARGET: edge-mv3
       # scegli quello giusto per il tuo progetto:
-      FIREFOX_TARGET: firefox-mv3  # oppure: firefox-mv2
+      FIREFOX_TARGET: firefox  # oppure: firefox-mv2
 
       # percorsi dei file generati da Plasmo (--zip)
       CHROME_ZIP: build/chrome-mv3-prod.zip
       EDGE_ZIP: build/edge-mv3-prod.zip
-      FIREFOX_XPI: build/firefox-mv3-prod.zip   # se usi mv2 -> firefox-mv2-prod.zip
+      FIREFOX_XPI: build/firefox-prod.zip   # se usi mv2 -> firefox-mv2-prod.zip
       FIREFOX_SOURCE_ZIP: dist/source_${{ github.sha }}.zip
 
     steps:
