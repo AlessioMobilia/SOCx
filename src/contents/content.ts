@@ -45,34 +45,86 @@ const availableServices = servicesConfig.availableServices as Record<string, str
 
 
 
-    let currentButton: HTMLButtonElement | null = null
-    let currentMagicButton: HTMLButtonElement | null = null
+    let buttonGroup: HTMLDivElement | null = null
     let lastSelectionSignature: string | null = null
+    let lastValidSelection: Selection | null = null
     let repositionScheduled = false
+    let lastInteractionRect: DOMRect | null = null
+    let lastPointerRect: DOMRect | null = null
+    const BUTTON_INTERACTION_SUSPEND_MS = 350
+    let lastButtonInteractionAt = 0
 
-    document.addEventListener("mouseup", debounce(handleSelection, 300))
+    const now = () =>
+      typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()
+
+    const markButtonInteraction = () => {
+      lastButtonInteractionAt = now()
+    }
+
+    const shouldSkipDueToButtonInteraction = () =>
+      now() - lastButtonInteractionAt < BUTTON_INTERACTION_SUSPEND_MS
+
+    const debouncedMouseSelection = debounce((event?: MouseEvent) => handleSelection(event), 180)
+    const deferredSelectionEvaluation = debounce(() => handleSelection(), 120)
+
+    document.addEventListener("mouseup", (event) => debouncedMouseSelection(event as MouseEvent))
+    document.addEventListener(
+      "pointerup",
+      (event) => debouncedMouseSelection(event as MouseEvent),
+      true
+    )
     document.addEventListener("selectionchange", handleSelectionChange)
 
+    const destroyButtonGroup = () => {
+      buttonGroup?.remove()
+      buttonGroup = null
+    }
+
     const clearSelectionUI = () => {
-      if (!currentButton && !currentMagicButton && !lastSelectionSignature) {
+      if (!buttonGroup && !lastSelectionSignature) {
         return
       }
 
-      currentButton?.remove()
-      currentMagicButton?.remove()
-      currentButton = currentMagicButton = null
+      destroyButtonGroup()
       lastSelectionSignature = null
+      lastInteractionRect = null
+      lastPointerRect = null
     }
 
-    function handleSelectionChange() {
-      const selection = window.getSelection()
-      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-        clearSelectionUI()
+    function handleSelectionChange(event?: Event) {
+      if (shouldSkipDueToButtonInteraction()) {
+        return
       }
+      const selection = getActiveSelection(event)
+      const hasDomSelection = hasUsableSelection(selection)
+      const hasInputSelection = Boolean(getInputSelection(getDeepActiveElement()))
+      if (!hasDomSelection && !hasInputSelection) {
+        lastValidSelection = null
+        clearSelectionUI()
+        return
+      }
+      if (hasDomSelection) {
+        lastValidSelection = selection
+      }
+      deferredSelectionEvaluation()
     }
 
     const clampValue = (value: number, min: number, max: number) =>
       Math.min(Math.max(value, min), max)
+
+    const clampToViewport = (
+      coords: { left: number; top: number },
+      width: number,
+      height: number
+    ) => {
+      const docEl = document.documentElement
+      const maxLeft = Math.max(BUTTON_MARGIN, docEl.clientWidth - width - BUTTON_MARGIN)
+      const maxTop = Math.max(BUTTON_MARGIN, docEl.clientHeight - height - BUTTON_MARGIN)
+      return {
+        left: clampValue(coords.left, BUTTON_MARGIN, maxLeft),
+        top: clampValue(coords.top, BUTTON_MARGIN, maxTop)
+      }
+    }
 
     const getDeepActiveElement = (): Element | null => {
       let active: Element | null = document.activeElement
@@ -82,149 +134,237 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       return active
     }
 
-    const placeFixedButton = (
-      button: HTMLButtonElement,
-      targetLeft: number,
-      targetTop: number,
-      selectionRect?: DOMRect
-    ) => {
-      const docEl = document.documentElement
-      const viewportWidth = docEl.clientWidth
-      const viewportHeight = docEl.clientHeight
-      const width = button.offsetWidth || 28
-      const height = button.offsetHeight || 28
-      let clampedLeft = clampValue(
-        targetLeft,
-        BUTTON_MARGIN,
-        Math.max(BUTTON_MARGIN, viewportWidth - width - BUTTON_MARGIN)
-      )
-      let clampedTop = clampValue(
-        targetTop,
-        BUTTON_MARGIN,
-        Math.max(BUTTON_MARGIN, viewportHeight - height - BUTTON_MARGIN)
-      )
-      if (selectionRect) {
-        const overlapsHorizontally =
-          clampedLeft < selectionRect.right && clampedLeft + width > selectionRect.left
+    type InputSelectionContext = {
+      element: HTMLInputElement | HTMLTextAreaElement
+      start: number
+      end: number
+      text: string
+    }
 
-        if (overlapsHorizontally) {
-          const rightCandidate = selectionRect.right + BUTTON_OFFSET
-          const leftCandidate = selectionRect.left - BUTTON_OFFSET - width
-          const canPlaceRight = rightCandidate + width <= viewportWidth - BUTTON_MARGIN
-          const canPlaceLeft = leftCandidate >= BUTTON_MARGIN
-
-          if (canPlaceRight || canPlaceLeft) {
-            clampedLeft = clampValue(
-              canPlaceRight ? rightCandidate : leftCandidate,
-              BUTTON_MARGIN,
-              Math.max(BUTTON_MARGIN, viewportWidth - width - BUTTON_MARGIN)
-            )
-          } else {
-            const aboveCandidate = selectionRect.top - BUTTON_OFFSET - height
-            const belowCandidate = selectionRect.bottom + BUTTON_OFFSET
-            const canPlaceAbove = aboveCandidate >= BUTTON_MARGIN
-            const canPlaceBelow =
-              belowCandidate + height <= viewportHeight - BUTTON_MARGIN
-
-            if (canPlaceAbove || canPlaceBelow) {
-              clampedTop = clampValue(
-                canPlaceAbove ? aboveCandidate : belowCandidate,
-                BUTTON_MARGIN,
-                Math.max(BUTTON_MARGIN, viewportHeight - height - BUTTON_MARGIN)
-              )
+    const getInputSelection = (
+      element: Element | null
+    ): InputSelectionContext | null => {
+      if (element instanceof HTMLTextAreaElement) {
+        const { selectionStart, selectionEnd, value } = element
+        if (
+          selectionStart === null ||
+          selectionEnd === null ||
+          selectionStart === selectionEnd
+        ) {
+          return null
+        }
+        const text = value.slice(selectionStart, selectionEnd)
+        return text
+          ? {
+              element,
+              start: selectionStart,
+              end: selectionEnd,
+              text
             }
+          : null
+      }
+
+      if (element instanceof HTMLInputElement) {
+        const { selectionStart, selectionEnd, value } = element
+        if (
+          selectionStart === null ||
+          selectionEnd === null ||
+          selectionStart === selectionEnd
+        ) {
+          return null
+        }
+        const text = value.slice(selectionStart, selectionEnd)
+        return text
+          ? {
+              element,
+              start: selectionStart,
+              end: selectionEnd,
+              text
+            }
+          : null
+      }
+
+      return null
+    }
+
+    const hasUsableSelection = (selection: Selection | null): selection is Selection =>
+      Boolean(selection && selection.rangeCount > 0 && !selection.isCollapsed)
+
+    const getSelectionFromRootNode = (root: Node | null): Selection | null => {
+      if (!root) {
+        return null
+      }
+      if (root instanceof Document) {
+        return root.getSelection()
+      }
+      if (root instanceof ShadowRoot) {
+        const getSelectionFn = (root as ShadowRoot & {
+          getSelection?: () => Selection | null
+        }).getSelection
+        return typeof getSelectionFn === "function" ? getSelectionFn.call(root) : null
+      }
+      return null
+    }
+
+    const getSelectionFromEventPath = (event?: Event): Selection | null => {
+      if (typeof event?.composedPath !== "function") {
+        return null
+      }
+      for (const entry of event.composedPath()) {
+        if (entry instanceof Node) {
+          const rootNode = entry.getRootNode?.() ?? null
+          const selection = getSelectionFromRootNode(rootNode)
+          if (hasUsableSelection(selection)) {
+            return selection
           }
         }
       }
-
-      button.style.position = "fixed"
-      button.style.left = `${clampedLeft}px`
-      button.style.top = `${clampedTop}px`
-      return { left: clampedLeft, top: clampedTop, width, height }
+      return null
     }
 
-    const getSingleButtonLeft = (rect: DOMRect, width: number): number => {
-      const docEl = document.documentElement
-      const availableRight = docEl.clientWidth - rect.right - BUTTON_MARGIN
-      const availableLeft = rect.left - BUTTON_MARGIN
-      const placeRight =
-        availableRight >= width + BUTTON_OFFSET || availableRight >= availableLeft
-      return placeRight
-        ? rect.right + BUTTON_OFFSET
-        : rect.left - BUTTON_OFFSET - width
+    const getSelectionFromActiveNode = (): Selection | null => {
+      const active = getDeepActiveElement()
+      if (!active) {
+        return null
+      }
+      return getSelectionFromRootNode(active.getRootNode?.() ?? null)
     }
 
-    const getVerticalAnchor = (rect: DOMRect, button: HTMLButtonElement | null) => {
-      const height = button?.offsetHeight || 28
-      return rect.top + (rect.height - height) / 2
+    const getActiveSelection = (event?: Event): Selection | null => {
+      const docSelection = window.getSelection()
+      if (hasUsableSelection(docSelection)) {
+        return docSelection
+      }
+      const eventSelection = getSelectionFromEventPath(event)
+      if (hasUsableSelection(eventSelection)) {
+        return eventSelection
+      }
+      const activeSelection = getSelectionFromActiveNode()
+      if (hasUsableSelection(activeSelection)) {
+        return activeSelection
+      }
+      return docSelection
     }
 
-    function positionButtonGroup(geometry: SelectionGeometry) {
+    const isEventFromButtonUI = (event?: Event | null): boolean => {
+      if (!event || !buttonGroup) {
+        return false
+      }
+      if (typeof event.composedPath === "function") {
+        return event
+          .composedPath()
+          .some(
+            (node) =>
+              node === buttonGroup ||
+              (node instanceof Node && buttonGroup.contains(node))
+          )
+      }
+      const target = event.target
+      return target instanceof Node ? buttonGroup.contains(target) : false
+    }
+
+    const getEventPointerRect = (event?: MouseEvent | PointerEvent | null): DOMRect | null => {
+      if (!event || typeof event.clientX !== "number" || typeof event.clientY !== "number") {
+        return null
+      }
+      return new DOMRect(event.clientX, event.clientY, 1, 1)
+    }
+
+    const getEventTargetRect = (event?: Event): DOMRect | null => {
+      if (!event) {
+        return null
+      }
+      const target = event.target
+      if (target instanceof Element) {
+        return target.getBoundingClientRect()
+      }
+      return null
+    }
+
+    const prepareFloatingButton = (button: HTMLButtonElement) => {
+      button.style.position = "static"
+      button.style.margin = "0"
+      button.style.flex = "0 0 auto"
+    }
+
+    const mountButtonGroup = (buttons: HTMLButtonElement[]) => {
+      destroyButtonGroup()
+      if (!buttons.length) return
+
+      const container = document.createElement("div")
+      container.id = "socx-floating-actions"
+      container.style.position = "fixed"
+      container.style.display = "flex"
+      container.style.alignItems = "center"
+      container.style.gap = `${MAGIC_BUTTON_GAP}px`
+      container.style.zIndex = "2147483647"
+      container.style.visibility = "hidden"
+      container.style.pointerEvents = "auto"
+
+      buttons.forEach((button) => {
+        prepareFloatingButton(button)
+        container.appendChild(button)
+      })
+
+      const registerInteraction = () => markButtonInteraction()
+      container.addEventListener("pointerdown", registerInteraction, true)
+      container.addEventListener("pointerup", registerInteraction, true)
+      container.addEventListener("click", registerInteraction, true)
+      container.addEventListener("contextmenu", registerInteraction, true)
+
+      document.body.appendChild(container)
+      buttonGroup = container
+    }
+
+    function positionButtonGroup(geometry: SelectionGeometry | null) {
+      if (!buttonGroup || !geometry) {
+        return
+      }
+
       const anchorRect = geometry.caret ?? geometry.bounds
       const selectionRect = geometry.bounds ?? geometry.caret
       if (!anchorRect || !selectionRect) {
         return
       }
 
-      if (currentButton && currentMagicButton) {
-        const primaryWidth = currentButton.offsetWidth || 28
-        const magicWidth = currentMagicButton.offsetWidth || 28
-        const primaryTop = getVerticalAnchor(anchorRect, currentButton)
-        const magicTop = getVerticalAnchor(anchorRect, currentMagicButton)
-        const docEl = document.documentElement
-        const totalWidth = primaryWidth + MAGIC_BUTTON_GAP + magicWidth
-        const availableRight = docEl.clientWidth - selectionRect.right - BUTTON_MARGIN
-        const availableLeft = selectionRect.left - BUTTON_MARGIN
-        const placeRight =
-          availableRight >= totalWidth + BUTTON_OFFSET || availableRight >= availableLeft
+      const groupWidth =
+        buttonGroup.offsetWidth ||
+        buttonGroup.getBoundingClientRect().width ||
+        28
+      const groupHeight =
+        buttonGroup.offsetHeight ||
+        buttonGroup.getBoundingClientRect().height ||
+        28
 
-        if (placeRight) {
-          const primaryPlacement = placeFixedButton(
-            currentButton,
-            selectionRect.right + BUTTON_OFFSET,
-            primaryTop,
-            selectionRect
-          )
-          placeFixedButton(
-            currentMagicButton,
-            primaryPlacement.left + primaryPlacement.width + MAGIC_BUTTON_GAP,
-            magicTop,
-            selectionRect
-          )
-        } else {
-          const primaryPlacement = placeFixedButton(
-            currentButton,
-            selectionRect.left - BUTTON_OFFSET - primaryWidth,
-            primaryTop,
-            selectionRect
-          )
-          placeFixedButton(
-            currentMagicButton,
-            primaryPlacement.left - magicWidth - MAGIC_BUTTON_GAP,
-            magicTop,
-            selectionRect
-          )
+      const verticalCenter = anchorRect.top + (anchorRect.height - groupHeight) / 2
+      const horizontalCenter = anchorRect.left + (anchorRect.width - groupWidth) / 2
+
+      const candidates = [
+        { left: selectionRect.right + BUTTON_OFFSET, top: verticalCenter },
+        { left: selectionRect.left - BUTTON_OFFSET - groupWidth, top: verticalCenter },
+        { left: horizontalCenter, top: selectionRect.bottom + BUTTON_OFFSET },
+        { left: horizontalCenter, top: selectionRect.top - BUTTON_OFFSET - groupHeight }
+      ]
+
+      let bestPlacement = clampToViewport(candidates[0], groupWidth, groupHeight)
+      let smallestAdjustment = Number.POSITIVE_INFINITY
+
+      for (const candidate of candidates) {
+        const clamped = clampToViewport(candidate, groupWidth, groupHeight)
+        const adjustment =
+          Math.abs(clamped.left - candidate.left) + Math.abs(clamped.top - candidate.top)
+        if (adjustment < smallestAdjustment) {
+          smallestAdjustment = adjustment
+          bestPlacement = clamped
+          if (adjustment === 0) {
+            break
+          }
         }
-        return
       }
 
-      if (currentButton) {
-        placeFixedButton(
-          currentButton,
-          getSingleButtonLeft(selectionRect, currentButton.offsetWidth || 28),
-          getVerticalAnchor(anchorRect, currentButton),
-          selectionRect
-        )
-      }
-
-      if (currentMagicButton) {
-        placeFixedButton(
-          currentMagicButton,
-          getSingleButtonLeft(selectionRect, currentMagicButton.offsetWidth || 28),
-          getVerticalAnchor(anchorRect, currentMagicButton),
-          selectionRect
-        )
-      }
+      buttonGroup.style.left = `${bestPlacement.left}px`
+      buttonGroup.style.top = `${bestPlacement.top}px`
+      buttonGroup.style.visibility = "visible"
     }
 
     type SelectionGeometry = {
@@ -266,9 +406,70 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       return null
     }
 
-    const getSelectionGeometry = (selection: Selection | null): SelectionGeometry | null => {
+    const mergeRectList = (rects: DOMRectList | DOMRect[]): DOMRect | null => {
+      let minLeft = Number.POSITIVE_INFINITY
+      let minTop = Number.POSITIVE_INFINITY
+      let maxRight = Number.NEGATIVE_INFINITY
+      let maxBottom = Number.NEGATIVE_INFINITY
+      let found = false
+
+      const visit = (rect: DOMRect) => {
+        if (rect.width || rect.height) {
+          found = true
+          if (rect.left < minLeft) minLeft = rect.left
+          if (rect.top < minTop) minTop = rect.top
+          if (rect.right > maxRight) maxRight = rect.right
+          if (rect.bottom > maxBottom) maxBottom = rect.bottom
+        }
+      }
+
+      const list = Array.isArray(rects) ? rects : Array.from(rects)
+      list.forEach(visit)
+
+      if (!found) {
+        return null
+      }
+      return new DOMRect(
+        minLeft,
+        minTop,
+        Math.max(0, maxRight - minLeft),
+        Math.max(0, maxBottom - minTop)
+      )
+    }
+
+    const getRangeRect = (range: Range): DOMRect | null => {
+      const rects = range.getClientRects()
+      const merged = mergeRectList(rects)
+      if (merged) {
+        return merged
+      }
+      const fallbackRect = range.getBoundingClientRect()
+      if (fallbackRect.width || fallbackRect.height) {
+        return fallbackRect
+      }
+      return null
+    }
+
+    const isUsableRect = (rect: DOMRect | null) =>
+      Boolean(rect && (rect.width > 0 || rect.height > 0 || rect.top > 0 || rect.left > 0))
+
+    const getSelectionGeometry = (
+      selection: Selection | null,
+      inputSelection: InputSelectionContext | null,
+      fallbackRect?: DOMRect | null
+    ): SelectionGeometry | null => {
       let caretRect: DOMRect | null = null
       let boundsRect: DOMRect | null = null
+
+      if (inputSelection) {
+        const caretEstimate =
+          estimateCaretRect(inputSelection.element) ??
+          inputSelection.element.getBoundingClientRect()
+        caretRect = caretEstimate
+        boundsRect = caretEstimate
+        return { caret: caretRect, bounds: boundsRect }
+      }
+
       const activeEl = getDeepActiveElement()
       if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) {
         const caretEstimate = estimateCaretRect(activeEl) ?? activeEl.getBoundingClientRect()
@@ -288,18 +489,32 @@ const availableServices = servicesConfig.availableServices as Record<string, str
         }
 
         const range = selection.getRangeAt(0)
-        const rangeRect = range.getBoundingClientRect()
-        if (rangeRect.width || rangeRect.height) {
+        const rangeRect = getRangeRect(range)
+        if (rangeRect?.width || rangeRect?.height) {
           boundsRect = rangeRect
         }
+      }
+
+      const caretUsable = isUsableRect(caretRect)
+      const boundsUsable = isUsableRect(boundsRect)
+
+      if (!caretUsable && fallbackRect) {
+        caretRect = fallbackRect
+      }
+
+      if (!boundsUsable && caretRect) {
+        boundsRect = caretRect
+      }
+
+      if (!isUsableRect(caretRect) && !isUsableRect(boundsRect)) {
+        return null
       }
 
       if (!caretRect && boundsRect) {
         caretRect = boundsRect
       }
-
-      if (!caretRect && !boundsRect) {
-        return null
+      if (!boundsRect && caretRect) {
+        boundsRect = caretRect
       }
 
       return { caret: caretRect, bounds: boundsRect }
@@ -335,13 +550,47 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       )
     }
 
-    async function handleSelection() {
-      const selection = window.getSelection()
-      const selectedText = asciiSafe(selection?.toString() ?? "").trim()
+    const extractTokenFromInputSelection = (
+      context: InputSelectionContext | null
+    ): string | null => {
+      if (!context) return null
+      const value = context.element.value
+      const caretIndex = clampValue(context.end, 0, value.length)
+      let start = caretIndex
+      let end = caretIndex
+      const isAllowed = (ch: string) => /[A-Za-z0-9_:\.\-\/\%]/.test(ch)
+      while (start > 0 && isAllowed(value[start - 1])) start--
+      while (end < value.length && isAllowed(value[end])) end++
+      const token = value.slice(start, end)
+      return token ? sanitizeToken(token) : null
+    }
+
+    async function handleSelection(event?: MouseEvent) {
+      if (isEventFromButtonUI(event) || shouldSkipDueToButtonInteraction()) {
+        return
+      }
+
+      const rawSelection = getActiveSelection(event)
+      const selection = hasUsableSelection(rawSelection) ? rawSelection : null
+      const activeElement = getDeepActiveElement()
+      const inputSelection = getInputSelection(activeElement)
+      const pointerRect = getEventPointerRect(event)
+      if (pointerRect) {
+        lastPointerRect = pointerRect
+      }
+      const targetRect = getEventTargetRect(event)
+      const fallbackRect =
+        pointerRect ?? targetRect ?? lastPointerRect ?? lastInteractionRect
+
+      const rawText = rawSelection?.toString() ?? inputSelection?.text ?? ""
+      const selectedText = asciiSafe(rawText).trim()
       if (!selectedText) {
+        lastValidSelection = null
         clearSelectionUI()
         return
       }
+
+      lastValidSelection = selection
 
       if (selectedText.length > MAX_SELECTION_LENGTH) {
         clearSelectionUI()
@@ -359,7 +608,9 @@ const availableServices = servicesConfig.availableServices as Record<string, str
         type = directType
       } else {
         // 2) Try token at caret
-        const token = extractTokenFromSelection(selection)
+        const token =
+          extractTokenFromSelection(selection) ||
+          extractTokenFromInputSelection(inputSelection)
         if (token) {
           const tokType = identifyIOC(token)
           if (tokType) {
@@ -386,7 +637,11 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       const selectionMatchesIOC = selectedText === ioc
       const selectionIncludesWhitespace = /\s/.test(selectedText)
       const selectionLongerThanIOC = selectedText.length > ioc.length
-      if (!selectionMatchesIOC && selectionIncludesWhitespace && selectionLongerThanIOC) {
+      if (
+        !selectionMatchesIOC &&
+        selectionLongerThanIOC &&
+        (selectionIncludesWhitespace || selectedText.length - ioc.length > 3)
+      ) {
         clearSelectionUI()
         return
       }
@@ -402,39 +657,30 @@ const availableServices = servicesConfig.availableServices as Record<string, str
 
       let geometry: SelectionGeometry | null = null
       try {
-        geometry = getSelectionGeometry(selection ?? null)
+        geometry = getSelectionGeometry(selection, inputSelection, fallbackRect)
       } catch (err) {
         console.warn("Unable to derive selection rect:", err)
         geometry = null
       }
 
+      if (!geometry) {
+        clearSelectionUI()
+        return
+      }
+
+      const resolvedAnchor = geometry.caret ?? geometry.bounds ?? fallbackRect
+      if (resolvedAnchor) {
+        lastInteractionRect = resolvedAnchor
+      }
+
       const selectionSignature = buildSelectionSignature(selectedText, geometry)
-      if (selectionSignature === lastSelectionSignature && currentButton) {
+      if (selectionSignature === lastSelectionSignature && buttonGroup) {
+        positionButtonGroup(geometry)
         return
       }
       lastSelectionSignature = selectionSignature
 
-      currentButton?.remove()
-      currentMagicButton?.remove()
-
-      const anchorRect = geometry?.caret ?? geometry?.bounds
-      if (
-        !anchorRect ||
-        (!anchorRect.width && !anchorRect.height && anchorRect.top <= 0 && anchorRect.left <= 0)
-      ) {
-        const activeEl = document.activeElement
-        if (
-          activeEl instanceof HTMLInputElement ||
-          activeEl instanceof HTMLTextAreaElement ||
-          (activeEl instanceof HTMLElement && activeEl.isContentEditable)
-        ) {
-          const caretRect = estimateCaretRect(activeEl) ?? activeEl.getBoundingClientRect()
-          geometry = { caret: caretRect, bounds: caretRect }
-        } else {
-          clearSelectionUI()
-          return
-        }
-      }
+      destroyButtonGroup()
 
       const button = isSupported ? createButton(ioc, async () => {
         try {
@@ -460,27 +706,30 @@ const availableServices = servicesConfig.availableServices as Record<string, str
         }
       }) : null
 
+      const buttonsToShow: HTMLButtonElement[] = []
       if (button) {
-        document.body.appendChild(button)
-        currentButton = button
+        buttonsToShow.push(button)
       }
 
       const magicButton = hasConfiguredServices ? createMagicButton(ioc, () => requestIOCInfo(ioc)) : null
       if (magicButton) {
-        document.body.appendChild(magicButton)
-        currentMagicButton = magicButton
+        buttonsToShow.push(magicButton)
       }
 
-      if (geometry) {
-        positionButtonGroup(geometry)
+      if (!buttonsToShow.length) {
+        clearSelectionUI()
+        return
       }
+
+      mountButtonGroup(buttonsToShow)
+      positionButtonGroup(geometry)
     }
 
 
 
 
     const scheduleReposition = () => {
-      if (repositionScheduled) return
+      if (repositionScheduled || !buttonGroup) return
       repositionScheduled = true
 
       const run = () => {
@@ -501,16 +750,29 @@ const availableServices = servicesConfig.availableServices as Record<string, str
     window.addEventListener("resize", scheduleReposition)
 
     function repositionButtons() {
-      const selection = window.getSelection?.()
-      if (!selection) return
+      if (!buttonGroup || shouldSkipDueToButtonInteraction()) return
+      let selection = getActiveSelection()
+      if (!hasUsableSelection(selection)) {
+        selection = hasUsableSelection(lastValidSelection) ? lastValidSelection : null
+      }
+      const activeElement = getDeepActiveElement()
+      const inputSelection = getInputSelection(activeElement)
       let geometry: SelectionGeometry | null = null
       try {
-        geometry = getSelectionGeometry(selection)
+        geometry = getSelectionGeometry(
+          selection,
+          inputSelection,
+          lastInteractionRect ?? lastPointerRect
+        )
       } catch (err) {
         geometry = null
       }
       if (!geometry) return
 
+      const anchorRect = geometry.caret ?? geometry.bounds
+      if (anchorRect) {
+        lastInteractionRect = anchorRect
+      }
       positionButtonGroup(geometry)
     }
 
@@ -628,19 +890,9 @@ const availableServices = servicesConfig.availableServices as Record<string, str
           sendResponse({ success: false, error: "Invalid text" })
         }
       } else if (message?.name === "format-selection") {
-        const formattedText = formatSelectedText(lastValidSelection);
-        sendResponse({ success: true, formatted: formattedText });
+        const formattedText = lastValidSelection ? formatSelectedText(lastValidSelection) : ""
+        sendResponse({ success: true, formatted: formattedText })
         return false;
-      }
-    })
-
-
-    let lastValidSelection = null
-
-    document.addEventListener("selectionchange", () => {
-      const sel = window.getSelection()
-      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-        lastValidSelection = sel
       }
     })
 

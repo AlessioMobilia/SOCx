@@ -50,7 +50,7 @@ const HIGHLIGHT_STYLES = {
 }
 
 const BASE_CONTAINER_STYLE =
-  "font-family:'Courier New',monospace;font-size:13px;line-height:1.4;word-break:break-word;white-space:normal;max-width:380px;padding:10px;border-radius:20px;border:3px solid #333;border-radius:20px;box-shadow:4 8 10px rgba(0,0,0,0.2);"
+  "font-family:'Courier New',monospace;font-size:13px;line-height:1.4;word-break:break-word;white-space:normal;min-width:min(300px,40vw);max-width:min(500px,80vw);padding:10px;border-radius:20px;border:3px solid #333;border-radius:20px;box-shadow:4 8 10px rgba(0,0,0,0.2);"
 
 
 const getIsDarkMode = async (): Promise<boolean> => {
@@ -197,7 +197,7 @@ const containerThemeStyle = isDarkMode
   tippy(button, {
     allowHTML: true,
     content: contentHTML,
-    maxWidth: 400,
+    maxWidth: 420,
     interactive: true,
     placement: "right",
     animation: false,
