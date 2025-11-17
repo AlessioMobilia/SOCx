@@ -30,6 +30,9 @@ const MAX_UNIQUE_WORDS = 2
 const BUTTON_OFFSET = 6
 const BUTTON_MARGIN = 8
 const MAGIC_BUTTON_GAP = 10
+const HIDDEN_CHAR_REGEX =
+  /[\p{Cf}\p{Cc}\u00A0\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180D\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF\uFFF9-\uFFFC]/gu
+const NON_ASCII_REGEX = /[^\x20-\x7E]/g
 const availableServices = servicesConfig.availableServices as Record<string, string[]>
 
   // inizializzazione sicura
@@ -302,7 +305,12 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       return { caret: caretRect, bounds: boundsRect }
     }
 
-    const sanitizeToken = (raw: string): string => raw.replace(/^\W+|\W+$/g, "")
+    const stripHiddenChars = (value: string): string => value.replace(HIDDEN_CHAR_REGEX, "")
+    const asciiSafe = (value: string): string =>
+      stripHiddenChars(value).normalize("NFKC").replace(NON_ASCII_REGEX, "")
+
+    const sanitizeToken = (raw: string): string =>
+      asciiSafe(raw).replace(/^\W+|\W+$/g, "")
 
     const extractTokenFromSelection = (sel: Selection | null): string | null => {
       if (!sel) return null
@@ -329,7 +337,7 @@ const availableServices = servicesConfig.availableServices as Record<string, str
 
     async function handleSelection() {
       const selection = window.getSelection()
-      const selectedText = selection?.toString().trim() ?? ""
+      const selectedText = asciiSafe(selection?.toString() ?? "").trim()
       if (!selectedText) {
         clearSelectionUI()
         return
@@ -371,6 +379,14 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       }
 
       if (!ioc || !type) {
+        clearSelectionUI()
+        return
+      }
+
+      const selectionMatchesIOC = selectedText === ioc
+      const selectionIncludesWhitespace = /\s/.test(selectedText)
+      const selectionLongerThanIOC = selectedText.length > ioc.length
+      if (!selectionMatchesIOC && selectionIncludesWhitespace && selectionLongerThanIOC) {
         clearSelectionUI()
         return
       }
