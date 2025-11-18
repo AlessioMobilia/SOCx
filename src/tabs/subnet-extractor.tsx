@@ -1,19 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react"
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  ListGroup,
-  Row,
-  Spinner
-} from "react-bootstrap"
 import { Storage } from "@plasmohq/storage"
-import "bootstrap/dist/css/bootstrap.min.css"
-import "./subnet-extractor.css"
+import "../styles/tailwind.css"
+import {
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  ClipboardDocumentListIcon,
+  PaperAirplaneIcon,
+  TrashIcon
+} from "@heroicons/react/24/outline"
 import {
   ExtractedIPMap,
   computeIPv4Subnet,
@@ -480,246 +474,265 @@ const SubnetExtractor = () => {
     return isPrivateIP(base)
   }
 
-  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
+const statusTone: Record<StatusVariant, string> = {
+  success: "border-emerald-400/60 bg-emerald-500/10 text-emerald-100",
+  danger: "border-rose-500/40 bg-rose-500/10 text-rose-100",
+  info: "border-sky-500/40 bg-sky-500/10 text-sky-100",
+  warning: "border-amber-500/50 bg-amber-500/10 text-amber-100"
+}
 
   return (
-    <Container fluid className={`p-4 min-vh-100 ${themeClass}`}>
-      <h1 className="mb-4">🧭 Subnet Extractor</h1>
-      <Row className="g-4">
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label className="d-flex align-items-center justify-content-between">
-              <span>Paste IP Addresses</span>
-              <Button
-                size="sm"
-                variant={isDarkMode ? "outline-light" : "outline-secondary"}
-                className="rounded-circle d-inline-flex align-items-center justify-content-center"
-                style={{
-                  width: 36,
-                  height: 36,
-                  padding: 0,
-                  lineHeight: 1
-                }}
+    <div className="min-h-screen bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <header className="rounded-socx-lg border border-socx-border-light bg-white/90 p-6 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
+            SOCx
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold">Subnet Extractor</h1>
+          <p className="text-sm text-socx-muted dark:text-socx-muted-dark">
+            Normalize large IP lists, compute IPv4/IPv6 subnets and hand over the result to AbuseIPDB.
+          </p>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="space-y-4 rounded-socx-lg border border-socx-border-light bg-white/90 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Paste IP addresses</p>
+                <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                  Supports raw text, defanged entries and mixed IPv4/IPv6 streams.
+                </p>
+              </div>
+              <button
+                type="button"
                 onClick={handleRefreshInput}
                 disabled={isProcessing || !inputText.trim()}
-                title="Refresh and deduplicate input"
-                aria-label="Refresh and deduplicate input"
-              >
-                <span
-                  aria-hidden="true"
-                  style={{ fontSize: "1.2rem", lineHeight: 1, transform: "translateY(-1px)" }}
-                >
-                  ⟳
-                </span>
-                <span className="visually-hidden">Refresh and deduplicate input</span>
-              </Button>
-            </Form.Label>
-            <Form.Control
-              as="textarea"
+                className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-3 py-1 text-xs font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark">
+                <ArrowPathIcon className="h-4 w-4" />
+                Refresh
+              </button>
+            </div>
+            <textarea
               rows={16}
               placeholder="Paste IPv4/IPv6 addresses, defanged entries, or raw text..."
               value={inputText}
-              className={themeClass}
               onChange={(event) => setInputText(event.target.value)}
+              className="socx-scroll w-full rounded-2xl border border-socx-border-light bg-white/95 px-4 py-3 text-sm text-socx-ink outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white"
             />
-          </Form.Group>
 
-          <Card className={`mt-3 ${themeClass}`}>
-            <Card.Header>Subnet Lists</Card.Header>
-            <Card.Body>
-              <Form.Group className="mb-3">
-                <Form.Label className="d-flex justify-content-between align-items-center gap-2">
-                  <span>IPv4 Subnets ({ipv4Subnets.length} networks / {ipv4SubnetIpCount} IPs)</span>
-                  <Button
-                    size="sm"
-                    variant={isDarkMode ? "outline-light" : "outline-secondary"}
-                    onClick={() => handleCopySubnetGroup("ipv4")}
-                  >
-                    Copy
-                  </Button>
-                </Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={4}
-                  readOnly
-                  className={`subnet-export-box ${themeClass}`}
-                  value={ipv4Subnets.join("\n")}
-                  placeholder="No IPv4 subnets yet."
-                />
-              </Form.Group>
-              <Form.Group>
-                <Form.Label className="d-flex justify-content-between align-items-center gap-2">
-                  <span>IPv6 Subnets ({ipv6Subnets.length} networks / {ipv6SubnetIpCount} IPs)</span>
-                  <Button
-                    size="sm"
-                    variant={isDarkMode ? "outline-light" : "outline-secondary"}
-                    onClick={() => handleCopySubnetGroup("ipv6")}
-                  >
-                    Copy
-                  </Button>
-                </Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={4}
-                  readOnly
-                  className={`subnet-export-box ${themeClass}`}
-                  value={ipv6Subnets.join("\n")}
-                  placeholder="No IPv6 subnets yet."
-                />
-              </Form.Group>
-            </Card.Body>
-          </Card>
-        </Col>
-
-        <Col md={6}>
-          <Form.Group className="mb-3">
-            <Form.Label>Upload .txt File</Form.Label>
-            <Form.Control
-              type="file"
-              accept=".txt"
-              className={themeClass}
-              onChange={handleFileUpload}
-            />
-          </Form.Group>
-
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Label>IPv4 Subnet</Form.Label>
-              <Form.Control
-                type="number"
-                min={0}
-                max={32}
-                value={ipv4Prefix}
-                className={themeClass}
-                onChange={handleIpv4PrefixChange}
-              />
-            </Col>
-            <Col md={6}>
-              <Form.Label>IPv6 Subnet</Form.Label>
-              <Form.Control
-                type="number"
-                min={0}
-                max={128}
-                value={ipv6Prefix}
-                className={themeClass}
-                onChange={handleIpv6PrefixChange}
-              />
-            </Col>
-          </Row>
-
-          <div className="d-grid gap-2">
-            <Button variant="outline-danger" onClick={handleClearInput} disabled={isProcessing}>
-              Clear Input
-            </Button>
-            <Button
-              variant="outline-primary"
-              onClick={handleCopyAll}
-              disabled={!hasExportableSubnets || isProcessing}
-            >
-              Copy Subnet List
-            </Button>
-            <Button
-              variant="outline-success"
-              onClick={handleExportTxt}
-              disabled={!hasExportableSubnets || isProcessing}
-            >
-              Export TXT
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSendToSubnetCheck}
-              disabled={!hasExportableSubnets || isProcessing}
-            >
-              AbuseIPDB Subnet Check
-            </Button>
-          </div>
-
-          {status && (
-            <Alert
-              variant={status.variant}
-              className="mt-3 d-flex align-items-center gap-2"
-            >
-              {isProcessing && status.variant === "info" && (
-                <Spinner animation="border" size="sm" role="status" />
-              )}
-              <span>{status.message}</span>
-            </Alert>
-          )}
-
-          <Card className={`mt-3 ${themeClass}`}>
-            <Card.Header>Overview</Card.Header>
-            <Card.Body>
-              <div className="subnet-stats mb-3">
-                <Badge bg="primary">IPv4 IPs: {totals.ipv4}</Badge>
-                <Badge bg="secondary">IPv6 IPs: {totals.ipv6}</Badge>
-                <Badge bg="info">Detected Subnets: {summary.length}</Badge>
+            <div className="space-y-4 rounded-2xl border border-socx-border-light bg-white/80 p-4 dark:border-socx-border-dark dark:bg-socx-panel/40">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">
+                  IPv4 Subnets ({ipv4Subnets.length} networks / {ipv4SubnetIpCount} IPs)
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopySubnetGroup("ipv4")}
+                  className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-3 py-1 text-xs font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark">
+                  <ClipboardDocumentListIcon className="h-4 w-4" />
+                  Copy
+                </button>
               </div>
-              <div className="subnet-stats">
-                <Badge bg="primary">IPv4 Subnets: {ipv4Subnets.length}</Badge>
-                <Badge bg="secondary">IPv6 Subnets: {ipv6Subnets.length}</Badge>
-                <Badge bg="danger">IPv4 Private IPs: {privateTotals.ipv4}</Badge>
-                <Badge bg="danger">IPv6 Private IPs: {privateTotals.ipv6}</Badge>
+              <textarea
+                readOnly
+                rows={4}
+                value={ipv4Subnets.join("\n")}
+                placeholder="No IPv4 subnets yet."
+                className="socx-scroll w-full rounded-xl border border-dashed border-socx-border-light bg-transparent px-3 py-2 text-xs text-socx-ink outline-none dark:border-socx-border-dark dark:text-socx-muted-dark"
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">
+                  IPv6 Subnets ({ipv6Subnets.length} networks / {ipv6SubnetIpCount} IPs)
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopySubnetGroup("ipv6")}
+                  className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-3 py-1 text-xs font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark">
+                  <ClipboardDocumentListIcon className="h-4 w-4" />
+                  Copy
+                </button>
               </div>
-            </Card.Body>
-          </Card>
+              <textarea
+                readOnly
+                rows={4}
+                value={ipv6Subnets.join("\n")}
+                placeholder="No IPv6 subnets yet."
+                className="socx-scroll w-full rounded-xl border border-dashed border-socx-border-light bg-transparent px-3 py-2 text-xs text-socx-ink outline-none dark:border-socx-border-dark dark:text-socx-muted-dark"
+              />
+            </div>
+          </section>
 
-          <Card className={`mt-3 ${themeClass}`}>
-            <Card.Header>Detected Subnets</Card.Header>
-            <Card.Body>
+          <section className="space-y-4 rounded-socx-lg border border-socx-border-light bg-white/90 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  Upload .txt file
+                </label>
+                <input
+                  type="file"
+                  accept=".txt"
+                  onChange={handleFileUpload}
+                  className="block w-full text-sm text-socx-muted file:mr-4 file:rounded-full file:border-0 file:bg-socx-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-socx-ink hover:file:bg-socx-accent-strong"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                  Actions
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClearInput}
+                    disabled={isProcessing}
+                    className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-socx-border-light px-3 py-2 text-xs font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark">
+                    <TrashIcon className="h-4 w-4" />
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyAll}
+                    disabled={!hasExportableSubnets || isProcessing}
+                    className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-socx-border-light px-3 py-2 text-xs font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark">
+                    <ClipboardDocumentListIcon className="h-4 w-4" />
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
+                  IPv4 prefix
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={32}
+                  value={ipv4Prefix}
+                  onChange={handleIpv4PrefixChange}
+                  className="w-full rounded-xl border border-socx-border-light bg-white/90 px-3 py-2 text-sm text-socx-ink outline-none focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/50 dark:text-white"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
+                  IPv6 prefix
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={128}
+                  value={ipv6Prefix}
+                  onChange={handleIpv6PrefixChange}
+                  className="w-full rounded-xl border border-socx-border-light bg-white/90 px-3 py-2 text-sm text-socx-ink outline-none focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/50 dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={handleExportTxt}
+                disabled={!hasExportableSubnets || isProcessing}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-3 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                <ArrowDownTrayIcon className="h-5 w-5" />
+                Export TXT
+              </button>
+              <button
+                type="button"
+                onClick={handleSendToSubnetCheck}
+                disabled={!hasExportableSubnets || isProcessing}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-3 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong disabled:cursor-not-allowed disabled:opacity-40">
+                <PaperAirplaneIcon className="h-5 w-5" />
+                AbuseIPDB Subnet Check
+              </button>
+            </div>
+
+            {status && (
+              <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone[status.variant]}`}>
+                {status.message}
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-socx-border-light bg-white/80 p-4 dark:border-socx-border-dark dark:bg-socx-panel/40">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                Overview
+              </p>
+              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-dashed border-socx-border-light px-3 py-2 dark:border-socx-border-dark">
+                  IPv4 IPs <span className="float-right font-semibold">{totals.ipv4}</span>
+                </div>
+                <div className="rounded-xl border border-dashed border-socx-border-light px-3 py-2 dark:border-socx-border-dark">
+                  IPv6 IPs <span className="float-right font-semibold">{totals.ipv6}</span>
+                </div>
+                <div className="rounded-xl border border-dashed border-socx-border-light px-3 py-2 dark:border-socx-border-dark">
+                  Detected subnets <span className="float-right font-semibold">{summary.length}</span>
+                </div>
+                <div className="rounded-xl border border-dashed border-socx-border-light px-3 py-2 dark:border-socx-border-dark">
+                  Private hits <span className="float-right font-semibold">{privateTotals.ipv4 + privateTotals.ipv6}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-socx-border-light bg-white/90 p-4 dark:border-socx-border-dark dark:bg-socx-panel/50">
+              <p className="text-sm font-semibold">Detected subnets</p>
               {summary.length === 0 ? (
-                <p className="text-muted mb-0">
+                <p className="mt-2 text-sm text-socx-muted dark:text-socx-muted-dark">
                   No subnets yet. Paste IPs or upload a file to generate the subnet list automatically.
                 </p>
               ) : (
-                <ListGroup variant="flush">
+                <div className="mt-3 space-y-3">
                   {summary.map((entry) => {
                     const isPrivate = isSubnetPrivate(entry)
-                    const versionBadge =
-                      isPrivate ? "danger" : entry.version === 4 ? "primary" : "secondary"
-                    const ipBadge = isPrivate ? "danger" : "dark"
-
                     return (
-                      <ListGroup.Item
+                      <div
                         key={`${entry.version}-${entry.subnet}`}
-                        className={`${themeClass} border rounded-2 mb-3 ${
-                          isPrivate ? "subnet-private" : "border-secondary-subtle"
-                        }`}
-                      >
-                        <div className="d-flex justify-content-between align-items-start gap-3">
-                          <div>
-                            <div className="d-flex align-items-center gap-2">
-                              <strong>{entry.subnet}</strong>
-                              <Badge bg={versionBadge}>IPv{entry.version}</Badge>
-                              <Badge bg={ipBadge}>{entry.ips.length} IPs</Badge>
-                              <Badge bg={isPrivate ? "danger" : "success"}>
+                        className={`rounded-2xl border p-4 ${isPrivate ? "border-rose-500/40 bg-rose-500/5" : "border-socx-border-light dark:border-socx-border-dark"}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="space-y-1">
+                            <p className="font-semibold">{entry.subnet}</p>
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              <span className="rounded-full bg-socx-cloud-soft px-2 py-1 text-socx-ink dark:bg-socx-panel/40 dark:text-white">
+                                IPv{entry.version}
+                              </span>
+                              <span className="rounded-full bg-socx-cloud-soft px-2 py-1 text-socx-ink dark:bg-socx-panel/40 dark:text-white">
+                                {entry.ips.length} IPs
+                              </span>
+                              <span
+                                className={`rounded-full px-2 py-1 ${
+                                  isPrivate ? "bg-rose-500/20 text-rose-200" : "bg-emerald-500/20 text-emerald-200"
+                                }`}>
                                 {isPrivate ? "Private" : "Public"}
-                              </Badge>
+                              </span>
                             </div>
-                            <details className="subnet-details mt-2">
-                              <summary>Show member IPs</summary>
-                              <code className="subnet-ip-list d-block mt-2">
-                                {entry.ips.join("\n")}
-                              </code>
-                            </details>
                           </div>
-                          <Button
-                            variant={isDarkMode ? "outline-light" : "outline-secondary"}
-                            size="sm"
+                          <button
+                            type="button"
                             onClick={() => handleCopySingle(entry)}
-                          >
+                            className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-3 py-1 text-xs font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark">
+                            <ClipboardDocumentListIcon className="h-4 w-4" />
                             Copy
-                          </Button>
+                          </button>
                         </div>
-                      </ListGroup.Item>
+                        <details className="mt-3 text-xs">
+                          <summary className="cursor-pointer font-semibold text-socx-muted dark:text-socx-muted-dark">
+                            Show member IPs
+                          </summary>
+                          <pre className="socx-scroll mt-2 whitespace-pre-wrap rounded-xl border border-dashed border-socx-border-light bg-black/5 px-3 py-2 font-mono text-[11px] text-socx-ink dark:border-socx-border-dark dark:bg-white/5 dark:text-socx-muted-dark">
+                            {entry.ips.join("\n")}
+                          </pre>
+                        </details>
+                      </div>
                     )
                   })}
-                </ListGroup>
+                </div>
               )}
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-    </Container>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   )
 }
 

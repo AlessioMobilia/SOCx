@@ -1,141 +1,111 @@
 /* src/utility/config.css */
 @import url("./colors.css");
 
-/* Stili Globali */
-body.dark-mode {
-  background-color: var(--bs-dark) !important;
-  color: var(--bs-body-color) !important;
-}
-
-body.light-mode {
-  background-color: var(--bs-light) !important;
-  color: var(--bs-body-color) !important;
-}
-
-/* Stili per le textbox */
-.dark-input {
-  background-color: var(--input-bg-dark) !important;
-  color: var(--input-text-dark) !important;
-  border-color: var(--input-bg-dark) !important;
-}
-
-.light-input {
-  background-color: var(--input-bg-light) !important;
-  color: var(--input-text-light) !important;
-  border-color: var(--input-bg-light) !important;
-}
-
-
-
-/* Font */
 :root {
-  --font-primary: "Arial, sans-serif";
-  --font-secondary: "Georgia, serif";
+  --font-primary: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-secondary: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-size-small: 12px;
   --font-size-medium: 14px;
   --font-size-large: 16px;
   --font-size-xlarge: 18px;
 }
 
-/* Pulsanti */
-:root {
-  --button-primary-light: #0d6efd;
-  --button-primary-dark: #3399ff;
-
-  --button-secondary-light: #6c757d;
-  --button-secondary-dark: #adb5bd;
-
-  --button-text-light: #ffffff;
-  --button-text-dark: #000000;
+body {
+  font-family: var(--font-primary);
+  background-color: var(--background-light);
+  color: var(--text-light);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Colori di testo */
-:root {
-  --text-light: #f8f9fa;
-  --text-dark: #212529;
-
-  --text-primary-light: var(--text-light);
-  --text-primary-dark: var(--text-dark);
-  --text-secondary-light: #ced4da;
-  --text-secondary-dark: #adb5bd;
+body.dark-mode {
+  background-color: var(--background-dark) !important;
+  color: var(--text-dark) !important;
 }
 
-/* Input */
-:root {
-  --input-bg-light: #ffffff;
-  --input-bg-dark: #343a40;
-
-  --input-text-light: #000000;
-  --input-text-dark: #ffffff;
+body.light-mode {
+  background-color: var(--background-light) !important;
+  color: var(--text-light) !important;
 }
 
-/* Bordi e sfondi */
-:root {
-  --border-light: #dee2e6;
-  --border-dark: #495057;
-
-  --background-light: #ffffff;
-  --background-dark: #212529;
+.dark-input {
+  background-color: var(--input-bg-dark) !important;
+  color: var(--input-text-dark) !important;
+  border-color: var(--border-dark) !important;
 }
 
+.light-input {
+  background-color: var(--input-bg-light) !important;
+  color: var(--input-text-light) !important;
+  border-color: var(--border-light) !important;
+}
 
-/* Stili del TextArea */
 .text-area {
   width: 100%;
-  height: 75vh;
-  padding: 8px auto;
+  min-height: 240px;
+  padding: 12px;
   font-size: var(--font-size-medium);
   border: 1px solid var(--border-light);
-  border-radius: 4px;
-  resize: none;
-  background-color: var(--background-light);
-  color: var(--text-primary-light);
+  border-radius: 12px;
+  resize: vertical;
+  background-color: var(--surface-light);
+  color: var(--text-light);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .dark-mode .text-area {
   border-color: var(--border-dark);
-  background-color: var(--background-dark);
-  color: var(--text-primary-dark);
+  background-color: var(--surface-dark);
+  color: var(--text-dark);
 }
 
-/* Stili dei Pulsanti */
 .button {
   width: 100%;
-  padding: 8px;
+  padding: 12px;
   margin-top: 16px;
-  border: 1px solid var(--border-light); /* Aggiungi il bordo */
-  border-radius: 4px;
+  border-radius: 999px;
   cursor: pointer;
   font-size: var(--font-size-medium);
   font-family: var(--font-primary);
+  border: 1px solid transparent;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(245, 194, 66, 0.35);
 }
 
 .primary-button {
   background-color: var(--button-primary-light);
-  color: var(--button-text-light);
+  color: var(--button-text-dark);
 }
 
-.dark-mode .primary-button {
-  background-color: var(--button-primary-dark);
-  border-color: var(--border-dark); /* Bordo per la dark mode */
+.primary-button:hover {
+  background-color: var(--accent-hover);
 }
 
 .secondary-button {
   background-color: var(--button-secondary-light);
-  color: var(--button-text-dark);
+  border-color: var(--border-light);
+  color: var(--text-light);
+}
+
+.secondary-button:hover {
+  border-color: var(--accent);
+}
+
+.dark-mode .primary-button {
+  color: #050912;
 }
 
 .dark-mode .secondary-button {
   background-color: var(--button-secondary-dark);
-  color: var(--button-text-light);
-  border-color: var(--border-dark); /* Bordo per la dark mode */
+  color: var(--text-dark);
+  border-color: var(--border-dark);
 }
 
-/* Contenitore per i pulsanti Refang e Defang */
 .button-group {
   display: flex;
   gap: 8px;
   margin-top: 16px;
 }
-
-

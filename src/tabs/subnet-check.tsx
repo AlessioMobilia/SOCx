@@ -1,20 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Storage } from "@plasmohq/storage"
 import { sendToBackground } from "@plasmohq/messaging"
+import "../styles/tailwind.css"
 import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  Row,
-  Spinner,
-  Table
-} from "react-bootstrap"
-import "bootstrap/dist/css/bootstrap.min.css"
-import "./bulk-check.css"
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  ClipboardDocumentListIcon,
+  PlayCircleIcon,
+  TrashIcon
+} from "@heroicons/react/24/outline"
 import type { NormalizedSubnet, SubnetCheckSummaryRow } from "../utility/utils"
 import {
   estimateSubnetHostCount,
@@ -75,15 +69,15 @@ const readAbuseCounter = async (): Promise<number> => {
   })
 }
 
-const STATUS_BADGE_MAP: Record<SubnetCheckSummaryRow["statusKind"], { bg: string; text?: "dark" | "light" }> = {
-  flagged: { bg: "warning", text: "dark" },
-  error: { bg: "danger" },
-  private: { bg: "secondary" },
-  clean: { bg: "success" },
-  pending: { bg: "secondary" }
+const STATUS_BADGE_MAP: Record<SubnetCheckSummaryRow["statusKind"], string> = {
+  flagged: "bg-amber-500/15 text-amber-100",
+  error: "bg-rose-500/15 text-rose-100",
+  private: "bg-slate-500/20 text-slate-200",
+  clean: "bg-emerald-500/15 text-emerald-100",
+  pending: "bg-socx-muted/10 text-socx-muted-dark"
 }
 
-const getStatusBadgeProps = (entry: SubnetCheckSummaryRow) =>
+const getStatusBadgeClass = (entry: SubnetCheckSummaryRow) =>
   STATUS_BADGE_MAP[entry.statusKind] ?? STATUS_BADGE_MAP.pending
 
 const resolveStatusDescriptor = (
@@ -441,177 +435,209 @@ const SubnetCheck = () => {
     }
   }, [summarizedResults])
 
-  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
-  const secondaryTextClass = isDarkMode ? "text-white-50" : "text-muted"
-
   return (
-    <Container fluid className={`p-4 min-vh-100 ${themeClass}`}>
-      <h1 className="mb-4">🛰️ Subnet Abuse Check</h1>
-      <Row className="g-4">
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label className="d-flex align-items-center justify-content-between">
-              <span>📋 Enter IPv4/IPv6 Subnets</span>
-              <Button
-                size="sm"
-                variant={isDarkMode ? "outline-light" : "outline-secondary"}
-                className="rounded-circle d-inline-flex align-items-center justify-content-center"
-                style={{
-                  width: 36,
-                  height: 36,
-                  padding: 0,
-                  lineHeight: 1
-                }}
+    <div className="min-h-screen bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <header className="rounded-socx-lg border border-socx-border-light bg-white/90 p-6 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
+            SOCx
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold">Subnet Abuse Check</h1>
+          <p className="text-sm text-socx-muted dark:text-socx-muted-dark">
+            Launch AbuseIPDB scoped checks for IPv4/IPv6 ranges, track flagged blocks and copy actionable reports.
+          </p>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="space-y-4 rounded-socx-lg border border-socx-border-light bg-white/90 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Enter IPv4/IPv6 subnets</p>
+                <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                  Accepts CIDR ranges per line, will auto-normalize duplicates.
+                </p>
+              </div>
+              <button
+                type="button"
                 onClick={handleRefreshSubnets}
                 disabled={isLoading || !textareaValue.trim()}
-                title="Refresh subnet list"
-                aria-label="Refresh subnet list"
-              >
-                <span
-                  aria-hidden="true"
-                  style={{ fontSize: "1.2rem", lineHeight: 1, transform: "translateY(-1px)" }}
-                >
-                  ⟳
-                </span>
-                <span className="visually-hidden">Refresh subnet list</span>
-              </Button>
-            </Form.Label>
-            <Form.Control
-              as="textarea"
+                className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-3 py-1 text-xs font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark">
+                <ArrowPathIcon className="h-4 w-4" />
+                Refresh
+              </button>
+            </div>
+            <textarea
               rows={16}
               value={textareaValue}
-              className={themeClass}
               onChange={handleTextAreaChange}
               placeholder={"Example: 192.168.10.0/24\n2001:db8::/48"}
+              className="socx-scroll w-full rounded-2xl border border-socx-border-light bg-white/95 px-4 py-3 text-sm text-socx-ink outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white"
             />
-          </Form.Group>
 
-          <Card className={`mt-4 ${themeClass}`}>
-            <Card.Body>
-              <h5>📊 Summary</h5>
-              <div className="d-flex flex-wrap gap-2">
-                <Badge bg="primary">Total: {subnets.length}</Badge>
-                <Badge bg="success">IPv4: {totalIpv4}</Badge>
-                <Badge bg="info">IPv6: {totalIpv6}</Badge>
-                <Badge bg="warning" text="dark">
-                  Flagged Subnets: {flaggedTotal}
-                </Badge>
-                <Badge bg="danger">AbuseIPDB Today: {abuseDailyCount}</Badge>
+            <div className="rounded-2xl border border-socx-border-light bg-white/80 p-4 dark:border-socx-border-dark dark:bg-socx-panel/40">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                Summary
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-socx-cloud-soft px-3 py-1 text-socx-ink dark:bg-socx-panel/40 dark:text-white">
+                  Total {subnets.length}
+                </span>
+                <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-emerald-100">
+                  IPv4 {totalIpv4}
+                </span>
+                <span className="rounded-full bg-sky-500/20 px-3 py-1 text-sky-100">
+                  IPv6 {totalIpv6}
+                </span>
+                <span className="rounded-full bg-amber-500/20 px-3 py-1 text-amber-100">
+                  Flagged {flaggedTotal}
+                </span>
+                <span className="rounded-full bg-rose-500/20 px-3 py-1 text-rose-100">
+                  AbuseIPDB today {abuseDailyCount}
+                </span>
               </div>
-            </Card.Body>
-          </Card>
-        </Col>
+            </div>
+          </section>
 
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label>📁 Upload .txt File</Form.Label>
-            <Form.Control type="file" accept=".txt" onChange={handleFileUpload} className={themeClass} />
-          </Form.Group>
+          <section className="space-y-4 rounded-socx-lg border border-socx-border-light bg-white/90 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                <ArrowDownTrayIcon className="h-4 w-4" />
+                Upload .txt file
+              </label>
+              <input
+                type="file"
+                accept=".txt"
+                onChange={handleFileUpload}
+                className="block w-full text-sm text-socx-muted file:mr-4 file:rounded-full file:border-0 file:bg-socx-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-socx-ink hover:file:bg-socx-accent-strong"
+              />
+            </div>
 
-          <Row className="mt-3">
-            <Col md={12}>
-              <Form.Label>Confidence minimum</Form.Label>
-              <Form.Control
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                Confidence minimum
+              </label>
+              <input
                 type="number"
                 min={0}
                 max={100}
                 value={confidenceMinimum}
-                className={themeClass}
                 onChange={handleConfidenceChange}
+                className="w-full rounded-xl border border-socx-border-light bg-white/90 px-3 py-2 text-sm text-socx-ink outline-none focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/50 dark:text-white"
                 inputMode="numeric"
               />
-            </Col>
-          </Row>
-          <p className={`${secondaryTextClass} small mt-2`}>
-            Reports are limited to the last {LOOKBACK_DAYS} days.
-          </p>
+              <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                Reports limited to the last {LOOKBACK_DAYS} days.
+              </p>
+            </div>
 
-          <div className="d-grid gap-2 mt-4">
-            <Button variant="success" onClick={handleCheck} disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Spinner as="span" size="sm" animation="border" role="status" aria-hidden="true" />
-                  <span className="ms-2">Checking...</span>
-                </>
-              ) : (
-                "🔍 Run AbuseIPDB Check"
-              )}
-            </Button>
-            <Button variant="outline-danger" onClick={handleClear} disabled={isLoading}>
-              🗑️ Clear Subnets
-            </Button>
-            <Button
-              variant={isDarkMode ? "outline-light" : "outline-secondary"}
-              onClick={handleCopyResults}
-              disabled={summarizedResults.length === 0}
-            >
-              Copy Report
-            </Button>
-            <Button variant="outline-success" onClick={handleExportResults} disabled={summarizedResults.length === 0}>
-              📘 Export Excel (.xlsx)
-            </Button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={handleCheck}
+                disabled={isLoading}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-3 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong disabled:cursor-not-allowed disabled:opacity-40">
+                <PlayCircleIcon className="h-5 w-5" />
+                {isLoading ? "Checking…" : "Run AbuseIPDB Check"}
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={isLoading}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-3 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                <TrashIcon className="h-4 w-4" />
+                Clear subnets
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyResults}
+                disabled={summarizedResults.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-3 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                <ClipboardDocumentListIcon className="h-4 w-4" />
+                Copy report
+              </button>
+              <button
+                type="button"
+                onClick={handleExportResults}
+                disabled={summarizedResults.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-3 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                <ArrowDownTrayIcon className="h-4 w-4" />
+                Export Excel (.xlsx)
+              </button>
+            </div>
+
+            {message && (
+              <div className="rounded-2xl border border-socx-border-light bg-white/80 px-4 py-3 text-sm text-socx-ink dark:border-socx-border-dark dark:bg-socx-panel/40 dark:text-white">
+                {message}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <section className="rounded-socx-lg border border-socx-border-light bg-white/90 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                AbuseIPDB results
+              </p>
+              <h2 className="text-xl font-semibold">Subnet intelligence matrix</h2>
+            </div>
+            <span className="text-sm text-socx-muted dark:text-socx-muted-dark">
+              {summarizedResults.length} entries
+            </span>
           </div>
 
-          {message && (
-            <Alert variant="info" className="mt-3">
-              {message}
-            </Alert>
-          )}
-        </Col>
-      </Row>
-
-      <Card className={`mt-4 ${themeClass}`}>
-        <Card.Header>AbuseIPDB Results</Card.Header>
-        <Card.Body className="table-responsive">
           {subnets.length === 0 ? (
-            <p className={`${secondaryTextClass} mb-0`}>
+            <p className="mt-4 text-sm text-socx-muted dark:text-socx-muted-dark">
               Enter at least one subnet to start the analysis.
             </p>
           ) : (
-            <Table bordered hover variant={isDarkMode ? "dark" : undefined} className="mb-0">
-              <thead>
-                <tr>
-                  <th>Subnet</th>
-                  <th>Version</th>
-                  <th>Hosts</th>
-                  <th>Reported IPs</th>
-                  <th>Most Recent Report</th>
-                  <th>Details</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summarizedResults.map((entry) => {
-                  const badge = getStatusBadgeProps(entry)
-                  const hasDistinctIps = typeof entry.distinctIpCount === "number" && entry.distinctIpCount > 0
-                  const hasOtherIntel = Boolean(
-                    entry.country || entry.isp || entry.usageType || entry.domain || (entry.hostnames && entry.hostnames.length)
-                  )
-                  const hasIntel = hasDistinctIps || hasOtherIntel
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead>
+                  <tr className="text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
+                    <th className="py-3">Subnet</th>
+                    <th className="py-3">Version</th>
+                    <th className="py-3">Hosts</th>
+                    <th className="py-3">Reported IPs</th>
+                    <th className="py-3">Most recent</th>
+                    <th className="py-3">Details</th>
+                    <th className="py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summarizedResults.map((entry) => {
+                    const badgeClass = getStatusBadgeClass(entry)
+                    const hasDistinctIps = typeof entry.distinctIpCount === "number" && entry.distinctIpCount > 0
+                    const hasOtherIntel = Boolean(
+                      entry.country || entry.isp || entry.usageType || entry.domain || (entry.hostnames && entry.hostnames.length)
+                    )
+                    const hasIntel = hasDistinctIps || hasOtherIntel
 
-                  return (
-                    <tr key={entry.subnet}>
-                      <td>
-                        <div className="fw-semibold">{entry.subnet}</div>
-                        <small className={secondaryTextClass}>
-                          {entry.minAddress && entry.maxAddress
-                            ? `${entry.minAddress} → ${entry.maxAddress}`
-                            : entry.version === 4
-                              ? "IPv4 block"
-                              : "IPv6 block"}
-                        </small>
-                      </td>
-                      <td>IPv{entry.version}</td>
-                      <td>{entry.hostCount}</td>
-                      <td>
-                        <Badge bg={entry.reportedCount > 0 ? "danger" : "secondary"}>{entry.reportedCount}</Badge>
-                      </td>
-                      <td>{entry.mostRecent ?? "—"}</td>
-                      <td>
-                        <div className={`small ${secondaryTextClass}`}>
-                          {hasDistinctIps && (
-                            <div>Distinct IPs: {entry.distinctIpCount}</div>
-                          )}
+                    return (
+                      <tr key={entry.subnet} className="border-t border-socx-border-light dark:border-socx-border-dark">
+                        <td className="py-3">
+                          <p className="font-semibold">{entry.subnet}</p>
+                          <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                            {entry.minAddress && entry.maxAddress
+                              ? `${entry.minAddress} → ${entry.maxAddress}`
+                              : entry.version === 4
+                                ? "IPv4 block"
+                                : "IPv6 block"}
+                          </p>
+                        </td>
+                        <td className="py-3">IPv{entry.version}</td>
+                        <td className="py-3">{formatHostCount(entry.hostCount)}</td>
+                        <td className="py-3">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              entry.reportedCount > 0 ? "bg-rose-500/20 text-rose-100" : "bg-slate-500/20 text-slate-200"
+                            }`}>
+                            {entry.reportedCount}
+                          </span>
+                        </td>
+                        <td className="py-3">{entry.mostRecent ?? "—"}</td>
+                        <td className="py-3 text-xs text-socx-muted dark:text-socx-muted-dark">
+                          {hasDistinctIps && <div>Distinct IPs: {entry.distinctIpCount}</div>}
                           {entry.country && <div>Country: {entry.country}</div>}
                           {entry.isp && <div>ISP: {entry.isp}</div>}
                           {entry.usageType && <div>Usage: {entry.usageType}</div>}
@@ -620,22 +646,22 @@ const SubnetCheck = () => {
                             <div>Hostnames: {entry.hostnames.join(", ")}</div>
                           )}
                           {!hasIntel && <div>No extra intel</div>}
-                        </div>
-                      </td>
-                      <td>
-                        <Badge bg={badge.bg} text={badge.text} className="d-inline-block">
-                          {entry.statusText}
-                        </Badge>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </Table>
+                        </td>
+                        <td className="py-3">
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${badgeClass}`}>
+                            {entry.statusText}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
-        </Card.Body>
-      </Card>
-    </Container>
+        </section>
+      </div>
+    </div>
   )
 }
 

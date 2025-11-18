@@ -1,7 +1,10 @@
 import React from "react"
-import "bootstrap/dist/css/bootstrap.min.css"
-import { Container, Button, Form } from "react-bootstrap"
-import { MdDownload, MdDelete, MdBuild, MdBugReport } from "react-icons/md"
+import {
+  ArrowDownTrayIcon,
+  ArrowsRightLeftIcon,
+  BugAntIcon,
+  TrashIcon
+} from "@heroicons/react/24/outline"
 
 interface SidePanelUIProps {
   note: string
@@ -13,6 +16,9 @@ interface SidePanelUIProps {
   onDefang: () => void
 }
 
+const buttonClass =
+  "flex flex-1 items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent focus-visible:outline-none focus-visible:shadow-socx-focus dark:border-socx-border-dark dark:text-white"
+
 const SidePanelUI: React.FC<SidePanelUIProps> = ({
   note,
   isDarkMode,
@@ -22,42 +28,54 @@ const SidePanelUI: React.FC<SidePanelUIProps> = ({
   onRefang,
   onDefang
 }) => {
-  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
-
   return (
-    <Container fluid className={`p-3 ${themeClass}`}>
-      <h6 className="text-center mb-3">📝 IOC Notepad</h6>
+    <div className="min-h-full bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
+      <div className="space-y-4 rounded-socx-lg border border-socx-border-light bg-white/80 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/70">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
+              SOCx
+            </p>
+            <h2 className="text-lg font-semibold">IOC Notepad</h2>
+          </div>
+          <span className="rounded-full border border-socx-border-light px-3 py-1 text-xs text-socx-muted dark:border-socx-border-dark dark:text-socx-muted-dark">
+            {isDarkMode ? "Dark" : "Light"} mode
+          </span>
+        </div>
 
-      <Form.Group className="mb-3">
-        <Form.Control
-          as="textarea"
+        <textarea
           value={note}
           onChange={onTextChange}
-          placeholder="Write here..."
           rows={16}
-          className={`form-control ${themeClass}`}
-          aria-label="Textarea for notes"
+          placeholder="Document quick findings, snippets or ad-hoc lists…"
+          className="socx-scroll w-full rounded-2xl border border-socx-border-light bg-white/90 px-4 py-3 text-sm text-socx-ink shadow-sm outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white"
+          aria-label="IOC notebook text area"
         />
-      </Form.Group>
 
-      <div className="d-grid gap-2 mb-3">
-        <Button variant="outline-secondary" size="sm" onClick={onRefang}>
-          <MdBuild className="me-1" /> Refang
-        </Button>
-        <Button variant="outline-secondary" size="sm" onClick={onDefang}>
-          <MdBugReport className="me-1" /> Defang
-        </Button>
-      </div>
+        <div className="flex flex-col gap-2 md:flex-row">
+          <button type="button" onClick={onRefang} className={buttonClass}>
+            <ArrowsRightLeftIcon className="h-4 w-4" /> Refang
+          </button>
+          <button type="button" onClick={onDefang} className={buttonClass}>
+            <BugAntIcon className="h-4 w-4" /> Defang
+          </button>
+        </div>
 
-      <div className="d-grid gap-2">
-        <Button variant="outline-success" size="sm" onClick={onSaveTxt}>
-          <MdDownload className="me-1" /> Save as TXT
-        </Button>
-        <Button variant="outline-danger" size="sm" onClick={onClearNote}>
-          <MdDelete className="me-1" /> Clear All
-        </Button>
+        <div className="flex flex-col gap-2 md:flex-row">
+          <button
+            type="button"
+            onClick={onSaveTxt}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-2 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong focus-visible:outline-none focus-visible:shadow-socx-focus">
+            <ArrowDownTrayIcon className="h-4 w-4" />
+            Save as TXT
+          </button>
+          <button type="button" onClick={onClearNote} className={`${buttonClass} text-socx-danger`}>
+            <TrashIcon className="h-4 w-4" />
+            Clear all
+          </button>
+        </div>
       </div>
-    </Container>
+    </div>
   )
 }
 

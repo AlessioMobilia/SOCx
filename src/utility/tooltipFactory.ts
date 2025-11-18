@@ -25,32 +25,31 @@ const CRITICAL_KEYS = [
 ]
 
 const BADGE_BASE_STYLE =
-  "font-weight:600;padding:6px 12px;border-radius:4px;text-align:center;font-size:14px;margin-bottom:8px;display:block;width:fit-content;margin-left:auto;margin-right:auto;"
+  "font-family:'Inter',sans-serif;font-weight:600;padding:4px 14px;border-radius:999px;text-align:center;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;display:inline-flex;justify-content:center;"
 const BADGE_COLORS = {
-  malicious: "background-color:#d32f2f;color:#fff;",
-  suspicious: "background-color:#fbc02d;color:#000;",
-  benign: "background-color:#66bb6a;color:#000;",
-  unknown: "background-color:#9e9e9e;color:#fff;"
+  malicious: "background-color:#f87171;color:#2b0b0e;",
+  suspicious: "background-color:#f5c242;color:#231a06;",
+  benign: "background-color:#34d399;color:#032219;",
+  unknown: "background-color:#475569;color:#e0e7ff;"
 }
 
 
 // Evidenziazione con sfondo (highlight)
 const HIGHLIGHT_STYLES = {
   malicious:
-    "background:#ffd7d7;color:#8b0000;font-weight:bold;padding:0 3px;border-radius:3px;",
+    "background:rgba(248,113,113,0.2);color:#f87171;font-weight:600;padding:0 4px;border-radius:6px;",
   suspicious:
-    "background:#fff3cd;color:#7a5a00;font-weight:bold;padding:0 3px;border-radius:3px;",
+    "background:rgba(245,194,66,0.25);color:#d1900b;font-weight:600;padding:0 4px;border-radius:6px;",
   benign:
-    "background:#e6f4ea;color:#0b6b2f;font-weight:bold;padding:0 3px;border-radius:3px;",
+    "background:rgba(52,211,153,0.2);color:#34d399;font-weight:600;padding:0 4px;border-radius:6px;",
   intel:
-    //"background:#ede7f6;color:#4a148c;font-weight:600;padding:0 3px;border-radius:3px;",
-    "font-weight:600;padding:0 3px;border-radius:3px;",
+    "font-weight:600;padding:0 4px;border-radius:6px;color:#f5c242;",
   criticalIntel:
-    "background:#ffebee;color:#b71c1c;font-weight:bold;padding:0 3px;border-radius:3px;"
+    "background:rgba(255,99,132,0.2);color:#ff6b81;font-weight:700;padding:0 4px;border-radius:6px;"
 }
 
 const BASE_CONTAINER_STYLE =
-  "font-family:'Courier New',monospace;font-size:13px;line-height:1.4;word-break:break-word;white-space:normal;min-width:min(300px,40vw);max-width:min(500px,80vw);padding:10px;border-radius:20px;border:3px solid #333;border-radius:20px;box-shadow:4 8 10px rgba(0,0,0,0.2);"
+  "font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;word-break:break-word;white-space:normal;min-width:min(320px,42vw);max-width:min(520px,80vw);padding:18px;border-radius:18px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 25px 80px rgba(5,9,18,0.6);backdrop-filter:blur(16px);"
 
 
 const getIsDarkMode = async (): Promise<boolean> => {
@@ -179,14 +178,26 @@ export const createTooltip = async (
 
   const isDarkMode = await getIsDarkMode()
 const containerThemeStyle = isDarkMode
-  ? `${BASE_CONTAINER_STYLE}background-color:#212529;color:#e2e8f0;`
-  : `${BASE_CONTAINER_STYLE}background-color:#e2e8f0;color:#212529;`
+  ? `${BASE_CONTAINER_STYLE}background-color:rgba(12,20,36,0.92);color:#f4f7ff;border-color:#1f273a;`
+  : `${BASE_CONTAINER_STYLE}background-color:rgba(255,255,255,0.94);color:#0b1220;border-color:#e2e8f0;`
+
+  const headerTone = isDarkMode ? "rgba(244,247,255,0.65)" : "rgba(17,19,34,0.55)"
+  const liveTone = isDarkMode ? "#ffd24d" : "#b7791f"
+
+  const headerStrip = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">
+      <span style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:${headerTone};">SOCx Intel</span>
+      <span style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${liveTone};">Live</span>
+    </div>
+    <div style="height:1px;background:rgba(255,255,255,0.08);margin-bottom:12px;"></div>
+  `
 
   const contentHTML = `
-    <div style="margin-top:16px;width:100%;">
+    <div style="margin-top:12px;width:100%;position:relative;z-index:2147483650;">
       <div style="${containerThemeStyle}">
+        ${headerStrip}
         ${statusBadge}
-        <div>${html}</div>
+        <div style="margin-top:8px;">${html}</div>
       </div>
     </div>
   `
@@ -199,9 +210,13 @@ const containerThemeStyle = isDarkMode
     content: contentHTML,
     maxWidth: 420,
     interactive: true,
+    zIndex: 2147483650,
     placement: "right",
     animation: false,
     onShow(instance) {
+      if (instance.popper) {
+        instance.popper.style.setProperty("z-index", "2147483650", "important")
+      }
       const box = instance.popper?.firstElementChild as HTMLElement | null
       if (box) {
         box.style.setProperty("background-color", popperBg, "important")

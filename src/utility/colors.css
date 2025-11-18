@@ -1,30 +1,36 @@
 /* src/utility/colors.css */
 :root {
-  /* 🎨 Light Mode */
-  --background-light: #ffffff;
-  --text-light: #000000;
-  --secondary-text-light: #666666;
+  /* Light mode */
+  --background-light: #f7f8fb;
+  --surface-light: #ffffff;
+  --text-light: #111322;
+  --secondary-text-light: #6b7280;
+  --border-light: #e2e8f0;
 
-  --button-primary-light: #007bff;
-  --button-secondary-light: #dee2e6;
-  --button-text-light: #ffffff;
+  /* Dark mode */
+  --background-dark: #050912;
+  --surface-dark: #0d1524;
+  --text-dark: #f4f7ff;
+  --secondary-text-dark: #9da7bf;
+  --border-dark: #1f273a;
 
-  --input-bg-light: #ffffff;
-  --input-text-light: #000000;
+  /* Accent + feedback */
+  --accent: #f5c242;
+  --accent-hover: #ffd24d;
+  --success: #34d399;
+  --danger: #f87171;
 
-  --border-light: #cccccc;
+  /* Inputs */
+  --input-bg-light: var(--surface-light);
+  --input-text-light: var(--text-light);
+  --input-bg-dark: #161f32;
+  --input-text-dark: var(--text-dark);
 
-  /* 🌙 Dark Mode */
-  --background-dark: #1a1a1a;
-  --text-dark: #ffffff;
-  --secondary-text-dark: #a0a0a0;
-
-  --button-primary-dark: #3399ff;
-  --button-secondary-dark: #444;
-  --button-text-dark: #ffffff;
-
-  --input-bg-dark: #2d2d2d;
-  --input-text-dark: #ffffff;
-
-  --border-dark: #555555;
+  /* Buttons */
+  --button-primary-light: var(--accent);
+  --button-primary-dark: var(--accent);
+  --button-secondary-light: rgba(0, 0, 0, 0.03);
+  --button-secondary-dark: rgba(255, 255, 255, 0.08);
+  --button-text-light: var(--text-light);
+  --button-text-dark: #050505;
 }

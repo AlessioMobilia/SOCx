@@ -1,17 +1,12 @@
 import React from "react"
 import {
-  Container,
-  Button,
-  Form,
-  Card,
-  Spinner,
-  Badge,
-  Row,
-  Col,
-  Alert
-} from "react-bootstrap"
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  ClipboardDocumentListIcon,
+  PlayCircleIcon,
+  TrashIcon
+} from "@heroicons/react/24/outline"
 import { parseAndFormatResults } from "../utility/utils"
-import "bootstrap/dist/css/bootstrap.min.css"
 
 interface BulkCheckUIProps {
   textareaValue: string
@@ -39,6 +34,24 @@ interface BulkCheckUIProps {
   }
 }
 
+const riskTone: Record<"low" | "medium" | "high", { border: string; badge: string; label: string }> = {
+  low: {
+    border: "border-emerald-500/40 bg-emerald-500/5",
+    badge: "bg-emerald-500/20 text-emerald-200",
+    label: "LOW"
+  },
+  medium: {
+    border: "border-amber-500/40 bg-amber-500/5",
+    badge: "bg-amber-500/20 text-amber-200",
+    label: "MEDIUM"
+  },
+  high: {
+    border: "border-rose-500/50 bg-rose-500/10",
+    badge: "bg-rose-500/20 text-rose-200",
+    label: "HIGH"
+  }
+}
+
 const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   textareaValue,
   onTextAreaChange,
@@ -50,7 +63,6 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   isLoading,
   message,
   results,
-  isDarkMode,
   proxyCheckEnabled,
   onExport,
   onProxyCheckToggle,
@@ -60,337 +72,279 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   onRefreshIocs,
   dailyCounters
 }) => {
-  const themeClass = isDarkMode ? "bg-dark text-white" : "bg-light text-dark"
+  const getRiskLevel = (result: any): "low" | "medium" | "high" => {
+    const vt = result?.VirusTotal
+    const abuse = result?.AbuseIPDB
 
-const getRiskLevel = (result: any): "low" | "medium" | "high" => {
-  const vt = result?.VirusTotal;
-  const abuse = result?.AbuseIPDB;
+    let vtLevel: "low" | "medium" | "high" = "low"
+    let abuseLevel: "low" | "medium" | "high" = "low"
 
-  let vtLevel: "low" | "medium" | "high" = "low";
-  let abuseLevel: "low" | "medium" | "high" = "low";
+    if (vt) {
+      const stats = vt?.data?.attributes?.last_analysis_stats || {}
+      const malicious = stats?.malicious || 0
+      const suspicious = stats?.suspicious || 0
+      const harmless = stats?.harmless || 0
+      const harmlessBonus = Math.min(harmless * 0.2, 5)
+      const vtScore = malicious * 3 + suspicious - harmlessBonus
 
-  // Evaluate VirusTotal with relaxed thresholds and harmless bonus
-  if (vt) {
-    const stats = vt?.data?.attributes?.last_analysis_stats || {};
-    const malicious = stats?.malicious || 0;
-    const suspicious = stats?.suspicious || 0;
-    const harmless = stats?.harmless || 0;
-
-    // Apply harmless bonus capped at 5 points
-    const harmlessBonus = Math.min(harmless * 0.2, 5);
-    const vtScore = (malicious * 3) + suspicious - harmlessBonus;
-
-    if (vtScore >= 20) vtLevel = "high";
-    else if (vtScore >= 5) vtLevel = "medium";
-  }
-
-  // Evaluate AbuseIPDB with relaxed thresholds
-  if (abuse) {
-    const abuseScore = abuse?.data?.abuseConfidenceScore || 0;
-
-    if (abuseScore >= 50) abuseLevel = "high";
-    else if (abuseScore >= 20) abuseLevel = "medium";
-  }
-
-  // Return the highest severity between the two services
-  const levels = ["low", "medium", "high"];
-  return levels[Math.max(levels.indexOf(vtLevel), levels.indexOf(abuseLevel))] as "low" | "medium" | "high";
-};
-
-
-
-  const getRiskClass = (risk: "low" | "medium" | "high") => {
-    switch (risk) {
-      case "low":
-        return "border-success bg-success-subtle text-dark";
-      case "medium":
-        return "border-warning bg-warning-subtle text-dark";
-      case "high":
-        return "border-danger bg-danger-subtle text-dark";
-      default:
-        return "";
+      if (vtScore >= 20) vtLevel = "high"
+      else if (vtScore >= 5) vtLevel = "medium"
     }
-  };
+
+    if (abuse) {
+      const abuseScore = abuse?.data?.abuseConfidenceScore || 0
+      if (abuseScore >= 50) abuseLevel = "high"
+      else if (abuseScore >= 20) abuseLevel = "medium"
+    }
+
+    const levels: Array<"low" | "medium" | "high"> = ["low", "medium", "high"]
+    return levels[Math.max(levels.indexOf(vtLevel), levels.indexOf(abuseLevel))]
+  }
 
   return (
-    <Container fluid className={`p-4 min-vh-100 ${themeClass}`}>
-      <h1 className="mb-4">🔍 Bulk IOC Check</h1>
+    <div className="min-h-screen bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <header className="rounded-socx-lg border border-socx-border-light bg-white/90 p-6 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
+            SOCx
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold">Bulk IOC Check</h1>
+          <p className="text-sm text-socx-muted dark:text-socx-muted-dark">
+            Paste any list of indicators, auto-categorize them and launch checks on your preferred services.
+          </p>
+        </header>
 
-      <Row className="mb-3">
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label className="d-flex align-items-center justify-content-between">
-              <span>📋 Enter IOCs</span>
-              <Button
-                size="sm"
-                variant={isDarkMode ? "outline-light" : "outline-secondary"}
-                className="rounded-circle d-inline-flex align-items-center justify-content-center"
-                style={{
-                  width: 36,
-                  height: 36,
-                  padding: 0,
-                  lineHeight: 1
-                }}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="space-y-4 rounded-socx-lg border border-socx-border-light bg-white/90 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">IOC workspace</p>
+                <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                  Paste plain text lists, the extractor keeps unique entries.
+                </p>
+              </div>
+              <button
+                type="button"
                 onClick={onRefreshIocs}
                 disabled={isLoading || !textareaValue.trim()}
-                title="Refresh IOC list"
-                aria-label="Refresh IOC list"
-              >
-                <span
-                  aria-hidden="true"
-                  style={{ fontSize: "1.2rem", lineHeight: 1, transform: "translateY(-1px)" }}
-                >
-                  ⟳
-                </span>
-                <span className="visually-hidden">Refresh IOC list</span>
-              </Button>
-            </Form.Label>
-            <Form.Control
-              as="textarea"
-              rows={15}
+                className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-socx-muted transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark">
+                <ArrowPathIcon className="h-3.5 w-3.5" />
+                Refresh
+              </button>
+            </div>
+            <textarea
+              className="socx-scroll h-72 w-full rounded-2xl border border-socx-border-light bg-white/95 px-4 py-3 text-sm text-socx-ink outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white"
               placeholder="Paste IPs, domains, hashes, emails, URLs..."
               value={textareaValue}
               onChange={onTextAreaChange}
-              className={themeClass}
             />
-          </Form.Group>
-          <Card className={`mt-4 ${themeClass}`}>
-            <Card.Body>
-              <h5>📊 Daily Counters</h5>
-              <p>
-                VirusTotal: <Badge bg="info">{dailyCounters.vt}</Badge>
+            <div className="rounded-2xl border border-socx-border-light bg-white/80 p-4 text-sm dark:border-socx-border-dark dark:bg-socx-panel/50">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                Daily counters
               </p>
-              <p>
-                AbuseIPDB: <Badge bg="danger">{dailyCounters.abuse}</Badge>
-              </p>
-              <p>
-                ProxyCheck: <Badge bg="secondary">{dailyCounters.proxy}</Badge>
-              </p>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label>📁 Upload .txt File</Form.Label>
-            <Form.Control
-              type="file"
-              accept=".txt"
-              onChange={onFileUpload}
-              className={themeClass}
-            />
-          </Form.Group>
-          <Form.Check
-            type="switch"
-            id="proxycheck-enrichment-toggle"
-            className="mt-3"
-            label="Enable ProxyCheck enrichment."
-            checked={proxyCheckEnabled}
-            onChange={(e) => onProxyCheckToggle(e.target.checked)}
-          />
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {[
+                  { label: "VirusTotal", value: dailyCounters.vt },
+                  { label: "AbuseIPDB", value: dailyCounters.abuse },
+                  { label: "ProxyCheck", value: dailyCounters.proxy }
+                ].map((counter) => (
+                  <div key={counter.label} className="rounded-xl border border-dashed border-socx-border-light px-3 py-2 text-center text-sm dark:border-socx-border-dark">
+                    <p className="text-xs text-socx-muted dark:text-socx-muted-dark">{counter.label}</p>
+                    <p className="text-lg font-semibold">{counter.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
 
-          <div className="mt-4 d-grid gap-2">
-            <Button
-              variant="success"
-              onClick={onCheckBulk}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Spinner
-                    as="span"
-                    size="sm"
-                    animation="border"
-                    role="status"
-                    aria-hidden="true"
-                  />
-                  <span className="ms-2">Analysis in progress...</span>
-                </>
-              ) : (
-                "🔍 Start Check"
-              )}
-            </Button>
-            <Button variant="outline-danger" onClick={onClearList}>
-              🗑️ Clear List
-            </Button>
-            <Button
-              variant="outline-primary"
-              onClick={() => onExport("csv")}
-              disabled={Object.keys(results).length === 0}
-            >
-              📤 Export CSV
-            </Button>
-            <Button
-              variant="outline-success"
-              onClick={() => onExport("xlsx")}
-              disabled={Object.keys(results).length === 0}
-            >
-              📘 Export Excel (.xlsx)
-            </Button>
+          <section className="space-y-4 rounded-socx-lg border border-socx-border-light bg-white/90 p-5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <ArrowDownTrayIcon className="h-4 w-4 text-socx-muted" />
+                Upload .txt file
+              </label>
+              <input
+                type="file"
+                accept=".txt"
+                onChange={onFileUpload}
+                className="block w-full text-sm text-socx-muted file:mr-4 file:flex file:items-center file:gap-2 file:rounded-full file:border-0 file:bg-socx-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-socx-ink hover:file:bg-socx-accent-strong"
+              />
+            </div>
 
-            <Button
-              variant="outline-secondary"
-              onClick={() => {
-                const formatted = Object.entries(results)
-                  .filter(([_, result]) => {
-                    const content = parseAndFormatResults(result).trim()
-                    return content && content !== "-"
-                  })
-                  .map(([ioc, result]) => {
-                    const content = parseAndFormatResults(result).trim()
-                    return `## ${ioc}\n${content}\n---\n\n`
-                  })
-                  .join("\n");
-
-                if (formatted) {
-                  navigator.clipboard
-                    .writeText(formatted)
-                    .then(() => alert("Formatted IOCs copied to clipboard!"))
-                    .catch(() => alert("Error copying to clipboard."));
-                } else {
-                  alert("No formatted results available to copy.");
-                }
-              }}
-              disabled={Object.keys(results).length === 0}
-            >
-              📋 Copy Formatted IOCs
-            </Button>
-          </div>
-
-          <Form.Group className="mt-4">
-            <Form.Label>🛠️ Select Services</Form.Label>
-            <div className="d-flex flex-wrap gap-3">
-              {["VirusTotal", "AbuseIPDB"].map((service) => {
-                const id = `service-${service.toLowerCase()}`
-                return (
-                  <Form.Check
-                    key={service}
-                    id={id}
-                    type="checkbox"
-                    className={`d-flex align-items-center ${
-                      isDarkMode ? "text-white" : "text-dark"
+            <div className="rounded-2xl border border-socx-border-light bg-white/80 p-4 dark:border-socx-border-dark dark:bg-socx-panel/50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">ProxyCheck enrichment</p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={proxyCheckEnabled}
+                  onClick={() => onProxyCheckToggle(!proxyCheckEnabled)}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
+                    proxyCheckEnabled
+                      ? "border-socx-accent bg-socx-accent/80"
+                      : "border-socx-border-light bg-white dark:border-socx-border-dark dark:bg-socx-panel"
+                  }`}>
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
+                      proxyCheckEnabled ? "translate-x-5" : "translate-x-1"
                     }`}
-                  >
-                    <Form.Check.Input
-                      type="checkbox"
-                      checked={selectedServices.includes(service)}
-                      onChange={(e) =>
-                        onServiceToggle(service, e.target.checked)
-                      }
-                    />
-                    <Form.Check.Label
-                      htmlFor={id}
-                      style={{ cursor: "pointer" }}
-                      className="ms-2 mb-0"
-                    >
+                  />
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-socx-muted dark:text-socx-muted-dark">
+                ProxyCheck adds VPN/proxy classification to Abuse lookups.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={onCheckBulk}
+                disabled={isLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-3 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong focus-visible:outline-none focus-visible:shadow-socx-focus disabled:cursor-not-allowed disabled:opacity-60">
+                <PlayCircleIcon className="h-5 w-5" />
+                {isLoading ? "Running analysis…" : "Run analysis"}
+              </button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={onClearList}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:text-white">
+                  <TrashIcon className="h-4 w-4" />
+                  Clear list
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onExport("csv")}
+                  disabled={Object.keys(results).length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onExport("xlsx")}
+                  disabled={Object.keys(results).length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const formatted = Object.entries(results)
+                      .filter(([_, result]) => {
+                        const content = parseAndFormatResults(result).trim()
+                        return content && content !== "-"
+                      })
+                      .map(([ioc, result]) => {
+                        const content = parseAndFormatResults(result).trim()
+                        return `## ${ioc}\n${content}\n---\n\n`
+                      })
+                      .join("\n")
+
+                    if (formatted) {
+                      navigator.clipboard
+                        .writeText(formatted)
+                        .then(() => alert("Formatted IOCs copied to clipboard!"))
+                        .catch(() => alert("Error copying to clipboard."))
+                    } else {
+                      alert("No formatted results available to copy.")
+                    }
+                  }}
+                  disabled={Object.keys(results).length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                  <ClipboardDocumentListIcon className="h-4 w-4" />
+                  Copy formatted
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
+                Services
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {["VirusTotal", "AbuseIPDB"].map((service) => {
+                  const checked = selectedServices.includes(service)
+                  return (
+                    <button
+                      type="button"
+                      key={service}
+                      onClick={(event) => onServiceToggle(service, !checked)}
+                      className={`socx-chip ${checked ? "socx-chip-active" : "border-socx-border-light bg-white/90 dark:border-socx-border-dark dark:bg-socx-panel/40"}`}
+                      aria-pressed={checked}>
                       {service}
-                    </Form.Check.Label>
-                  </Form.Check>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {iocTypeSummary.length > 0 && (
+              <div className="space-y-3 rounded-2xl border border-socx-border-light bg-white/90 p-4 dark:border-socx-border-dark dark:bg-socx-panel/40">
+                <p className="text-sm font-semibold">Detected IOC types</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {iocTypeSummary.map(({ type, count }) => (
+                    <span key={type} className="rounded-full bg-socx-cloud-soft px-3 py-1 text-socx-ink dark:bg-socx-panel/60 dark:text-white">
+                      {type}: {count}
+                    </span>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  {iocTypeSummary.map(({ type }) => {
+                    const checked = ignoredTypes.includes(type)
+                    return (
+                      <label key={type} className="flex cursor-pointer items-center justify-between rounded-xl border border-socx-border-light px-3 py-2 text-sm dark:border-socx-border-dark">
+                        <span>{`Ignore ${type}`}</span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => onTypeToggle(type)}
+                          className="h-4 w-4 rounded border-socx-border-light text-socx-accent focus:ring-socx-accent"
+                        />
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+
+        {message && (
+          <div className="rounded-socx-lg border border-socx-border-light bg-socx-cloud-soft/60 px-4 py-3 text-sm text-socx-ink dark:border-socx-border-dark dark:bg-socx-panel/50 dark:text-white">
+            {message}
+          </div>
+        )}
+
+        {results && Object.keys(results).length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold">Results</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {Object.entries(results).map(([ioc, result]) => {
+                const level = getRiskLevel(result)
+                return (
+                  <div
+                    key={ioc}
+                    className={`rounded-2xl border p-4 shadow-sm ${riskTone[level].border}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold">{ioc}</p>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${riskTone[level].badge}`}>
+                        {riskTone[level].label}
+                      </span>
+                    </div>
+                    <pre className="mt-3 whitespace-pre-wrap break-words text-xs text-socx-ink dark:text-socx-muted-dark">
+                      {parseAndFormatResults(result)}
+                    </pre>
+                  </div>
                 )
               })}
             </div>
-          </Form.Group>
-
-          {iocTypeSummary.length > 0 && (
-            <Card className={`mt-4 ${themeClass}`}>
-              <Card.Body>
-                <h5>🧭 Detected IOC Types</h5>
-                <div className="d-flex flex-wrap gap-2">
-                  {iocTypeSummary.map(({ type, count }) => (
-                    <Badge
-                      key={`summary-${type}`}
-                      bg="secondary"
-                      className="p-2"
-                    >
-                      {type}: {count}
-                    </Badge>
-                  ))}
-                </div>
-
-                <div className="mt-3">
-                  <Form.Label className="mb-2">Ignore IOC types</Form.Label>
-                  <div className="d-flex flex-column gap-2">
-                    {iocTypeSummary.map(({ type }) => {
-                      const checkboxId = `ignore-${type}`
-                      return (
-                        <Form.Check
-                          key={checkboxId}
-                          id={checkboxId}
-                          type="checkbox"
-                          className={`d-flex align-items-center ${
-                            isDarkMode ? "text-white" : "text-dark"
-                          }`}
-                        >
-                          <Form.Check.Input
-                            type="checkbox"
-                            checked={ignoredTypes.includes(type)}
-                            onChange={() => onTypeToggle(type)}
-                          />
-                          <Form.Check.Label
-                            htmlFor={checkboxId}
-                            style={{ cursor: "pointer" }}
-                            className="ms-2 mb-0"
-                          >
-                            Ignore {type}
-                          </Form.Check.Label>
-                        </Form.Check>
-                      )
-                    })}
-                  </div>
-                </div>
-              </Card.Body>
-            </Card>
-          )}
-        </Col>
-      </Row>
-
-      {message && (
-        <Alert
-          variant={isLoading ? "info" : "success"}
-          className="text-center"
-        >
-          {message}
-        </Alert>
-      )}
-
-      {results && Object.keys(results).length > 0 && (
-        <>
-          <h2>📦 Results</h2>
-          <Row>
-            {Object.entries(results).map(([ioc, result]) => {
-              const riskLevel = getRiskLevel(result);
-              const riskClass = getRiskClass(riskLevel);
-
-              return (
-                <Col md={6} key={ioc}>
-                  <Card className={`mb-3 shadow-sm border ${riskClass}`}>
-                    <Card.Header>
-                      <strong>{ioc}</strong>{" "}
-                      <Badge
-                        bg={
-                          riskLevel === "high"
-                            ? "danger"
-                            : riskLevel === "medium"
-                            ? "warning"
-                            : "success"
-                        }
-                        className="ms-2"
-                      >
-                        {riskLevel.toUpperCase()}
-                      </Badge>
-                    </Card.Header>
-                    <Card.Body>
-                      <pre className="small">
-                        {parseAndFormatResults(result)}
-                      </pre>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              );
-            })}
-          </Row>
-        </>
-      )}
-    </Container>
+          </section>
+        )}
+      </div>
+    </div>
   )
 }
 

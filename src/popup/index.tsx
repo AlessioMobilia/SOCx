@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import PopupUI from "./PopupUI"
-import "./popup.css"
-import "../utility/config.css"
-import "../utility/colors.css"
+import "../styles/tailwind.css"
 import { Storage } from "@plasmohq/storage"
 import { showNotification } from "~src/utility/utils"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
@@ -100,6 +98,15 @@ const Popup = () => {
     storage.set("iocHistory", [])
   }
 
+  const handleOpenOptionsClick = () => {
+    if (chrome.runtime?.openOptionsPage) {
+      chrome.runtime.openOptionsPage()
+    } else {
+      const url = chrome.runtime.getURL("options.html")
+      window.open(url, "_blank")
+    }
+  }
+
   return (
     <PopupUI
       isDarkMode={isDarkMode}
@@ -107,8 +114,10 @@ const Popup = () => {
       onBulkCheckClick={handleBulkCheckClick}
       onSubnetExtractorClick={handleSubnetExtractorClick}
       onSubnetCheckClick={handleSubnetCheckClick}
-      onOpenSidePanelClick={handleOpenSidePanelClick}
-      onClearHistory={handleClearHistory}
+  onOpenSidePanelClick={handleOpenSidePanelClick}
+  onClearHistory={handleClearHistory}
+  onToggleTheme={() => setIsDarkMode((prev) => !prev)}
+  onOpenOptionsClick={handleOpenOptionsClick}
     />
   )
 }

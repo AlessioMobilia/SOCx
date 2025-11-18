@@ -3,7 +3,7 @@ import { sendToBackground } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 
 import BulkCheckUI from "./BulkCheckUI"
-import "./bulk-check.css"
+import "../styles/tailwind.css"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 import {
   extractIOCs,

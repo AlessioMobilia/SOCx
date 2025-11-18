@@ -2,10 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import SidePanelUI from "./SidePanelUI";
-import { defang, refang, isAlreadyDefanged, extractIOCs } from "../utility/utils"; // Supponiamo che queste funzioni siano in un file utils.ts
-import "./sidepanel.css";
-import "../utility/config.css";
-import "../utility/colors.css";
+import { defang, refang, isAlreadyDefanged, extractIOCs } from "../utility/utils";
+import "../styles/tailwind.css";
 
 const SidePanel = () => {
   const [note, setNote] = useState("");

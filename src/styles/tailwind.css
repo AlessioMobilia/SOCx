@@ -1,0 +1,64 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    @apply antialiased;
+  }
+
+  body {
+    @apply font-inter bg-socx-cloud text-socx-ink transition-colors duration-200;
+    min-width: 360px;
+    margin: 0;
+  }
+
+  body.dark-mode {
+    @apply bg-socx-night text-white;
+  }
+
+  ::selection {
+    background-color: rgba(245, 194, 66, 0.3);
+    color: inherit;
+  }
+}
+
+@layer components {
+  .socx-card {
+    @apply rounded-socx-md border border-socx-border-light bg-white/70 dark:border-socx-border-dark dark:bg-socx-panel/80;
+  }
+
+  .socx-chip {
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors;
+  }
+
+  .socx-chip-active {
+    @apply border-socx-accent bg-socx-accent/10 text-socx-ink dark:text-white;
+  }
+
+  .socx-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(245, 194, 66, 0.4) transparent;
+  }
+
+  .socx-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .socx-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .socx-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 999px;
+  }
+
+  .dark-mode .socx-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.25);
+  }
+}
