@@ -8,13 +8,23 @@ With integration of leading services like **VirusTotal**, **AbuseIPDB**, **Censy
 
 ---
 
+## 📥 Install SOCx
+
+You can install SOCx directly from your browser’s official store:
+
+- **Chrome Web Store**: https://chromewebstore.google.com/detail/socx/nanabcjeikkjaiabmlncionjliiobcaf
+- **Firefox Add-ons**: https://addons.mozilla.org/it/firefox/addon/socx/
+- **Microsoft Edge Add-ons**: https://microsoftedge.microsoft.com/addons/detail/socx/bghkcnheknfloofcbffhhlfaojknjkfp
+
+---
+
 ## ✨ Key Features
 
 * 🔍 **Instant IOC Check**
   Quickly analyze IPs, domains, URLs, hashes, emails, ASN, MAC addresses, and more.
 
 * 📘 **Guided user workflow**
-  A dedicated wiki with step‑by‑step examples, tips, and best practices for non‑technical users is available in [`WIKI.md`](./WIKI.md).
+  A dedicated wiki with step‑by‑step examples, tips, and best practices for non‑technical users is available in the [SOCx wiki](https://github.com/AlessioMobilia/SOCx/wiki).
 
 * 🌐 **Integration with over 20 OSINT services**
   Support for the most widely used services in the threat intelligence industry.
@@ -30,11 +40,9 @@ With integration of leading services like **VirusTotal**, **AbuseIPDB**, **Censy
 
 ## 🧪 How to Use
 
-1. **Install the extension** from the [Chrome Web Store](https://chromewebstore.google.com/detail/socx/nanabcjeikkjaiabmlncionjliiobcaf)
-2. **Click the SOCx icon** in your browser toolbar
-3. **Enter an IOC** (IP, domain, hash, etc.)
-4. **Select the engines to query**
-5. **View the results** or export to CSV/Excel
+Use SOCx mainly while you browse: select an IOC (IP, domain, URL, hash, email, ASN, MAC) on any page and use the **right‑click menu** or **floating SOCx buttons** to open your favorite OSINT tools in one click. For long texts or lists, open the **popup** and use **Bulk IOC Check**, **Subnet tools**, or the **Field notes** side panel to organize and investigate indicators more efficiently.
+
+For a more complete, always up‑to‑date guide with examples, screenshots, and best practices, see the [SOCx wiki](https://github.com/AlessioMobilia/SOCx/wiki).
 
 ---
 
