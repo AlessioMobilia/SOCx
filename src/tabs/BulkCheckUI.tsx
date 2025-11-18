@@ -87,14 +87,23 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
       const harmlessBonus = Math.min(harmless * 0.2, 5)
       const vtScore = malicious * 3 + suspicious - harmlessBonus
 
-      if (vtScore >= 20) vtLevel = "high"
-      else if (vtScore >= 5) vtLevel = "medium"
+      if (vtScore >= 20) {
+        vtLevel = "high"
+      } else if (vtScore >= 5 || malicious > 0) {
+        // Treat even single malicious verdicts as medium severity.
+        vtLevel = "medium"
+      }
     }
 
     if (abuse) {
       const abuseScore = abuse?.data?.abuseConfidenceScore || 0
-      if (abuseScore >= 50) abuseLevel = "high"
-      else if (abuseScore >= 20) abuseLevel = "medium"
+      const totalReports = Number(abuse?.data?.totalReports) || 0
+      if (abuseScore >= 50) {
+        abuseLevel = "high"
+      } else if (abuseScore >= 20 || totalReports > 0) {
+        // Flag all reported IOCs as medium to make them stand out.
+        abuseLevel = "medium"
+      }
     }
 
     const levels: Array<"low" | "medium" | "high"> = ["low", "medium", "high"]

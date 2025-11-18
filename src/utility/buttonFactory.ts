@@ -22,29 +22,49 @@ const ICONS = {
 } as const
 
 type ButtonTheme = {
-  background: string
+  surface: string
+  surfaceHover: string
+  surfaceActive: string
   border: string
-  color: string
+  borderHover: string
+  accent: string
+  focusRing: string
+  glow: string
   icon: keyof typeof ICONS
 }
 
 const THEMES: Record<"virustotal" | "abuse" | "magic", ButtonTheme> = {
   virustotal: {
-    background: "rgba(37, 100, 235, 1)",
-    border: "rgba(59, 130, 246, 0.9)",
-    color: "#06182eff",
+    surface: "linear-gradient(135deg, rgba(10,16,30,0.94), rgba(33,51,92,0.82))",
+    surfaceHover: "linear-gradient(135deg, rgba(15,24,44,0.96), rgba(45,70,120,0.88))",
+    surfaceActive: "linear-gradient(135deg, rgba(8,13,24,0.92), rgba(29,47,86,0.78))",
+    border: "rgba(120, 156, 236, 0.45)",
+    borderHover: "rgba(120, 156, 236, 0.85)",
+    accent: "#9cc7ff",
+    focusRing: "rgba(120, 156, 236, 0.55)",
+    glow: "rgba(10, 16, 30, 0.65)",
     icon: "virustotal"
   },
   abuse: {
-    background: "rgba(239, 68, 68, 1)",
-    border: "rgba(248, 113, 113, 0.9)",
-    color: "#300c0cff",
+    surface: "linear-gradient(135deg, rgba(22,8,12,0.94), rgba(56,20,30,0.82))",
+    surfaceHover: "linear-gradient(135deg, rgba(30,10,14,0.95), rgba(68,24,36,0.9))",
+    surfaceActive: "linear-gradient(135deg, rgba(18,6,10,0.92), rgba(46,16,26,0.78))",
+    border: "rgba(248, 113, 113, 0.4)",
+    borderHover: "rgba(248, 113, 113, 0.72)",
+    accent: "#f87171",
+    focusRing: "rgba(248, 113, 113, 0.5)",
+    glow: "rgba(22, 8, 12, 0.7)",
     icon: "abuse"
   },
   magic: {
-    background: "rgba(245, 194, 66, 1)",
-    border: "rgba(245, 194, 66, 0.9)",
-    color: "#2b1b00",
+    surface: "linear-gradient(135deg, rgba(26,18,6,0.94), rgba(56,41,12,0.85))",
+    surfaceHover: "linear-gradient(135deg, rgba(30,22,8,0.96), rgba(68,52,16,0.9))",
+    surfaceActive: "linear-gradient(135deg, rgba(18,12,4,0.92), rgba(48,34,10,0.78))",
+    border: "rgba(245, 194, 66, 0.45)",
+    borderHover: "rgba(245, 194, 66, 0.8)",
+    accent: "#f5c242",
+    focusRing: "rgba(245, 194, 66, 0.55)",
+    glow: "rgba(26, 18, 6, 0.65)",
     icon: "magic"
   }
 }
@@ -54,28 +74,39 @@ const applyBaseStyling = (button: HTMLButtonElement, theme: ButtonTheme, label: 
   button.innerHTML = ICONS[theme.icon]
 
   // dimensioni / layout
-  button.style.width = "30px"
-  button.style.height = "30px"
+  button.style.width = "36px"
+  button.style.height = "36px"
   button.style.position = "absolute"
   button.style.zIndex = "2147483647"
-  button.style.borderRadius = "8px"
+  button.style.borderRadius = "16px"
   button.style.display = "inline-flex"
   button.style.alignItems = "center"
   button.style.justifyContent = "center"
   button.style.padding = "0"
   button.style.cursor = "pointer"
+  button.style.fontFamily = "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+  button.style.boxSizing = "border-box"
+  button.style.backdropFilter = "blur(18px)"
+  button.style.setProperty("-webkit-backdrop-filter", "blur(18px)")
+  button.style.letterSpacing = "0.08em"
+  button.style.textTransform = "uppercase"
+  button.style.fontSize = "10px"
+  button.style.fontWeight = "600"
 
-  // stile FLAT (no shadow, no blur), manteniamo i colori originali
+  // nuova superficie glass + accenti SOCx
   button.style.border = `1px solid ${theme.border}`
-  button.style.background = theme.background
-  button.style.color = theme.color
+  button.style.background = theme.surface
+  button.style.color = theme.accent
+  button.style.boxShadow = `0 15px 35px ${theme.glow}`
 
   // transizioni leggere
   button.style.transition = [
     "transform 0.16s ease-out",
     "background-color 0.16s ease-out",
     "border-color 0.16s ease-out",
-    "opacity 0.16s ease-out"
+    "opacity 0.16s ease-out",
+    "box-shadow 0.2s ease-out",
+    "background 0.2s ease-out"
   ].join(", ")
 
   // accessibilità
@@ -86,41 +117,68 @@ const applyBaseStyling = (button: HTMLButtonElement, theme: ButtonTheme, label: 
   // SVG leggermente ridimensionato
   const svg = button.querySelector("svg")
   if (svg) {
-    svg.setAttribute("width", "18")
-    svg.setAttribute("height", "18")
-    ;(svg as SVGElement).style.opacity = "0.95"
+    svg.setAttribute("width", "17")
+    svg.setAttribute("height", "17")
+    ;(svg as SVGElement).style.opacity = "0.92"
   }
 
   // stato di base
   button.style.opacity = "0.96"
 
-  // hover (flat: nessuna ombra, solo micro movimento + opacity)
-  button.addEventListener("mouseenter", () => {
-    button.style.transform = "translateY(-1px) scale(1.02)"
-    button.style.opacity = "1"
-  })
+  type VisualState = "base" | "hover" | "active"
+  let state: VisualState = "base"
+  let isFocused = false
 
-  button.addEventListener("mouseleave", () => {
-    button.style.transform = "translateY(0) scale(1)"
-    button.style.opacity = "0.96"
-  })
+  const applyShadow = () => {
+    const shadow =
+      state === "active"
+        ? `0 8px 24px ${theme.glow}`
+        : state === "hover"
+        ? `0 18px 42px ${theme.glow}`
+        : `0 15px 35px ${theme.glow}`
+    button.style.boxShadow = isFocused ? `${shadow}, 0 0 0 2px ${theme.focusRing}` : shadow
+  }
+
+  const setState = (next: VisualState) => {
+    state = next
+    if (state === "hover") {
+      button.style.background = theme.surfaceHover
+      button.style.borderColor = theme.borderHover
+      button.style.opacity = "1"
+      button.style.transform = "translateY(-2px) scale(1.03)"
+    } else if (state === "active") {
+      button.style.background = theme.surfaceActive
+      button.style.borderColor = theme.borderHover
+      button.style.opacity = "0.92"
+      button.style.transform = "translateY(0px) scale(0.96)"
+    } else {
+      button.style.background = theme.surface
+      button.style.borderColor = theme.border
+      button.style.opacity = "0.96"
+      button.style.transform = "translateY(0) scale(1)"
+    }
+    applyShadow()
+  }
+
+  setState("base")
+
+  // hover con micro movimento e glow coerente col resto dell'estensione
+  button.addEventListener("mouseenter", () => setState("hover"))
+
+  button.addEventListener("mouseleave", () => setState("base"))
 
   // active (click) – leggero "press"
-  button.addEventListener("mousedown", () => {
-    button.style.transform = "translateY(0px) scale(0.96)"
-    button.style.opacity = "0.9"
-  })
-  button.addEventListener("mouseup", () => {
-    button.style.transform = "translateY(-1px) scale(1.02)"
-    button.style.opacity = "1"
-  })
+  button.addEventListener("mousedown", () => setState("active"))
+  button.addEventListener("mouseup", () => setState("hover"))
 
   // focus per tastiera (anello sobrio)
   button.addEventListener("focus", () => {
-    button.style.boxShadow = "0 0 0 2px rgba(148, 163, 184, 0.7)"
+    isFocused = true
+    applyShadow()
   })
   button.addEventListener("blur", () => {
-    button.style.boxShadow = "none"
+    isFocused = false
+    applyShadow()
   })
 }
 

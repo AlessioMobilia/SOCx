@@ -187,7 +187,7 @@ const containerThemeStyle = isDarkMode
   const headerStrip = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">
       <span style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:${headerTone};">SOCx Intel</span>
-      <span style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${liveTone};">Live</span>
+      <span style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${liveTone};">IOC</span>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.08);margin-bottom:12px;"></div>
   `
