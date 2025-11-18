@@ -13,6 +13,9 @@ With integration of leading services like **VirusTotal**, **AbuseIPDB**, **Censy
 * 🔍 **Instant IOC Check**
   Quickly analyze IPs, domains, URLs, hashes, emails, ASN, MAC addresses, and more.
 
+* 📘 **Guided user workflow**
+  A dedicated wiki with step‑by‑step examples, tips, and best practices for non‑technical users is available in [`WIKI.md`](./WIKI.md).
+
 * 🌐 **Integration with over 20 OSINT services**
   Support for the most widely used services in the threat intelligence industry.
 
@@ -42,20 +45,20 @@ Need to test or modify SOCx locally? Here’s how to do it:
 ### Requirements
 
 * Node.js (recommended version 18+)
-* npm or yarn
+* pnpm
 
 ### Installation
 
 ```bash
 git clone https://github.com/AlessioMobilia/socx.git
 cd socx
-npm install
+pnpm install
 ```
 
 ### Run in Development Mode
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 1. Open **Chrome** and go to `chrome://extensions`
@@ -66,7 +69,7 @@ npm run dev
 ### Final Build (for Production)
 
 ```bash
-npm run build
+pnpm build
 ```
 
 The compiled version will be available in the `build/` folder.
