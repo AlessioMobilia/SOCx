@@ -49,6 +49,14 @@
     width: 6px;
   }
 
+  .socx-scroll-mini {
+    scrollbar-width: thin;
+  }
+
+  .socx-scroll-mini::-webkit-scrollbar {
+    width: 4px;
+  }
+
   .socx-scroll::-webkit-scrollbar-track {
     background: transparent;
   }

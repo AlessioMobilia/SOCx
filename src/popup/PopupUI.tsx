@@ -75,8 +75,8 @@ const PopupUI: React.FC<PopupUIProps> = ({
   ]
 
   return (
-    <div className="min-w-[320px] max-w-[360px] bg-transparent p-3 font-inter text-socx-ink dark:text-white">
-      <div className="space-y-3 rounded-socx-lg border border-socx-border-light bg-white/90 p-4 shadow-sm dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+    <div className="min-w-[320px] max-w-[360px] bg-transparent p-2.5 font-inter text-socx-ink dark:text-white">
+      <div className="space-y-2 rounded-socx-lg border border-socx-border-light bg-white/90 p-3 shadow-sm dark:border-socx-border-dark dark:bg-socx-night-soft/80">
         <header className="flex items-start justify-between gap-2">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-socx-muted dark:text-socx-muted-dark">
@@ -88,20 +88,20 @@ const PopupUI: React.FC<PopupUIProps> = ({
             type="button"
             onClick={onToggleTheme}
             aria-label="Toggle color theme"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-socx-border-light text-socx-muted transition hover:border-socx-accent hover:text-socx-ink focus-visible:outline-none focus-visible:shadow-socx-focus dark:border-socx-border-dark dark:text-socx-muted-dark">
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-socx-border-light text-socx-muted transition hover:border-socx-accent hover:text-socx-ink focus-visible:outline-none focus-visible:shadow-socx-focus dark:border-socx-border-dark dark:text-socx-muted-dark">
             {isDarkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
           </button>
         </header>
 
-        <section className="space-y-2">
+        <section className="space-y-1.5">
           {actions.map(({ label, helper, icon: Icon, action }) => (
             <button
               key={label}
               type="button"
               onClick={action}
-              className="flex w-full items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-3 py-2 text-left text-sm transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:bg-socx-panel/50">
+              className="flex w-full items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-3 py-1.5 text-left text-sm transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:bg-socx-panel/50">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent bg-socx-accent/15 text-socx-accent">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent bg-socx-accent/15 text-socx-accent">
                   <Icon className="h-4 w-4" />
                 </span>
                 <div>
@@ -116,7 +116,7 @@ const PopupUI: React.FC<PopupUIProps> = ({
           ))}
         </section>
 
-        <section className="space-y-2">
+        <section className="space-y-1.5">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
               Latest activity
@@ -130,14 +130,14 @@ const PopupUI: React.FC<PopupUIProps> = ({
               </button>
             )}
           </div>
-          <div className="socx-scroll max-h-36 space-y-1 overflow-y-auto rounded-xl border border-socx-border-light bg-white/70 p-2 dark:border-socx-border-dark dark:bg-socx-panel/40">
+          <div className="socx-scroll socx-scroll-mini max-h-24 space-y-1 overflow-y-auto rounded-xl border border-socx-border-light bg-white/70 p-2 dark:border-socx-border-dark dark:bg-socx-panel/40">
             {recentHistory.length === 0 ? (
               <p className="py-4 text-center text-xs text-socx-muted dark:text-socx-muted-dark">No IOCs recorded yet.</p>
             ) : (
               recentHistory.map((entry, index) => (
                 <div
                   key={`${entry.text}-${index}`}
-                  className="flex items-center justify-between rounded-lg px-2 py-1 text-xs text-socx-ink dark:text-white">
+                  className="flex items-center justify-between rounded-lg px-2 py-0.5 text-xs text-socx-ink dark:text-white">
                   <div className="mr-3 min-w-0">
                     <p className="truncate text-sm font-medium">{entry.text}</p>
                     <p className="text-[11px] uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
