@@ -1543,32 +1543,27 @@ export const extractBestOrganization = (whois: string): string => {
 
 
 
-
-
-
-
-
 // Funzione per inviare un messaggio al content script format-selection
 export const formatAndCopySelection = async (tabId: number, frameId: number): Promise<void> => {
   try {
     const response = await chrome.tabs.sendMessage(tabId, {
-      name: "format-selection"
-    }, { frameId })
+      name: "format-selection",
+    }, { frameId });
 
-    const formattedText = response?.formatted
+    const formattedText = response?.formatted;
     console.log("Response:", response);
 
     if (typeof formattedText === "string" && formattedText.trim() !== "" && response?.success) {
       console.log("Formatted text to copy:", formattedText);
-      await copyToClipboard(formattedText)
+      await copyToClipboard(formattedText);
     } else {
-      showNotification("Nothing to copy", "No formatted text received.")
+      showNotification("Nothing to copy", "No formatted text received.");
     }
   } catch (error) {
-    showNotification("Error", "Could not format or copy selection.")
-    console.error("formatAndCopySelection error:", error)
+    showNotification("Error", "Could not format or copy selection.");
+    console.error("formatAndCopySelection error:", error);
   }
-}
+};
 
 export function formatSelectedText(lastValidSelection: Selection): string {
   console.log("Formatting selected text:", lastValidSelection);
@@ -1585,48 +1580,45 @@ export function formatSelectedText(lastValidSelection: Selection): string {
   div.appendChild(fragment);
   console.log("Selected HTML before cleanup:", div.innerHTML);
 
-  // Pulizia del contenuto spostata in una funzione separata
+  // Pulizia del contenuto
   cleanContent(div);
 
   console.log("Selected HTML after cleanup:", div.innerHTML);
   const orderedBlocks: string[] = [];
   const seenBlocks = new Set<string>();
   const seenCanonicalBlocks = new Set<string>();
-  const seenAggressiveBlocks = new Set<string>();
+  const seenAggressiveBlocks = new Set<string>(); // tenuto per futura estensione, ma non usato nel check
 
   const appendBlock = (block: string | string[] | null, label: string) => {
-    if (!block) {
-      return;
-    }
+    if (!block) return;
 
     const values = Array.isArray(block) ? block : [block];
 
     values.forEach((value) => {
       const normalized = normalizeOutputBlock(value);
-      if (!normalized) {
-        return;
-      }
+      if (!normalized) return;
 
       const canonical = canonicalizeOutputBlock(normalized);
-      const aggressive = aggressiveCanonicalizeOutputBlock(normalized);
-      if (
-        seenBlocks.has(normalized) ||
-        seenCanonicalBlocks.has(canonical) ||
-        (aggressive && seenAggressiveBlocks.has(aggressive))
-      ) {
+      // deduplica meno aggressiva: niente aggressiveCanonical nel check
+      if (seenBlocks.has(normalized) || seenCanonicalBlocks.has(canonical)) {
         return;
       }
 
       console.log(`Dati ${label} estratti:`, normalized);
       seenBlocks.add(normalized);
       seenCanonicalBlocks.add(canonical);
+
+      // mantengo comunque il calcolo aggressivo per uso futuro/debug
+      const aggressive = aggressiveCanonicalizeOutputBlock(normalized);
       if (aggressive) {
         seenAggressiveBlocks.add(aggressive);
       }
+
       orderedBlocks.push(normalized);
     });
   };
 
+  // Ordine estrattori
   appendBlock(extractJsonBlocks(div), "JSON");
   appendBlock(extractSplunkKeyValue(div), "Splunk");
   appendBlock(extractGridcellKeyValue(div), "gridcell");
@@ -1640,10 +1632,20 @@ export function formatSelectedText(lastValidSelection: Selection): string {
   appendBlock(extractDtDdKeyValue(div), "dt/dl");
   appendBlock(extractLabelKeyValue(div), "label key-value");
   appendBlock(extractSpanKeyValue(div), "span key-value");
+
+  // Estrattore testuale "nuovo"
   const strictTextKeyValue = extractTextKeyValue(div);
   appendBlock(strictTextKeyValue, "text key-value");
+
   if (!strictTextKeyValue) {
-    appendBlock(extractTextKeyValue(div, { removeNodes: false, allowSimpleLines: true }), "loose text key-value");
+    // versione più permissiva
+    appendBlock(
+      extractTextKeyValue(div, { removeNodes: false, allowSimpleLines: true }),
+      "loose text key-value"
+    );
+
+    // fallback legacy (versione vecchia semplificata)
+    appendBlock(legacyExtractTextKeyValue(div), "legacy text key-value");
   }
 
   const remainingText = extractRemainingText(div);
@@ -1661,13 +1663,15 @@ export function formatSelectedText(lastValidSelection: Selection): string {
   return finalText;
 }
 
+// ============================================================================
+// Normalizzazione e deduplica
+// ============================================================================
+
 const JSON_ATTRIBUTE_CANDIDATES = ["data-json", "data-clipboard-text", "data-raw", "data-payload", "data-copy-text"];
 const JSON_SELECTOR_CANDIDATES = ["pre", "code", "textarea", "[data-json]", "[data-testid*='json']", "[data-component*='json']", "[class*='json']"];
 
 function normalizeOutputBlock(value: string): string {
-  if (!value) {
-    return "";
-  }
+  if (!value) return "";
 
   const replaced = value.replace(/\u00A0/g, " ").replace(/\r/g, "");
   const trimmed = replaced.trim();
@@ -1676,11 +1680,11 @@ function normalizeOutputBlock(value: string): string {
     return trimmed;
   }
 
-  const lines = replaced.split("\n").map((line) => line.replace(/\t/g, "    ").replace(/[ ]+$/g, ""));
+  const lines = replaced
+    .split("\n")
+    .map((line) => line.replace(/\t/g, "    ").replace(/[ ]+$/g, ""));
   const filtered = lines.filter((line, index, array) => {
-    if (line.trim() !== "") {
-      return true;
-    }
+    if (line.trim() !== "") return true;
     const previous = array[index - 1];
     return previous && previous.trim() !== "";
   });
@@ -1690,14 +1694,10 @@ function normalizeOutputBlock(value: string): string {
 
 function canonicalizeOutputBlock(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
+  if (!trimmed) return "";
 
   const isCodeFence = /^```/.test(trimmed) && /```$/.test(trimmed);
-  if (isCodeFence) {
-    return trimmed;
-  }
+  if (isCodeFence) return trimmed;
 
   return trimmed
     .replace(/\s+/g, " ")
@@ -1707,9 +1707,7 @@ function canonicalizeOutputBlock(value: string): string {
 
 function aggressiveCanonicalizeOutputBlock(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
+  if (!trimmed) return "";
 
   if (/^```/.test(trimmed) && /```$/.test(trimmed)) {
     return trimmed.toLowerCase();
@@ -1718,17 +1716,17 @@ function aggressiveCanonicalizeOutputBlock(value: string): string {
   return trimmed.replace(/\s+/g, "").toLowerCase();
 }
 
+// ============================================================================
+// Estrazione JSON
+// ============================================================================
+
 function extractJsonBlocks(container: HTMLElement): string[] | null {
   const candidates = new Set<string>();
 
   const tryAddCandidate = (value?: string | null) => {
-    if (!value) {
-      return;
-    }
+    if (!value) return;
     const trimmed = value.trim();
-    if (!trimmed || trimmed.length < 2) {
-      return;
-    }
+    if (!trimmed || trimmed.length < 2) return;
     if (looksLikeJsonStructure(trimmed)) {
       candidates.add(trimmed);
     }
@@ -1761,9 +1759,7 @@ function extractJsonBlocks(container: HTMLElement): string[] | null {
 
 function looksLikeJsonStructure(value: string): boolean {
   const trimmed = value.trim();
-  if (!trimmed) {
-    return false;
-  }
+  if (!trimmed) return false;
   const startsWith = trimmed[0];
   const endsWith = trimmed[trimmed.length - 1];
   return (startsWith === "{" && endsWith === "}") || (startsWith === "[" && endsWith === "]");
@@ -1781,21 +1777,21 @@ function parseJsonFromSource(source: string): string[] {
     }
   }
 
-  const lines = trimmed.split(/\r?\n+/).map((line) => line.trim()).filter(Boolean);
+  const lines = trimmed
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   let parsedLine = false;
   lines.forEach((line) => {
-    if (!looksLikeJsonStructure(line)) {
-      return;
-    }
+    if (!looksLikeJsonStructure(line)) return;
     const parsed = safeParseJsonString(line);
     if (parsed !== null) {
       parsedLine = true;
       blocks.push(formatJsonBlock(parsed));
     }
   });
-  if (parsedLine) {
-    return blocks;
-  }
+  if (parsedLine) return blocks;
 
   const looseBlocks = extractLooseJsonBlocks(trimmed);
   looseBlocks.forEach((block) => {
@@ -1866,15 +1862,13 @@ function safeParseJsonString(value: string): unknown {
   attempts.add(quoteUnquotedJsonKeys(removeTrailingCommas(value)));
   attempts.add(quoteUnquotedJsonKeys(normalizeSingleQuotes(value)));
   attempts.add(
-    quoteUnquotedJsonKeys(
-      removeTrailingCommas(normalizeSingleQuotes(value))
-    )
+    quoteUnquotedJsonKeys(removeTrailingCommas(normalizeSingleQuotes(value)))
   );
 
   for (const attempt of attempts) {
     try {
       return JSON.parse(attempt);
-    } catch (error) {
+    } catch {
       continue;
     }
   }
@@ -1887,9 +1881,7 @@ function removeTrailingCommas(value: string): string {
 }
 
 function normalizeSingleQuotes(value: string): string {
-  if (!/'/.test(value)) {
-    return value;
-  }
+  if (!/'/.test(value)) return value;
 
   const convert = (match: string, prefix: string, content: string) => {
     const escaped = content.replace(/"/g, '\\"');
@@ -1910,31 +1902,29 @@ function formatJsonBlock(value: unknown): string {
   return `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
 }
 
+// ============================================================================
+// Liste
+// ============================================================================
+
 function extractListBlocks(container: HTMLElement): string | null {
   const lines: string[] = [];
   const lists = container.querySelectorAll("ul, ol");
 
   lists.forEach((list) => {
-    if (!container.contains(list)) {
-      return;
-    }
+    if (!container.contains(list)) return;
 
     const children = Array.from(list.children).filter(
       (child): child is HTMLElement => child.tagName.toLowerCase() === "li"
     );
 
-    if (children.length === 0) {
-      return;
-    }
+    if (children.length === 0) return;
 
     const isOrdered = list.tagName.toLowerCase() === "ol";
     let index = 1;
 
     children.forEach((child) => {
       const text = child.textContent?.replace(/\s+/g, " ").trim();
-      if (!text) {
-        return;
-      }
+      if (!text) return;
       lines.push(isOrdered ? `${index}. ${text}` : `- ${text}`);
       index += 1;
     });
@@ -1945,69 +1935,82 @@ function extractListBlocks(container: HTMLElement): string | null {
   return lines.length > 0 ? lines.join("\n") : null;
 }
 
+// ============================================================================
+// Pulizia contenuto
+// ============================================================================
+
 function cleanContent(container: HTMLElement): void {
   // Elementi da rimuovere (contenuti invisibili o superflui)
   const selectorsToRemove = [
-    "img", "svg", "select", "input[type='checkbox']", 
-    "script", "style", "noscript", "template", "iframe", "object", "embed"
+    "img",
+    "svg",
+    "select",
+    "input[type='checkbox']",
+    "script",
+    "style",
+    "noscript",
+    "template",
+    "iframe",
+    "object",
+    "embed",
   ];
-  selectorsToRemove.forEach(selector => {
+  selectorsToRemove.forEach((selector) => {
     const elements = container.querySelectorAll(selector);
-    elements.forEach(el => el.remove());
+    elements.forEach((el) => el.remove());
   });
 
   // Rimuovi elementi hidden (con attributo hidden o stile display: none)
-  container.querySelectorAll("*").forEach(el => {
-    if (
-      el.hasAttribute("hidden") ||
-      el.getAttribute("aria-hidden") === "true" ||
-      getComputedStyle(el).display === "none"
-    ) {
+  // e gestisci aria-hidden solo se non c'è testo significativo
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const hasHiddenAttr = el.hasAttribute("hidden");
+    const isDisplayNone = getComputedStyle(el).display === "none";
+    const isAriaHidden = el.getAttribute("aria-hidden") === "true";
+    const hasVisibleText = !!el.textContent?.trim();
+
+    if (hasHiddenAttr || isDisplayNone || (isAriaHidden && !hasVisibleText)) {
       el.remove();
     }
   });
 
   // Rimuovi elementi tooltip (id o class con 'tooltip', case-insensitive)
-  container.querySelectorAll("*").forEach(el => {
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
     const id = el.id?.toLowerCase() || "";
-    const className = el.className?.toLowerCase() || "";
+    const className = (el.className as string | undefined)?.toLowerCase?.() || "";
     if (id.includes("tooltip") || className.includes("tooltip")) {
       el.remove();
     }
   });
 
-  // Rimuovi elementi con class che contengono  'copy', case-insensitive
-  container.querySelectorAll("*").forEach(el => {
-    const className = el.className?.toLowerCase() || "";
+  // Rimuovi elementi con class che contengono 'copy', case-insensitive
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const className = (el.className as string | undefined)?.toLowerCase?.() || "";
     if (className.includes("copy")) {
       el.remove();
-    }   
+    }
   });
 
-
-
   // Rimuovi tutti i tag <br>
-  container.querySelectorAll("br").forEach(el => el.remove());
+  container.querySelectorAll("br").forEach((el) => el.remove());
 
-  container.querySelectorAll("*").forEach(el => {
-    el.childNodes.forEach(node => {
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    el.childNodes.forEach((node) => {
       if (node.nodeType === Node.TEXT_NODE) {
         node.textContent = node.textContent
-          ?.replace(/\u00A0/g, " ")              // Sostituisce spazi non separabili
+          ?.replace(/\u00A0/g, " ") // Sostituisce spazi non separabili
           .replace(/[\u200B-\u200D\uFEFF]/g, " ") // Caratteri invisibili
-          .replace(/\s+/g, " ")                  // Spazi multipli in uno solo
+          .replace(/\s+/g, " ") // Spazi multipli in uno solo
           .trim();
       }
     });
 
-    // per rimuovere anche &nbsp; presenti come entità HTML (non ancora convertiti in caratteri)
+    // Rimuovi anche &nbsp; come entità HTML
     if (el.innerHTML.includes("&nbsp;")) {
       el.innerHTML = el.innerHTML.replace(/&nbsp;/g, " ");
     }
   });
 
-  // Rimuovi <td> e <tr> vuoti
-  container.querySelectorAll("td, tr, th").forEach(el => {
+  // Rimuovi <td>, <tr>, <th> vuoti
+  container.querySelectorAll<HTMLElement>("td, tr, th").forEach((el) => {
     const text = el.textContent?.replace(/[\u00A0\u200B-\u200D\uFEFF\t\r\n ]/g, "").trim();
     if (!text) {
       el.remove();
@@ -2015,71 +2018,92 @@ function cleanContent(container: HTMLElement): void {
   });
 
   // Rimuovi elementi con solo testo =, :, [-], [+] o singole parentesi
-  container.querySelectorAll("*").forEach(el => {
-    let text = el.textContent?.trim() || "";
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const text = el.textContent?.trim() || "";
     if (
-      /^[:=]+$/.test(text) || 
-      /^\[\-\]$/.test(text) || 
-      /^\[\+\]$/.test(text) || 
+      /^[:=]+$/.test(text) ||
+      /^\[\-\]$/.test(text) ||
+      /^\[\+\]$/.test(text) ||
       /^[\(\)\[\]\{\}]$/.test(text)
     ) {
       el.remove();
     }
   });
 
-  // Rimuovi elementi con attributi data-icon-name o jsexpands o jscollapse o data-icon, o con figli che sembrano icone
-  container.querySelectorAll("*").forEach(el => {
-    if (el.hasAttribute("data-icon-name") || el.hasAttribute("data-icon") || el.hasAttribute("jscollapse") || el.hasAttribute("jsexpands")) {
+  // Rimuovi elementi con attributi icona
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    if (
+      el.hasAttribute("data-icon-name") ||
+      el.hasAttribute("data-icon") ||
+      el.hasAttribute("jscollapse") ||
+      el.hasAttribute("jsexpands")
+    ) {
       el.remove();
     } else {
-      const iconDescendant = el.querySelector(":scope > [data-icon-name], :scope > [data-icon], :scope > svg");
+      const iconDescendant = el.querySelector(
+        ":scope > [data-icon-name], :scope > [data-icon], :scope > svg"
+      );
       if (iconDescendant) {
         iconDescendant.remove();
       }
     }
   });
 
-  // Rimuovi solo i tag <i> con classi che indicano icone (es: fa, fa-icon)
-  container.querySelectorAll("i").forEach(el => {
-    const className = el.className?.toLowerCase() || "";
-    if (className.includes("fa") || className.includes("fa-icon") || className.includes("dropdown")|| className.includes("ms-layer")) {
+  // Rimuovi solo i tag <i> che sembrano icone
+  container.querySelectorAll<HTMLElement>("i").forEach((el) => {
+    const className = (el.className as string | undefined)?.toLowerCase?.() || "";
+    if (
+      className.includes("fa") ||
+      className.includes("fa-icon") ||
+      className.includes("dropdown") ||
+      className.includes("ms-layer")
+    ) {
       el.remove();
     }
   });
 
   // Rimuovi attributi indesiderati
-  const attributesToRemove = ["style", "onclick", "onmouseover", "onerror", "onload", "onmouseout", "onmouseenter", "onmouseleave"];
-  container.querySelectorAll("*").forEach(el => {
-    attributesToRemove.forEach(attr => el.removeAttribute(attr));
+  const attributesToRemove = [
+    "style",
+    "onclick",
+    "onmouseover",
+    "onerror",
+    "onload",
+    "onmouseout",
+    "onmouseenter",
+    "onmouseleave",
+  ];
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    attributesToRemove.forEach((attr) => el.removeAttribute(attr));
   });
 
-  container.querySelectorAll("button").forEach(el => {
-  if (el.textContent?.trim() === "")  {
-    el.remove(); // Rimuove i bottoni vuoti
-  }
-});
+  // Bottoni vuoti
+  container.querySelectorAll<HTMLButtonElement>("button").forEach((el) => {
+    if (el.textContent?.trim() === "") {
+      el.remove();
+    }
+  });
 }
 
-
-
-
-
+// ============================================================================
+// Tabelle & grid
+// ============================================================================
 
 function extractTableLikeData(container: HTMLElement): string | null {
   const keyValuePairs: string[][] = [];
-
-  // Trova tutte le righe (tr)
   const trElements = container.querySelectorAll("tr");
 
-  trElements.forEach(tr => {
-    const cells = Array.from(tr.querySelectorAll("td, th")).map(cell => cell.textContent?.trim() || "");
+  trElements.forEach((tr) => {
+    const cells = Array.from(tr.querySelectorAll("td, th")).map(
+      (cell) => cell.textContent?.trim() || ""
+    );
 
     if (cells.length === 2) {
       const [key, value] = cells;
       if (key && value) {
         keyValuePairs.push([key, value]);
       }
-      tr.remove(); // Rimuove l'intera riga dal DOM
+      tr.remove();
     }
   });
 
@@ -2092,19 +2116,18 @@ function extractGridcellKeyValue(container: HTMLElement): string | null {
   const keyValuePairs: string[][] = [];
   const rowElements = container.querySelectorAll('[role="row"]');
 
-  rowElements.forEach(row => {
-    // Verifica se il row è ancora nel DOM (non già rimosso)
+  rowElements.forEach((row) => {
     if (!container.contains(row)) return;
-
-    // Verifica che il row non sia contenuto in un altro gridcell (evita duplicati)
     if (row.closest('[role="gridcell"]')) return;
 
     const gridcells = Array.from(row.querySelectorAll('[role="gridcell"]'));
     let extracted = false;
 
-    // Cerca gridcell con esattamente due figli (chiave e valore)
+    // gridcell con esattamente due figli (key/value)
     for (const gridcell of gridcells) {
-      const children = Array.from(gridcell.children).filter(el => el.textContent?.trim());
+      const children = Array.from(gridcell.children).filter(
+        (el) => el.textContent?.trim()
+      );
       if (children.length === 2) {
         const key = (children[0].textContent || "").trim();
         const value = (children[1].textContent || "").trim();
@@ -2117,7 +2140,7 @@ function extractGridcellKeyValue(container: HTMLElement): string | null {
       }
     }
 
-    // Se non ha trovato nulla nei figli, cerca gridcell separati
+    // gridcell separati
     if (!extracted && gridcells.length >= 2) {
       const key = (gridcells[0].textContent || "").trim();
       const value = (gridcells[1].textContent || "").trim();
@@ -2133,377 +2156,28 @@ function extractGridcellKeyValue(container: HTMLElement): string | null {
   return formatKeyValue(keyValuePairs);
 }
 
-
-
-
-function extractGridTable(container) {
-  const rows = [];
-
-  // Seleziona tutti gli elementi con role="row" all'interno del contenitore
+function extractGridTable(container: HTMLElement): string | null {
+  const rows: string[][] = [];
   const rowElements = container.querySelectorAll('[role="row"]');
 
-  rowElements.forEach(rowEl => {
-    // Verifica se il row è ancora presente nel DOM
+  rowElements.forEach((rowEl) => {
     if (!container.contains(rowEl)) return;
-
-    // Verifica che il row non sia figlio di un altro gridcell
     if (rowEl.closest('[role="gridcell"]')) return;
 
-    // Seleziona tutti i gridcell nella riga
-    const cells = Array.from(rowEl.querySelectorAll('[role="gridcell"]')).map(cell =>
-      (cell as Element).textContent?.trim().replace(/\s+/g, " ") || ""
+    const cells = Array.from(rowEl.querySelectorAll('[role="gridcell"]')).map(
+      (cell) => (cell as Element).textContent?.trim().replace(/\s+/g, " ") || ""
     );
 
-    // Aggiunge la riga solo se contiene almeno una cella con testo
-    if (cells.length > 0 && cells.some(cell => cell !== "")) {
+    if (cells.length > 0 && cells.some((cell) => cell !== "")) {
       rows.push(cells);
-      rowEl.remove(); // Rimuove la riga dal DOM per evitare doppioni
+      rowEl.remove();
     }
   });
 
-  // Se non ci sono righe valide, restituisce null
   if (rows.length === 0) return null;
 
-  // Formatta i dati raccolti in una tabella Markdown
   return formatTableData(rows);
 }
-
-
-
-
-
-function formatKeyValue(rows: string[][]): string {
-  // Funzione per controllare se il testo è un timestamp, url, email, ecc.
-  const isSpecialCase = (text: string) => {
-    return /(\d{1,2}:\d{2}(:\d{2})?)/.test(text) ||      
-           /\bhttps?:\/\//.test(text) ||                 
-           /\S+@\S+\.\S+/.test(text) ||                  
-           /\d{4}-\d{2}-\d{2}/.test(text) ||            
-           /\bUTC[+-]?\d{1,2}:\d{2}\b/.test(text) ||    
-           /\/[\w\/\-:.]+/.test(text);                  
-  };
-
-  // Rimuove virgolette solo se entrambe presenti
-  const removeSurroundingQuotes = (text: string) => {
-    if ((text.startsWith('"') && text.endsWith('"')) || 
-        (text.startsWith("'") && text.endsWith("'"))) {
-      return text.slice(1, -1);
-    }
-    return text;
-  };
-
-  // Pulizia e normalizzazione spazi e linee multiple
-  const cleanText = (text: string) => {
-    return text
-      .replace(/[\r\n]+/g, " ")      // Unifica le linee spezzate in una riga
-      .replace(/\s+/g, " ")          // Riduce spazi multipli a uno solo
-      .trim();
-  };
-
-  // Pulisce le chiavi
-  const cleanedKeys = rows
-    .filter(r => r.length === 2)
-    .map(([key, _]) => {
-      let cleanedKey = cleanText(key);
-      if (!isSpecialCase(cleanedKey)) {
-        cleanedKey = removeSurroundingQuotes(cleanedKey);
-        cleanedKey = cleanedKey.replace(/[:=]+$/, "");
-      }
-      return cleanedKey + ":";
-    });
-
-  const maxKeyLength = Math.max(...cleanedKeys.map(k => k.length));
-
-  // Pulisce i valori e formatta la coppia chiave-valore
-  return rows
-    .filter(r => r.length === 2)
-    .map(([key, value], index) => {
-      let cleanedValue = cleanText(value);
-      if (!isSpecialCase(cleanedValue)) {
-        cleanedValue = cleanedValue.replace(/[,;]+$/, "");
-        cleanedValue = removeSurroundingQuotes(cleanedValue);
-      }
-
-      return `${cleanedKeys[index].padEnd(maxKeyLength, " ")} ${cleanedValue}`;
-    })
-    .join("\n");
-}
-
-
-
-
-
-function formatTableData(rows: string[][]): string {
-  if (rows.length === 0) return "";
-
-  const columnCount = Math.max(...rows.map(r => r.length));
-
-  // Pulisce le celle da \n e \r
-  const cleanedRows = rows.map(row =>
-    row.map(cell => cell.replace(/[\r\n]+/g, " ").trim())
-  );
-
-  if (columnCount === 2) {
-    return formatKeyValue(cleanedRows);
-  } else {
-    return formatMarkdownTable(cleanedRows);
-  }
-}
-
-
-function formatMarkdownTable(rows: string[][]): string {
-  if (rows.length === 0) return "";
-
-  // Calcola il numero massimo di colonne
-  const columnCount = Math.max(...rows.map(r => r.length));
-
-  // Pulisce le celle da \n e \r e normalizza spazi
-  const cleanedRows = rows.map(row =>
-    row.map(cell => (cell || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim())
-  );
-
-  // Calcola la larghezza massima di ogni colonna
-  const colWidths: number[] = Array(columnCount).fill(0);
-  cleanedRows.forEach(row => {
-    row.forEach((cell, index) => {
-      colWidths[index] = Math.max(colWidths[index], cell.length);
-    });
-  });
-
-  // Funzione per formattare una riga
-  const formatRow = (row: string[]) => {
-    const padded = row.map((cell, i) => {
-      const content = cell || "";
-      return content.padEnd(colWidths[i], " ");
-    });
-    return "| " + padded.join(" | ") + " |";
-  };
-
-  // Formatta tutte le righe senza separatori
-  const formattedRows = cleanedRows.map(formatRow).join("\n");
-
-  return formattedRows;
-}
-
-
-
-
-function extractLabelKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-
-  // Trova tutti i label nel container
-  const labels = container.querySelectorAll("label");
-  labels.forEach(label => {
-    // Estrai solo il testo visibile, ignorando eventuali tag HTML annidati
-    const key = (label.textContent || "").trim();
-
-    // Trova l'elemento successivo, saltando nodi vuoti
-    let sibling = label.nextElementSibling;
-    while (sibling && sibling.textContent?.trim() === "") {
-      sibling = sibling.nextElementSibling;
-    }
-
-    if (sibling) {
-      // Estrai il testo visibile del valore
-      const value = (sibling.textContent || "").trim();
-
-      // Aggiungi la coppia chiave-valore
-      keyValuePairs.push([key, value]);
-
-      // Rimuovi il nodo successivo
-      sibling.remove();
-    }
-
-    // Rimuovi il label dopo averlo processato
-    label.remove();
-  });
-
-  // Se non sono state trovate coppie, restituisci null
-  if (keyValuePairs.length === 0) {
-    return null;
-  }
-
-  // Passa le coppie a formatKeyValue
-  return formatKeyValue(keyValuePairs);
-}
-
-// Funzione per estrarre coppie chiave-valore da span consecutivi
-function extractSpanKeyValue(container: HTMLElement): string | null {
-
-  const keyValuePairs: string[][] = [];
-
-  // Ottieni tutti i discendenti in ordine di apparizione nel DOM
-  const nodes = Array.from(container.querySelectorAll("*"));
-
-  let lastSpan: HTMLElement | null = null;
-
-  nodes.forEach(node => {
-    if (node.tagName.toLowerCase() === "span" && container.contains(node)) {
-      if (lastSpan) {
-        const key = lastSpan.textContent?.trim() || "";
-        const value = node.textContent?.trim() || "";
-
-        if (key && value) {
-          keyValuePairs.push([key, value]);
-
-          // Rimuove entrambi i nodi dal container
-          lastSpan.remove();
-          node.remove();
-
-          lastSpan = null; // Resetta per cercare nuove coppie
-        }
-      } else {
-        lastSpan = node as HTMLElement;
-      }
-    }
-  });
-
-  if (keyValuePairs.length === 0) {
-    return null;
-  }
-
-  return formatKeyValue(keyValuePairs);
-}
-
-function extractTextKeyValue(
-  container: HTMLElement,
-  options: { removeNodes?: boolean; allowSimpleLines?: boolean } = {}
-): string | null {
-  const keyValuePairs: string[][] = [];
-  const textNodes = Array.from(container.querySelectorAll("*"));
-  const structuredLines = collectStructuredLines(container);
-  const fallbackLines = (container.textContent || "")
-    .split(/\r\n|\n|\r/)
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-  const lines = structuredLines.length > 0 ? structuredLines : fallbackLines;
-
-  const isSpecialCase = (text: string) => (
-    /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) ||
-    /^https?:\/\/\S+$/.test(text) ||
-    /^\S+@\S+\.\S+$/.test(text) ||
-    /^\d{4}-\d{2}-\d{2}$/.test(text) ||
-    /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) ||
-    /^\/[\w\/\-:.]+$/.test(text)
-  );
-
-  lines.forEach(line => {
-    const trimmedLine = line.trim();
-    if (trimmedLine === "") return;
-
-    const parsed = parseKeyValueLine(trimmedLine);
-    if (parsed) {
-      const [key, value] = parsed;
-
-      if (isSpecialCase(trimmedLine)) return;
-
-      keyValuePairs.push([key, value]);
-
-      if (options.removeNodes !== false) {
-        textNodes.forEach(node => {
-          if (node.textContent?.includes(trimmedLine) || node.textContent?.includes(key) || node.textContent?.includes(value)) {
-            node.remove();
-          }
-        });
-      }
-    } else if (options.allowSimpleLines) {
-      const simpleMatch = trimmedLine.match(/^([A-Za-z][\w\s-]{0,80})\s+(.+)$/);
-      if (simpleMatch) {
-        const keyCandidate = simpleMatch[1].trim();
-        const valueCandidate = simpleMatch[2].trim();
-        if (keyCandidate && valueCandidate && !isSpecialCase(trimmedLine)) {
-          keyValuePairs.push([keyCandidate, valueCandidate]);
-        }
-      }
-    }
-  });
-
-  if (keyValuePairs.length === 0) return null;
-
-  return formatKeyValue(keyValuePairs);
-}
-
-const GENERIC_KEY_VALUE_PATTERNS: RegExp[] = [
-  /^-?\s*(.+?)\s*[:：=]\s*(.+)$/,
-  /^-?\s*(.+?)\t+(.+)$/,
-  /^-?\s*(.+?)\s+-{1,3}\s+(.+)$/,
-  /^-?\s*(.+?)\s+\|\s+(.+)$/,
-  /^-?\s*(.+?)(?:\s*\.{2,}\s+)(.+)$/
-];
-
-const sanitizeKeyCandidate = (key: string): string => {
-  return key.replace(/[\s.:=-]+$/, "").replace(/^\s*[-•]+/, "").trim();
-};
-
-const isValidKeyCandidate = (key: string): boolean => {
-  if (!key) {
-    return false;
-  }
-  if (key.length > 80) {
-    return false;
-  }
-  const firstChar = key.trim().charAt(0);
-  if (!/[A-Za-z]/.test(firstChar)) {
-    return false;
-  }
-  return true;
-};
-
-function parseKeyValueLine(line: string): [string, string] | null {
-  for (const pattern of GENERIC_KEY_VALUE_PATTERNS) {
-    const match = line.match(pattern);
-    if (!match) {
-      continue;
-    }
-
-    const key = sanitizeKeyCandidate(match[1] ?? "");
-    const value = (match[2] ?? "").trim();
-
-    if (!key || !value) {
-      continue;
-    }
-
-    if (!isValidKeyCandidate(key)) {
-      continue;
-    }
-
-    return [key, value];
-  }
-
-  return null;
-}
-
-// Funzione per estrarre coppie chiave-valore da Splunk
-function extractSplunkKeyValue(container) {
-  const keyValuePairs = [];
-
-  // Seleziona tutti gli span.key.level-* (ordina per profondità discendente se necessario)
-  const keyLevelSpans = container.querySelectorAll("span.key[class*='level-']");
-
-  keyLevelSpans.forEach(levelSpan => {
-    // Trova solo i discendenti diretti (non quelli annidati in altri level)
-    const keyNameEl = Array.from(levelSpan.children).find(child => (child as Element).matches("span.key-name"));
-    const valueEl = Array.from(levelSpan.children).find(child => (child as Element).matches("span.t"));
-
-    if (keyNameEl && valueEl) {
-      const key = (keyNameEl as Element).textContent?.trim() || "";
-      const value = (valueEl as Element).textContent?.trim() || "";
-
-      if (key && value) {
-        keyValuePairs.push([key, value]);
-      }
-    }
-  });
-
-  // Rimuovi tutti gli span.key.level-*
-  keyLevelSpans.forEach(levelSpan => levelSpan.remove());
-
-  if (keyValuePairs.length === 0) return null;
-
-  return formatKeyValue(keyValuePairs);
-}
-
-
 
 function extractMultiElementTable(container: HTMLElement): string | null {
   const tableRows: string[][] = [];
@@ -2529,32 +2203,184 @@ function extractMultiElementTable(container: HTMLElement): string | null {
 }
 
 
+function formatKeyValue(rows: string[][]): string {
+  const isSpecialCase = (text: string) => {
+    return (
+      /(\d{1,2}:\d{2}(:\d{2})?)/.test(text) || // orario
+      /\bhttps?:\/\//.test(text) || // URL
+      /\S+@\S+\.\S+/.test(text) || // email
+      /\d{4}-\d{2}-\d{2}/.test(text) || // data ISO
+      /\bUTC[+-]?\d{1,2}:\d{2}\b/.test(text) || // timezone
+      /\/[\w\/\-:.]+/.test(text)
+    );
+  };
 
-function extractDtDdKeyValue(container) {
-  const keyValuePairs = [];
+  const removeSurroundingQuotes = (text: string) => {
+    if (
+      (text.startsWith('"') && text.endsWith('"')) ||
+      (text.startsWith("'") && text.endsWith("'"))
+    ) {
+      return text.slice(1, -1);
+    }
+    return text;
+  };
 
-  // Trova tutti gli elementi dt e dd
+  const cleanText = (text: string) =>
+    text
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const cleanedKeys = rows
+    .filter((r) => r.length === 2)
+    .map(([key]) => {
+      let cleanedKey = cleanText(key);
+      if (!isSpecialCase(cleanedKey)) {
+        cleanedKey = removeSurroundingQuotes(cleanedKey);
+        cleanedKey = cleanedKey.replace(/[:=]+$/, "");
+      }
+      return cleanedKey + ":";
+    });
+
+  const maxKeyLength = Math.max(...cleanedKeys.map((k) => k.length));
+
+  return rows
+    .filter((r) => r.length === 2)
+    .map(([key, value], index) => {
+      let cleanedValue = cleanText(value);
+      if (!isSpecialCase(cleanedValue)) {
+        cleanedValue = cleanedValue.replace(/[,;]+$/, "");
+        cleanedValue = removeSurroundingQuotes(cleanedValue);
+      }
+
+      return `${cleanedKeys[index].padEnd(maxKeyLength, " ")} ${cleanedValue}`;
+    })
+    .join("\n");
+}
+
+function formatTableData(rows: string[][]): string {
+  if (rows.length === 0) return "";
+
+  const columnCount = Math.max(...rows.map((r) => r.length));
+
+  const cleanedRows = rows.map((row) =>
+    row.map((cell) => cell.replace(/[\r\n]+/g, " ").trim())
+  );
+
+  if (columnCount === 2) {
+    return formatKeyValue(cleanedRows);
+  } else {
+    return formatMarkdownTable(cleanedRows);
+  }
+}
+
+function formatMarkdownTable(rows: string[][]): string {
+  if (rows.length === 0) return "";
+
+  const columnCount = Math.max(...rows.map((r) => r.length));
+
+  const cleanedRows = rows.map((row) =>
+    row.map((cell) =>
+      (cell || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
+    )
+  );
+
+  const colWidths: number[] = Array(columnCount).fill(0);
+  cleanedRows.forEach((row) => {
+    row.forEach((cell, index) => {
+      colWidths[index] = Math.max(colWidths[index], cell.length);
+    });
+  });
+
+  const formatRow = (row: string[]) => {
+    const padded = row.map((cell, i) => {
+      const content = cell || "";
+      return content.padEnd(colWidths[i], " ");
+    });
+    return "| " + padded.join(" | ") + " |";
+  };
+
+  return cleanedRows.map(formatRow).join("\n");
+}
+
+// ============================================================================
+// label / span / dt-dd / div pair
+// ============================================================================
+
+function extractLabelKeyValue(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
+  const labels = container.querySelectorAll("label");
+
+  labels.forEach((label) => {
+    const key = (label.textContent || "").trim();
+
+    let sibling = label.nextElementSibling;
+    while (sibling && sibling.textContent?.trim() === "") {
+      sibling = sibling.nextElementSibling;
+    }
+
+    if (sibling) {
+      const value = (sibling.textContent || "").trim();
+      keyValuePairs.push([key, value]);
+      sibling.remove();
+    }
+
+    label.remove();
+  });
+
+  if (keyValuePairs.length === 0) return null;
+
+  return formatKeyValue(keyValuePairs);
+}
+
+function extractSpanKeyValue(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
+  const nodes = Array.from(container.querySelectorAll("*"));
+
+  let lastSpan: HTMLElement | null = null;
+
+  nodes.forEach((node: Element) => {
+    if (node.tagName.toLowerCase() === "span" && container.contains(node)) {
+      if (lastSpan) {
+        const key = lastSpan.textContent?.trim() || "";
+        const value = node.textContent?.trim() || "";
+
+        if (key && value) {
+          keyValuePairs.push([key, value]);
+          lastSpan.remove();
+          node.remove();
+          lastSpan = null;
+        }
+      } else {
+        lastSpan = node as HTMLElement;
+      }
+    }
+  });
+
+  if (keyValuePairs.length === 0) return null;
+
+  return formatKeyValue(keyValuePairs);
+}
+
+function extractDtDdKeyValue(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
   const elements = Array.from(container.querySelectorAll("dt, dd"));
 
   for (let i = 0; i < elements.length; i++) {
     const el = elements[i];
 
     if (el instanceof Element && el.tagName.toLowerCase() === "dt") {
-      const key = el.textContent.trim();
+      const key = el.textContent?.trim() || "";
 
-      // Cerca il prossimo dd consecutivo
-      let next = elements[i + 1];
+      const next = elements[i + 1];
       if (next instanceof Element && next.tagName.toLowerCase() === "dd") {
-        const value = next.textContent.trim();
+        const value = next.textContent?.trim() || "";
         if (key && value) {
           keyValuePairs.push([key, value]);
-
-          // Rimuove dt e dd dal DOM
           el.remove();
           next.remove();
         }
-
-        i++; // Salta dd già processato
+        i++;
       }
     }
   }
@@ -2564,40 +2390,30 @@ function extractDtDdKeyValue(container) {
   return formatKeyValue(keyValuePairs);
 }
 
-
-
-
-
-
-
-
 function extractPairDivKeyValue(container: HTMLElement): string | null {
   const keyValuePairs: string[][] = [];
   let lastKey: string | null = null;
 
-  const parents = container.querySelectorAll("*");
-  parents.forEach(parent => {
+  const parents = container.querySelectorAll<HTMLElement>("*");
+  parents.forEach((parent) => {
     if (!container.contains(parent)) return;
 
     const children = Array.from(parent.children);
 
-    // Controlla che ci siano esattamente 2 figli, ma non richiede stesso tag
     if (children.length === 2) {
       const key = (children[0].textContent || "").trim();
       const value = (children[1].textContent || "").trim();
       let extracted = false;
 
       if (key && value) {
-        // Caso normale: chiave e valore entrambi presenti
         keyValuePairs.push([key, value]);
         lastKey = key;
         extracted = true;
       } else if (!key && value && lastKey) {
-        // Chiave vuota, valore pieno: consideralo come secondo valore della chiave precedente
         keyValuePairs.push([lastKey, value]);
         extracted = true;
       } else if (key && !value) {
-        // Se la chiave non ha valore, lascia la riga al DOM per tentativi successivi
+        // lascio nel DOM per altri tentativi
         lastKey = key;
       }
 
@@ -2609,22 +2425,34 @@ function extractPairDivKeyValue(container: HTMLElement): string | null {
     }
   });
 
-  if (keyValuePairs.length === 0) {
-    return null;
-  }
+  if (keyValuePairs.length === 0) return null;
 
   return formatKeyValue(keyValuePairs);
 }
+
+// ============================================================================
+// Inline row key-value / anchor row
+// ============================================================================
 
 const INLINE_LABEL_PATTERN = /[:：]\s*$/;
 
 const getInlineNodeText = (node: Node): string => {
   if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent?.replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim() ?? "";
+    return (
+      node.textContent
+        ?.replace(/\u00A0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim() ?? ""
+    );
   }
 
   if (node instanceof HTMLElement) {
-    return node.textContent?.replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim() ?? "";
+    return (
+      node.textContent
+        ?.replace(/\u00A0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim() ?? ""
+    );
   }
 
   return "";
@@ -2639,59 +2467,42 @@ function extractAnchorValueRows(container: HTMLElement): string | null {
   const candidates = container.querySelectorAll<HTMLElement>("p, div, li");
 
   candidates.forEach((node) => {
-    if (!container.contains(node)) {
-      return;
-    }
+    if (!container.contains(node)) return;
 
-    if (node.closest("table, thead, tbody, tfoot, tr, dl")) {
-      return;
-    }
+    if (node.closest("table, thead, tbody, tfoot, tr, dl")) return;
 
     const elementChildren = Array.from(node.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement
     );
 
-    if (elementChildren.length < 2 || elementChildren.length > 4) {
-      return;
-    }
+    if (elementChildren.length < 2 || elementChildren.length > 4) return;
 
     const labelEl = elementChildren[0];
     const valueEls = elementChildren.slice(1);
 
     const labelText = getInlineNodeText(labelEl);
-    if (!labelText || labelText.length > 80) {
-      return;
-    }
+    if (!labelText || labelText.length > 80) return;
 
     const labelQualifies =
       labelEl.matches("a, strong, span") ||
       labelEl.hasAttribute("href") ||
       /filter-option|title|label/i.test(labelEl.className);
 
-    if (!labelQualifies) {
-      return;
-    }
+    if (!labelQualifies) return;
 
     const values = valueEls
-      .map((child) => {
-        const text = getInlineNodeText(child);
-        return text;
-      })
+      .map((child) => getInlineNodeText(child))
       .filter(Boolean);
 
-    if (values.length === 0) {
-      return;
-    }
+    if (values.length === 0) return;
 
-    const containsAnotherLabel = values.some((text) => INLINE_LABEL_PATTERN.test(text ?? ""));
-    if (containsAnotherLabel) {
-      return;
-    }
+    const containsAnotherLabel = values.some((text) =>
+      INLINE_LABEL_PATTERN.test(text ?? "")
+    );
+    if (containsAnotherLabel) return;
 
     const valueText = values.join(" ").trim();
-    if (!valueText) {
-      return;
-    }
+    if (!valueText) return;
 
     keyValuePairs.push([normalizeLabelKey(labelText), valueText]);
     node.remove();
@@ -2705,53 +2516,40 @@ function extractInlineRowKeyValue(container: HTMLElement): string | null {
   const parents = container.querySelectorAll<HTMLElement>("*");
 
   parents.forEach((parent) => {
-    if (!container.contains(parent)) {
-      return;
-    }
-
-    if (parent.closest("table, thead, tbody, tfoot, tr, dl")) {
-      return;
-    }
+    if (!container.contains(parent)) return;
+    if (parent.closest("table, thead, tbody, tfoot, tr, dl")) return;
 
     const elementChildren = Array.from(parent.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement
     );
 
-    if (elementChildren.length < 2 || elementChildren.length > 6) {
-      return;
-    }
+    if (elementChildren.length < 2 || elementChildren.length > 6) return;
 
     const labelChild = elementChildren.find((child) => {
       const text = getInlineNodeText(child);
       return text && INLINE_LABEL_PATTERN.test(text);
     });
 
-    if (!labelChild) {
-      return;
-    }
+    if (!labelChild) return;
 
     const keyText = getInlineNodeText(labelChild);
-    if (!keyText || keyText.length > 80) {
-      return;
-    }
+    if (!keyText || keyText.length > 80) return;
 
     const labelIndex = elementChildren.indexOf(labelChild);
     const valueCandidates = elementChildren.slice(labelIndex + 1);
 
     const values: string[] = [];
-    let consumedNodes: Node[] = [];
+    const consumedNodes: Node[] = [];
 
     if (valueCandidates.length > 0) {
-      const containsAnotherLabel = valueCandidates.some((child) => INLINE_LABEL_PATTERN.test(getInlineNodeText(child)));
-      if (containsAnotherLabel) {
-        return;
-      }
+      const containsAnotherLabel = valueCandidates.some((child) =>
+        INLINE_LABEL_PATTERN.test(getInlineNodeText(child))
+      );
+      if (containsAnotherLabel) return;
 
       valueCandidates.forEach((child) => {
         const text = getInlineNodeText(child);
-        if (text) {
-          values.push(text);
-        }
+        if (text) values.push(text);
         consumedNodes.push(child);
       });
     }
@@ -2760,22 +2558,15 @@ function extractInlineRowKeyValue(container: HTMLElement): string | null {
       let sibling: ChildNode | null = labelChild.nextSibling;
       while (sibling) {
         const text = getInlineNodeText(sibling);
-        if (text && INLINE_LABEL_PATTERN.test(text)) {
-          break;
-        }
+        if (text && INLINE_LABEL_PATTERN.test(text)) break;
 
-        if (text) {
-          values.push(text);
-        }
-
+        if (text) values.push(text);
         consumedNodes.push(sibling);
         sibling = sibling.nextSibling;
       }
     }
 
-    if (values.length === 0) {
-      return;
-    }
+    if (values.length === 0) return;
 
     keyValuePairs.push([normalizeLabelKey(keyText), values.join(" ")]);
 
@@ -2789,9 +2580,18 @@ function extractInlineRowKeyValue(container: HTMLElement): string | null {
 
   return keyValuePairs.length > 0 ? formatKeyValue(keyValuePairs) : null;
 }
+
+// ============================================================================
+// Text key-value (nuovo) + legacy fallback
+// ============================================================================
+
 function collectStructuredLines(container: HTMLElement): string[] {
   const doc = container.ownerDocument ?? document;
-  const walker = doc.createTreeWalker(container, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
+  const walker = doc.createTreeWalker(
+    container,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    null
+  );
   const lines: string[] = [];
   let currentLine = "";
 
@@ -2808,9 +2608,7 @@ function collectStructuredLines(container: HTMLElement): string[] {
 
     if (node.nodeType === Node.TEXT_NODE) {
       const rawText = node.textContent ?? "";
-      if (!rawText) {
-        continue;
-      }
+      if (!rawText) continue;
 
       const segments = rawText.split(/[\r\n]+/);
       segments.forEach((segment, index) => {
@@ -2831,7 +2629,9 @@ function collectStructuredLines(container: HTMLElement): string[] {
         currentLine = "-";
       } else if (["strong", "b", "i", "em", "u", "span"].includes(tag)) {
         continue;
-      } else if (["p", "div", "section", "article", "header", "footer", "br", "table", "tr", "pre", "code"].includes(tag)) {
+      } else if (
+        ["p", "div", "section", "article", "header", "footer", "br", "table", "tr", "pre", "code"].includes(tag)
+      ) {
         flushLine();
       }
     }
@@ -2841,6 +2641,190 @@ function collectStructuredLines(container: HTMLElement): string[] {
   return lines;
 }
 
+function extractTextKeyValue(
+  container: HTMLElement,
+  options: { removeNodes?: boolean; allowSimpleLines?: boolean } = {}
+): string | null {
+  const keyValuePairs: string[][] = [];
+  const textNodes = Array.from(container.querySelectorAll("*"));
+
+  const structuredLines = collectStructuredLines(container);
+  const fallbackLines = (container.textContent || "")
+    .split(/\r\n|\n|\r/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const lines = structuredLines.length > 0 ? structuredLines : fallbackLines;
+
+  const isSpecialCase = (text: string) =>
+    /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) || // ora
+    /^https?:\/\/\S+$/.test(text) || // URL
+    /^\S+@\S+\.\S+$/.test(text) || // email
+    /^\d{4}-\d{2}-\d{2}$/.test(text) || // data ISO
+    /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) || // timezone
+    /^\/[\w\/\-:.]+$/.test(text); // path
+
+  lines.forEach((line) => {
+    const trimmedLine = line.trim();
+    if (trimmedLine === "") return;
+
+    const parsed = parseKeyValueLine(trimmedLine);
+    if (parsed) {
+      const [key, value] = parsed;
+
+      if (isSpecialCase(trimmedLine)) return;
+
+      keyValuePairs.push([key, value]);
+
+      if (options.removeNodes !== false) {
+        textNodes.forEach((node) => {
+          if (
+            node.textContent?.includes(trimmedLine) ||
+            node.textContent?.includes(key) ||
+            node.textContent?.includes(value)
+          ) {
+            node.remove();
+          }
+        });
+      }
+    } else if (options.allowSimpleLines) {
+      const simpleMatch = trimmedLine.match(/^([A-Za-z0-9][\w\s-]{0,80})\s+(.+)$/);
+      if (simpleMatch) {
+        const keyCandidate = simpleMatch[1].trim();
+        const valueCandidate = simpleMatch[2].trim();
+        if (keyCandidate && valueCandidate && !isSpecialCase(trimmedLine)) {
+          keyValuePairs.push([keyCandidate, valueCandidate]);
+        }
+      }
+    }
+  });
+
+  if (keyValuePairs.length === 0) return null;
+
+  return formatKeyValue(keyValuePairs);
+}
+
+const GENERIC_KEY_VALUE_PATTERNS: RegExp[] = [
+  /^-?\s*(.+?)\s*[:：=]\s*(.+)$/,
+  /^-?\s*(.+?)\t+(.+)$/,
+  /^-?\s*(.+?)\s+-{1,3}\s+(.+)$/,
+  /^-?\s*(.+?)\s+\|\s+(.+)$/,
+  /^-?\s*(.+?)(?:\s*\.{2,}\s+)(.+)$/,
+];
+
+const sanitizeKeyCandidate = (key: string): string => {
+  return key.replace(/[\s.:=-]+$/, "").replace(/^\s*[-•]+/, "").trim();
+};
+
+const isValidKeyCandidate = (key: string): boolean => {
+  if (!key) return false;
+  if (key.length > 80) return false;
+  const firstChar = key.trim().charAt(0);
+  // CONSENTI anche chiavi che iniziano con numeri (es. tabelle Defender/Azure)
+  if (!/[A-Za-z0-9]/.test(firstChar)) return false;
+  return true;
+};
+
+function parseKeyValueLine(line: string): [string, string] | null {
+  for (const pattern of GENERIC_KEY_VALUE_PATTERNS) {
+    const match = line.match(pattern);
+    if (!match) continue;
+
+    const key = sanitizeKeyCandidate(match[1] ?? "");
+    const value = (match[2] ?? "").trim();
+
+    if (!key || !value) continue;
+    if (!isValidKeyCandidate(key)) continue;
+
+    return [key, value];
+  }
+
+  return null;
+}
+
+// Legacy: versione vecchia più semplice, usata come fallback
+function legacyExtractTextKeyValue(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
+  const textNodes = Array.from(container.querySelectorAll("*"));
+  const lines = (container.textContent || "").split("\n");
+
+  const isSpecialCase = (text: string) =>
+    /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) ||
+    /^https?:\/\/\S+$/.test(text) ||
+    /^\S+@\S+\.\S+$/.test(text) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(text) ||
+    /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) ||
+    /^\/[\w\/\-:.]+$/.test(text);
+
+  lines.forEach((line) => {
+    const trimmedLine = line.trim();
+    if (trimmedLine === "") return;
+
+    const match = trimmedLine.match(/^([^\s:=][^:=]*)\s*[:=]\s*(.+)$/);
+    if (match) {
+      const key = match[1].trim();
+      const value = match[2].trim();
+
+      if (isSpecialCase(trimmedLine)) return;
+
+      keyValuePairs.push([key, value]);
+
+      textNodes.forEach((node) => {
+        if (
+          node.textContent?.includes(trimmedLine) ||
+          node.textContent?.includes(key) ||
+          node.textContent?.includes(value)
+        ) {
+          node.remove();
+        }
+      });
+    }
+  });
+
+  if (keyValuePairs.length === 0) return null;
+
+  return formatKeyValue(keyValuePairs);
+}
+
+// ============================================================================
+// Splunk
+// ============================================================================
+
+function extractSplunkKeyValue(container: HTMLElement): string | null {
+  const keyValuePairs: string[][] = [];
+  const keyLevelSpans = container.querySelectorAll("span.key[class*='level-']");
+
+  keyLevelSpans.forEach((levelSpan) => {
+    const keyNameEl = Array.from(levelSpan.children).find((child) =>
+      (child as Element).matches("span.key-name")
+    );
+    const valueEl = Array.from(levelSpan.children).find((child) =>
+      (child as Element).matches("span.t")
+    );
+
+    if (keyNameEl && valueEl) {
+      const key = (keyNameEl as Element).textContent?.trim() || "";
+      const value = (valueEl as Element).textContent?.trim() || "";
+
+      if (key && value) {
+        keyValuePairs.push([key, value]);
+      }
+    }
+  });
+
+  keyLevelSpans.forEach((levelSpan) => levelSpan.remove());
+
+  if (keyValuePairs.length === 0) return null;
+
+  return formatKeyValue(keyValuePairs);
+}
+
+// ============================================================================
+// Testo rimanente
+// ============================================================================
+
 function extractRemainingText(container: HTMLElement, separator: string = "\n"): string {
   return collectStructuredLines(container).join(separator).trim();
 }
+
+
+
