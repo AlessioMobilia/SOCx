@@ -26,3 +26,29 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 })
 
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type !== "floating-buttons-preference-changed") {
+    return
+  }
+  const enabled = Boolean(message.enabled)
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach((tab) => {
+      if (typeof tab.id !== "number") {
+        return
+      }
+      chrome.tabs.sendMessage(
+        tab.id,
+        {
+          type: "floating-buttons-preference-changed",
+          enabled
+        },
+        () => {
+          const err = chrome.runtime.lastError
+          if (err && !/Receiving end/.test(err.message ?? "")) {
+            console.debug("Floating button preference broadcast failed:", err.message)
+          }
+        }
+      )
+    })
+  })
+})

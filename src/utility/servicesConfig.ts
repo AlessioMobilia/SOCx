@@ -1,4 +1,5 @@
 // src/utils/servicesConfig.ts
+import { toBase64NoPadding } from "./utils"
 
 export const servicesConfig = {
   services: {
@@ -9,7 +10,7 @@ export const servicesConfig = {
         switch (type) {
           case "IP": return `https://www.virustotal.com/gui/ip-address/${text}`;
           case "Domain": return `https://www.virustotal.com/gui/domain/${text}`;
-          case "URL": return `https://www.virustotal.com/gui/url/${encodeURIComponent(text)}`;
+          case "URL": return `https://www.virustotal.com/gui/url/${toBase64NoPadding(text)}`;
           case "Hash": return `https://www.virustotal.com/gui/file/${text}`;
           default: return null;
         }

@@ -53,6 +53,7 @@ const availableServices = servicesConfig.availableServices as Record<string, str
     let lastPointerRect: DOMRect | null = null
     const BUTTON_INTERACTION_SUSPEND_MS = 350
     let lastButtonInteractionAt = 0
+    let floatingButtonsEnabled = true
 
     const now = () =>
       typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()
@@ -89,6 +90,36 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       lastSelectionSignature = null
       lastInteractionRect = null
       lastPointerRect = null
+    }
+
+    const refreshFloatingButtonsPreference = async () => {
+      try {
+        const storedValue = await storage.get<boolean>("floatingButtonsEnabled")
+        floatingButtonsEnabled = typeof storedValue === "boolean" ? storedValue : true
+      } catch {
+        floatingButtonsEnabled = true
+      }
+      if (!floatingButtonsEnabled) {
+        clearSelectionUI()
+      }
+    }
+
+    refreshFloatingButtonsPreference()
+
+    if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== "local") {
+          return
+        }
+        const change = changes["floatingButtonsEnabled"]
+        if (change.newValue!=undefined){
+          floatingButtonsEnabled = change.newValue
+          console.log("[SOCx] Updated floatingButtonsEnabled to:", floatingButtonsEnabled)
+        }        
+        if (!floatingButtonsEnabled) {
+          clearSelectionUI()
+        }
+      })
     }
 
     function handleSelectionChange(event?: Event) {
@@ -569,6 +600,10 @@ const availableServices = servicesConfig.availableServices as Record<string, str
       if (isEventFromButtonUI(event) || shouldSkipDueToButtonInteraction()) {
         return
       }
+      if (!floatingButtonsEnabled) {
+        clearSelectionUI()
+        return
+      }
 
       const rawSelection = getActiveSelection(event)
       const selection = hasUsableSelection(rawSelection) ? rawSelection : null
@@ -695,14 +730,14 @@ const availableServices = servicesConfig.availableServices as Record<string, str
               ? `${baseInfo}\nEnriched Signals: ${ipSignals.join(", ")}`
               : baseInfo
 
-          await createTooltip(baseInfo, button, ipSignals)
+          await createTooltip(baseInfo, button, ipSignals, type)
           navigator.clipboard.writeText(baseInfo)
           if (!(await saveIOC(type, ioc))) {
             showNotification("Error", "Failed to save the IOC")
           }
         } catch (err) {
           console.error("Fetch error:", err)
-          await createTooltip("❌ Error retrieving IOC information.", button)
+          await createTooltip("❌ Error retrieving IOC information.", button, [], type)
         }
       }) : null
 
@@ -893,6 +928,11 @@ const availableServices = servicesConfig.availableServices as Record<string, str
         const formattedText = lastValidSelection ? formatSelectedText(lastValidSelection) : ""
         sendResponse({ success: true, formatted: formattedText })
         return false;
+      } else if (message?.type === "floating-buttons-preference-changed") {
+        floatingButtonsEnabled = Boolean(message.enabled)
+        if (!floatingButtonsEnabled) {
+          clearSelectionUI()
+        }
       }
     })
 

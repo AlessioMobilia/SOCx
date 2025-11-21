@@ -23,7 +23,21 @@ const Options = () => {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [ipapiEnabled, setIpapiEnabled] = useState(false)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
+  const [floatingButtonsEnabled, setFloatingButtonsEnabled] = useState(true)
   const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
+  const notifyFloatingButtonsListeners = useCallback((enabled: boolean) => {
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+      return
+    }
+    try {
+      chrome.runtime.sendMessage({
+        type: "floating-buttons-preference-changed",
+        enabled
+      })
+    } catch (error) {
+      console.warn("Unable to broadcast floating button preference:", error)
+    }
+  }, [])
 
   const getCounterKeys = useCallback(() => {
     const today = new Date().toISOString().split("T")[0]
@@ -66,6 +80,7 @@ const Options = () => {
     persistIsDarkMode(isDarkMode)
     storage.set("ipapiEnrichmentEnabled", ipapiEnabled)
     storage.set("proxyCheckEnabled", proxyCheckEnabled)
+    storage.set("floatingButtonsEnabled", floatingButtonsEnabled)
   }, [
     virusTotalApiKey,
     abuseIPDBApiKey,
@@ -74,7 +89,8 @@ const Options = () => {
     customServices,
     isDarkMode,
     ipapiEnabled,
-    proxyCheckEnabled
+    proxyCheckEnabled,
+    floatingButtonsEnabled
   ])
 
   useEffect(() => {
@@ -130,6 +146,7 @@ const Options = () => {
       const theme = await ensureIsDarkMode()
       const ipapiSetting = await storage.get("ipapiEnrichmentEnabled")
       const proxySetting = await storage.get("proxyCheckEnabled")
+      const floatingButtonsSetting = await storage.get("floatingButtonsEnabled")
 
       if (vtKey) setVirusTotalApiKey(vtKey)
       if (abKey) setAbuseIPDBApiKey(abKey)
@@ -158,6 +175,9 @@ const Options = () => {
       const nextIpapiEnabled = nextProxyEnabled ? false : persistedIpapi
       setProxyCheckEnabled(nextProxyEnabled)
       setIpapiEnabled(nextIpapiEnabled)
+      const shouldShowFloatingButtons =
+        typeof floatingButtonsSetting === "boolean" ? floatingButtonsSetting : true
+      setFloatingButtonsEnabled(shouldShowFloatingButtons)
     } catch (err) {
       console.error("Failed to load settings:", err)
       setSelectedServices(defaultServices)
@@ -281,6 +301,11 @@ const Options = () => {
     }
   }
 
+  const handleFloatingButtonsToggle = (value: boolean) => {
+    setFloatingButtonsEnabled(value)
+    notifyFloatingButtonsListeners(value)
+  }
+
   return (
     <OptionsUI
       isDarkMode={isDarkMode}
@@ -291,6 +316,7 @@ const Options = () => {
       proxyCheckEnabled={proxyCheckEnabled}
       selectedServices={selectedServices}
       customServices={customServices}
+      floatingButtonsEnabled={floatingButtonsEnabled}
       onDarkModeToggle={() => setIsDarkMode((prev) => !prev)}
       onServiceChange={handleServiceChange}
       onVirusTotalApiKeyChange={setVirusTotalApiKey}
@@ -298,6 +324,7 @@ const Options = () => {
       onProxyCheckApiKeyChange={handleProxyCheckKeyChange}
       onIpapiToggle={handleIpapiToggle}
       onProxyCheckToggle={handleProxyCheckToggle}
+      onFloatingButtonsToggle={handleFloatingButtonsToggle}
       onTestKeys={handleTestKeys}
       onAddCustomService={handleAddCustomService}
       onRemoveCustomService={handleRemoveCustomService}

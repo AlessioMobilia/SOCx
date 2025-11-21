@@ -81,7 +81,8 @@ const buildKeyValueRegex = (key: string) =>
 export const createTooltip = async (
   text: string,
   button: HTMLButtonElement,
-  highlightTerms: string[] = []
+  highlightTerms: string[] = [],
+  iocType?: string
 ) => {
   // Normalizza acronimi per la visualizzazione
   const normalizedForView = normalizeAcronyms(text)
@@ -184,10 +185,11 @@ const containerThemeStyle = isDarkMode
   const headerTone = isDarkMode ? "rgba(244,247,255,0.65)" : "rgba(17,19,34,0.55)"
   const liveTone = isDarkMode ? "#ffd24d" : "#b7791f"
 
+  const headerLabel = (iocType ?? "IOC").toUpperCase()
   const headerStrip = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">
       <span style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:${headerTone};">SOCx Intel</span>
-      <span style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${liveTone};">IOC</span>
+      <span style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${liveTone};">${headerLabel}</span>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.08);margin-bottom:12px;"></div>
   `

@@ -20,6 +20,7 @@ interface OptionsUIProps {
   proxyCheckApiKey: string
   ipapiEnabled: boolean
   proxyCheckEnabled: boolean
+  floatingButtonsEnabled: boolean
   selectedServices: { [key: string]: string[] }
   customServices: CustomService[]
   onDarkModeToggle: () => void
@@ -29,6 +30,7 @@ interface OptionsUIProps {
   onProxyCheckApiKeyChange: (val: string) => void
   onIpapiToggle: (value: boolean) => void
   onProxyCheckToggle: (value: boolean) => void
+  onFloatingButtonsToggle: (value: boolean) => void
   onTestKeys: () => void
   onAddCustomService: (s: CustomService) => void
   onRemoveCustomService: (index: number) => void
@@ -56,6 +58,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   proxyCheckApiKey,
   ipapiEnabled,
   proxyCheckEnabled,
+  floatingButtonsEnabled,
   selectedServices,
   customServices,
   onDarkModeToggle,
@@ -65,6 +68,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   onProxyCheckApiKeyChange,
   onIpapiToggle,
   onProxyCheckToggle,
+  onFloatingButtonsToggle,
   onTestKeys,
   onAddCustomService,
   onRemoveCustomService,
@@ -147,6 +151,17 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
       enabled: proxyCheckEnabled,
       onToggle: handleProxyToggle,
       disabled: !proxyCheckApiKey && !proxyCheckEnabled
+    }
+  ]
+
+  const interfacePreferences = [
+    {
+      id: "floatingButtons",
+      label: "Show floating SOCx buttons",
+      helper: "Displays quick-action buttons next to your text selection.",
+      enabled: floatingButtonsEnabled,
+      onToggle: () => onFloatingButtonsToggle(!floatingButtonsEnabled),
+      disabled: false
     }
   ]
 
@@ -233,6 +248,38 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
             <p className={labelClass}>Enrichments</p>
             <div className="grid gap-3 md:grid-cols-2">
               {enrichments.map(({ id, label, helper, enabled, onToggle, disabled }) => (
+                <div
+                  key={id}
+                  className="flex items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50">
+                  <div>
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="text-xs text-socx-muted dark:text-socx-muted-dark">{helper}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={enabled}
+                    disabled={disabled}
+                    onClick={onToggle}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
+                      enabled
+                        ? "border-socx-accent bg-socx-accent/90"
+                        : "border-socx-border-light bg-white dark:border-socx-border-dark dark:bg-socx-panel"
+                    } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}>
+                    <span
+                      className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
+                        enabled ? "translate-x-5" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="md:col-span-2 space-y-3">
+            <p className={labelClass}>Quick actions</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {interfacePreferences.map(({ id, label, helper, enabled, onToggle, disabled }) => (
                 <div
                   key={id}
                   className="flex items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50">

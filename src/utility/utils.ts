@@ -976,12 +976,23 @@ export const formatVirusTotalData = (vtData: any): string => {
   const whois = attr.whois || "";
   const isDomain = d.type === "domain";
   const isIp = d.type === "ip_address";
+  const isUrl = d.type === "url";
 
   const allFields: { section: string; label: string; value: any }[] = [];
 
+  const rawIoc =
+    isDomain && d.id
+      ? defang(d.id)
+      : isIp && d.id
+      ? d.id
+      : isUrl && typeof attr.url === "string"
+      ? defang(attr.url)
+      : null;
+  const iocLabel = isUrl || isDomain ? "IOC (defanged):" : "IOC:";
+
   // Base Info
   const info: Record<string, any> = {
-    ...(d.id && (isDomain || isIp) && { "IOC:": d.id }),
+    ...(rawIoc && { [iocLabel]: rawIoc }),
     ...(attr.md5 && !isDomain && !isIp && { "MD5:": attr.md5 }),
     ...(attr.sha1 && !isDomain && !isIp && { "SHA1:": attr.sha1 }),
     ...(attr.sha256 && { "SHA256:": attr.sha256 }),
@@ -1449,6 +1460,13 @@ export const exportResultsToExcel = (results: { [key: string]: any }) => {
 
   XLSX.writeFile(workbook, `SOCx_IOC_Report_${new Date().toISOString().split("T")[0]}.xlsx`)
 }
+
+
+export function toBase64NoPadding(str) {
+  const b64 = btoa(str);
+  return b64.replace(/=+$/, ""); // remove trailing '='
+}
+
 
 
 
@@ -1939,6 +1957,18 @@ function extractListBlocks(container: HTMLElement): string | null {
 // Pulizia contenuto
 // ============================================================================
 
+function unwrapElement(el: HTMLElement): void {
+  const parent = el.parentNode;
+  if (!parent) {
+    return;
+  }
+
+  while (el.firstChild) {
+    parent.insertBefore(el.firstChild, el);
+  }
+  parent.removeChild(el);
+}
+
 function cleanContent(container: HTMLElement): void {
   // Elementi da rimuovere (contenuti invisibili o superflui)
   const selectorsToRemove = [
@@ -1976,8 +2006,20 @@ function cleanContent(container: HTMLElement): void {
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
     const id = el.id?.toLowerCase() || "";
     const className = (el.className as string | undefined)?.toLowerCase?.() || "";
+    const dataTestId = el.getAttribute("data-testid")?.toLowerCase() || "";
     if (id.includes("tooltip") || className.includes("tooltip")) {
-      el.remove();
+      const hasContent = !!el.textContent?.trim();
+      const isSemanticTooltip =
+        el.getAttribute("role") === "tooltip" ||
+        dataTestId.includes("tooltip") ||
+        el.getAttribute("aria-hidden") === "true" ||
+        el.hasAttribute("hidden");
+
+      if (!hasContent || isSemanticTooltip) {
+        el.remove();
+      } else {
+        unwrapElement(el);
+      }
     }
   });
 
@@ -2825,6 +2867,3 @@ function extractSplunkKeyValue(container: HTMLElement): string | null {
 function extractRemainingText(container: HTMLElement, separator: string = "\n"): string {
   return collectStructuredLines(container).join(separator).trim();
 }
-
-
-

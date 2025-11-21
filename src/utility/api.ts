@@ -2,6 +2,35 @@ import { Storage } from "@plasmohq/storage"
 
 const storage = new Storage({ area: "local" })
 
+const base64UrlId = (value: string): string => {
+  const encodeWithBrowser = (): string | null => {
+    if (typeof btoa !== "function") {
+      return null
+    }
+    try {
+      return btoa(unescape(encodeURIComponent(value)))
+    } catch (err) {
+      console.warn("btoa failed to encode URL, trying Buffer fallback:", err)
+      return null
+    }
+  }
+
+  const encodeWithBuffer = (): string | null => {
+    const bufferCtor = (globalThis as { Buffer?: { from: (value: string, encoding: string) => { toString: (enc: string) => string } } }).Buffer
+    if (bufferCtor?.from) {
+      return bufferCtor.from(value, "utf-8").toString("base64")
+    }
+    return null
+  }
+
+  const encoded = encodeWithBrowser() ?? encodeWithBuffer()
+  if (!encoded) {
+    throw new Error("No base64 encoder available for URL processing.")
+  }
+
+  return encoded.replace(/=+$/u, "")
+}
+
 // ---------------- VIRUSTOTAL ----------------
 
 export const checkVirusTotal = async (ioc: string, type: string): Promise<any> => {
@@ -23,9 +52,11 @@ export const checkVirusTotal = async (ioc: string, type: string): Promise<any> =
     case "domain":
       url = `https://www.virustotal.com/api/v3/domains/${encodeURIComponent(ioc)}`
       break
-    case "url":
-      url = `https://www.virustotal.com/api/v3/urls/${encodeURIComponent(ioc)}`
+    case "url": {
+      const vtId = base64UrlId(ioc)
+      url = `https://www.virustotal.com/api/v3/urls/${vtId}`
       break
+    }
     case "hash":
       url = `https://www.virustotal.com/api/v3/files/${encodeURIComponent(ioc)}`
       break

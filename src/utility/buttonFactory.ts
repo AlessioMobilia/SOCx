@@ -198,7 +198,10 @@ export function createButton(ioc: string, onClick: () => void): HTMLButtonElemen
 
   // evita text selection ecc. mantenendo il feeling di click
   button.addEventListener("mousedown", (event) => event.preventDefault())
-  button.addEventListener("click", onClick)
+  button.addEventListener("click", () => {
+    console.log(`[SOCx] Floating ${label} button clicked for IOC:`, ioc)
+    onClick()
+  })
 
   return button
 }
@@ -209,7 +212,10 @@ export function createMagicButton(ioc: string, onClick: () => void): HTMLButtonE
   button.id = "MagicButton_SOCx"
 
   button.addEventListener("mousedown", (event) => event.preventDefault())
-  button.addEventListener("click", onClick)
+  button.addEventListener("click", () => {
+    console.log("[SOCx] Floating Magic IOC button clicked for IOC:", ioc)
+    onClick()
+  })
 
   return button
 }
