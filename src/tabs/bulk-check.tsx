@@ -12,6 +12,7 @@ import {
   identifyIOC,
   uniqueStrings
 } from "../utility/utils"
+import type { BulkCheckSummaryRow, BulkServiceStatus, BulkStatusKind } from "./bulk-check.types"
 
 type IOCSummary = Record<string, string[]>
 type BulkCheckResults = Record<string, any>
@@ -58,6 +59,183 @@ const applyDocumentTheme = (isDark: boolean) => {
   document.body.className = isDark ? "dark-mode" : "light-mode"
 }
 
+const canServiceHandleType = (service: string, rawType: string | null): boolean => {
+  if (!rawType) {
+    return false
+  }
+  if (service === "AbuseIPDB") {
+    return rawType === "IP"
+  }
+  if (service === "VirusTotal") {
+    return rawType !== "MAC"
+  }
+  return true
+}
+
+const describeVirusTotalPayload = (payload: any): BulkServiceStatus => {
+  const stats = payload?.data?.attributes?.last_analysis_stats || {}
+  const malicious = Number(stats?.malicious) || 0
+  const suspicious = Number(stats?.suspicious) || 0
+  const harmless = Number(stats?.harmless) || 0
+  const undetected = Number(stats?.undetected) || 0
+  const flaggedTotal = malicious + suspicious
+
+  if (flaggedTotal > 0) {
+    return {
+      name: "VirusTotal",
+      status: "flagged",
+      text: `${malicious} malicious • ${suspicious} suspicious`
+    }
+  }
+
+  const benignSignals = harmless + undetected
+  return {
+    name: "VirusTotal",
+    status: "clean",
+    text: benignSignals > 0 ? `${benignSignals} engines no detections` : "No detections"
+  }
+}
+
+const describeAbusePayload = (payload: any): BulkServiceStatus => {
+  const score = Number(payload?.data?.data?.abuseConfidenceScore) || 0
+  const reports = Number(payload?.data?.data?.totalReports) || 0
+  if (score >= 50 || reports > 0) {
+    return {
+      name: "AbuseIPDB",
+      status: "flagged",
+      text: `${score}% confidence • ${reports} reports`
+    }
+  }
+
+  return {
+    name: "AbuseIPDB",
+    status: "clean",
+    text: "No reports"
+  }
+}
+
+const buildServiceStatus = (
+  service: string,
+  payload: Record<string, any> | undefined,
+  rawType: string | null,
+  isPending: boolean
+): BulkServiceStatus => {
+  if (!canServiceHandleType(service, rawType)) {
+    const text =
+      service === "AbuseIPDB"
+        ? "Works with public IP addresses only"
+        : "Type not supported for this service"
+    return {
+      name: service,
+      status: "skipped",
+      text
+    }
+  }
+
+  if (isPending) {
+    return {
+      name: service,
+      status: "pending",
+      text: "Running check..."
+    }
+  }
+
+  const servicePayload = payload?.[service]
+  if (!servicePayload) {
+    return {
+      name: service,
+      status: "pending",
+      text: "Awaiting check"
+    }
+  }
+
+  if (servicePayload?.error) {
+    return {
+      name: service,
+      status: "error",
+      text: typeof servicePayload.error === "string" ? servicePayload.error : "Unable to fetch data"
+    }
+  }
+
+  if (service === "VirusTotal") {
+    return describeVirusTotalPayload(servicePayload)
+  }
+
+  if (service === "AbuseIPDB") {
+    return describeAbusePayload(servicePayload)
+  }
+
+  return {
+    name: service,
+    status: "clean",
+    text: "Completed"
+  }
+}
+
+const deriveRowStatus = (
+  displayType: string,
+  rawType: string | null,
+  serviceStatuses: BulkServiceStatus[],
+  hasServices: boolean,
+  isPending: boolean
+): Pick<BulkCheckSummaryRow, "statusKind" | "statusText"> => {
+  if (!rawType || displayType === "Unknown") {
+    return {
+      statusKind: "error",
+      statusText: "Unsupported IOC format"
+    }
+  }
+
+  if (rawType === "Private IP") {
+    return {
+      statusKind: "skipped",
+      statusText: "Private IP - not checked"
+    }
+  }
+
+  if (!hasServices) {
+    return {
+      statusKind: "skipped",
+      statusText: "Select at least one service"
+    }
+  }
+
+  const errorStatus = serviceStatuses.find((entry) => entry.status === "error")
+  if (errorStatus) {
+    return {
+      statusKind: "error",
+      statusText: errorStatus.text
+    }
+  }
+
+  const flaggedStatus = serviceStatuses.find((entry) => entry.status === "flagged")
+  if (flaggedStatus) {
+    return {
+      statusKind: "flagged",
+      statusText: flaggedStatus.text
+    }
+  }
+
+  if (serviceStatuses.length > 0 && serviceStatuses.every((entry) => entry.status === "skipped")) {
+    return {
+      statusKind: "skipped",
+      statusText: "Services not applicable"
+    }
+  }
+
+  if (serviceStatuses.some((entry) => entry.status === "pending")) {
+    return {
+      statusKind: "pending",
+      statusText: isPending ? "Checking..." : "Awaiting check"
+    }
+  }
+
+  return {
+    statusKind: "clean",
+    statusText: "No detections"
+  }
+}
+
 const BulkCheck = () => {
   const [textareaValue, setTextareaValue] = useState("")
   const [allIocs, setAllIocs] = useState<string[]>([])
@@ -72,6 +250,8 @@ const BulkCheck = () => {
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
   const [themeLoaded, setThemeLoaded] = useState(false)
   const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
+  const [servicesInUse, setServicesInUse] = useState<string[]>([])
+  const [pendingIocs, setPendingIocs] = useState<string[]>([])
   const iocSummaryRef = useRef<IOCSummary>({})
 
   const getCounterKeys = useCallback(() => {
@@ -278,27 +458,84 @@ const BulkCheck = () => {
       return
     }
 
+    if (selectedServices.length === 0) {
+      setMessage("Select at least one service to run the check.")
+      if (typeof window !== "undefined") {
+        window.alert("Select at least one service to run the check.")
+      }
+      return
+    }
+
+    const selectedCopy = [...selectedServices]
+    setServicesInUse(selectedCopy)
+    setPendingIocs(requestList)
+    setResults({})
     setIsLoading(true)
-    setMessage("Bulk check in progress...")
+
+    const vtEligible = selectedCopy.includes("VirusTotal")
+      ? requestList.filter((entry) => {
+          const type = identifyIOC(entry)
+          return Boolean(type) && type !== "MAC"
+        }).length
+      : 0
+    const vtNote =
+      selectedCopy.includes("VirusTotal") && vtEligible > 0
+        ? ` • VirusTotal 4 req/min${vtEligible > 4 ? ` (~${Math.ceil(vtEligible / 4)} min)` : ""}`
+        : ""
+
+    setMessage(`Bulk check in progress${vtNote} – 0/${requestList.length}`)
+
+    const queue = [...requestList]
+    const concurrencyLimit = Math.max(1, selectedCopy.includes("VirusTotal") ? 4 : 8)
+    let completedCount = 0
+    let hadFailures = false
+
+    const runWorker = async () => {
+      while (queue.length > 0) {
+        const next = queue.shift()
+        if (!next) {
+          return
+        }
+        try {
+          const response = await sendToBackground<{ results?: BulkCheckResults }>({
+            name: "check-bulk-iocs",
+            body: {
+              iocList: [next],
+              services: selectedCopy,
+              includeIpapi: false,
+              includeProxyCheck: proxyCheckEnabled
+            }
+          })
+
+          const payload = response?.results?.[next] ?? {}
+          setResults((prev) => ({ ...prev, [next]: payload }))
+        } catch (error) {
+          hadFailures = true
+          console.error("Bulk check failed for IOC:", next, error)
+          setResults((prev) => ({
+            ...prev,
+            [next]: { error: "Error during bulk check." }
+          }))
+        } finally {
+          completedCount += 1
+          setPendingIocs((prev) => prev.filter((entry) => entry !== next))
+          setMessage(
+            `Bulk check in progress${vtNote} – ${completedCount}/${requestList.length}`
+          )
+        }
+      }
+    }
 
     try {
-      const response = await sendToBackground<{ results?: BulkCheckResults }>({
-        name: "check-bulk-iocs",
-        body: {
-          iocList: requestList,
-          services: selectedServices,
-          includeIpapi: false,
-          includeProxyCheck: proxyCheckEnabled
-        }
-      })
-
-      setResults(response?.results ?? {})
-      setMessage("Check completed!")
+      await Promise.all(Array.from({ length: concurrencyLimit }, () => runWorker()))
+      setMessage(hadFailures ? "Check completed with some errors." : "Check completed!")
     } catch (error) {
       console.error("Bulk check failed:", error)
       setMessage("Error during bulk check.")
     } finally {
       setIsLoading(false)
+      setPendingIocs([])
+      setServicesInUse([])
       refreshDailyCounters()
     }
   }, [iocList, proxyCheckEnabled, refreshDailyCounters, selectedServices])
@@ -368,6 +605,42 @@ const BulkCheck = () => {
     return () => chrome.storage.onChanged.removeListener(listener)
   }, [])
 
+  const activeServices = useMemo(
+    () => (servicesInUse.length > 0 ? servicesInUse : selectedServices),
+    [servicesInUse, selectedServices]
+  )
+
+  const iocSummaries = useMemo<BulkCheckSummaryRow[]>(() => {
+    const pendingLookup = new Set(pendingIocs)
+    return iocList.map((ioc) => {
+      const rawType = identifyIOC(ioc)
+      const displayType = normalizeType(rawType)
+      const payload = results[ioc]
+      const isPending = pendingLookup.has(ioc)
+      const serviceStatuses = activeServices.map((service) =>
+        buildServiceStatus(service, payload, rawType, isPending)
+      )
+      const { statusKind, statusText } = deriveRowStatus(
+        displayType,
+        rawType,
+        serviceStatuses,
+        activeServices.length > 0,
+        isPending
+      )
+
+      return {
+        ioc,
+        displayType,
+        rawType,
+        serviceStatuses,
+        statusKind,
+        statusText,
+        result: payload,
+        isPending
+      }
+    })
+  }, [activeServices, iocList, pendingIocs, results])
+
   const iocTypeSummary = useMemo(() => buildTypeSummary(iocSummary), [iocSummary])
 
   return (
@@ -391,6 +664,7 @@ const BulkCheck = () => {
       onTypeToggle={handleTypeToggle}
       onRefreshIocs={handleRefreshIocs}
       dailyCounters={dailyCounters}
+      iocSummaries={iocSummaries}
     />
   )
 }

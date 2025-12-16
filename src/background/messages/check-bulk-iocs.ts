@@ -8,6 +8,31 @@ console.log("[Plasmo] check-bulk-iocs handler loaded")
 
 
 const storage = new Storage({ area: "local" })
+const VT_LIMIT_PER_MINUTE = 4
+const VT_WINDOW_MS = 60_000
+let vtWindowStart = 0
+let vtRequestsInWindow = 0
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const respectVirusTotalRateLimit = async () => {
+  const now = Date.now()
+  if (vtWindowStart === 0 || now - vtWindowStart >= VT_WINDOW_MS) {
+    vtWindowStart = now
+    vtRequestsInWindow = 0
+  }
+
+  if (vtRequestsInWindow >= VT_LIMIT_PER_MINUTE) {
+    const waitTime = VT_WINDOW_MS - (now - vtWindowStart)
+    if (waitTime > 0) {
+      await sleep(waitTime)
+    }
+    vtWindowStart = Date.now()
+    vtRequestsInWindow = 0
+  }
+
+  vtRequestsInWindow += 1
+}
 
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   try {
@@ -45,54 +70,66 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       return res.send({ results: {} })
     }
 
+    const vtTasks: Promise<void>[] = []
+    let warnedPrivateIp = false
+
     for (const ioc of normalizedList) {
       const type = identifyIOC(ioc)
       const result: Record<string, any> = {}
-      let privateIpcount = 0;
 
-      if (type) {
-        if (services.includes("VirusTotal") && type !== "MAC") {
+      if (!type) {
+        result.error = "Unable to identify IOC type"
+        results[ioc] = result
+        continue
+      }
+
+      if (type === "Private IP" && !warnedPrivateIp) {
+        showNotification("Warning", "Skipping private IP address in bulk check.")
+        warnedPrivateIp = true
+      }
+
+      if (services.includes("AbuseIPDB") && type === "IP") {
+        try {
+          result.AbuseIPDB = await checkAbuseIPDB(ioc)
+          if (effectiveIpapi) {
+            try {
+              result.Ipapi = await checkIpapi(ioc)
+            } catch (err) {
+              console.warn("IPAPI error:", err)
+              result.Ipapi = { error: "Fetch failed" }
+            }
+          }
+          if (effectiveProxyCheck) {
+            try {
+              result.ProxyCheck = await checkProxyCheck(ioc)
+            } catch (err) {
+              console.warn("ProxyCheck error:", err)
+              result.ProxyCheck = { error: "Fetch failed" }
+            }
+          }
+        } catch (err) {
+          console.warn("AbuseIPDB error:", err)
+          result.AbuseIPDB = { error: "Fetch failed" }
+        }
+      }
+
+      if (services.includes("VirusTotal") && type !== "MAC") {
+        const vtTask = (async () => {
           try {
+            await respectVirusTotalRateLimit()
             result.VirusTotal = await checkVirusTotal(ioc, type)
           } catch (err) {
             console.warn("VirusTotal error:", err)
             result.VirusTotal = { error: "Fetch failed" }
           }
-        }
-        if (services.includes("AbuseIPDB") && type === "IP") {
-          try {
-            result.AbuseIPDB = await checkAbuseIPDB(ioc)
-            if (effectiveIpapi) {
-              try {
-                result.Ipapi = await checkIpapi(ioc)
-              } catch (err) {
-                console.warn("IPAPI error:", err)
-                result.Ipapi = { error: "Fetch failed" }
-              }
-            }
-            if (effectiveProxyCheck) {
-              try {
-                result.ProxyCheck = await checkProxyCheck(ioc)
-              } catch (err) {
-                console.warn("ProxyCheck error:", err)
-                result.ProxyCheck = { error: "Fetch failed" }
-              }
-            }
-          } catch (err) {
-            console.warn("AbuseIPDB error:", err)
-            result.AbuseIPDB = { error: "Fetch failed" }
-          }
-        } else if (type === "Private IP") {
-          privateIpcount++;
-          if(privateIpcount == 0) {
-          showNotification("Error", "Skipping the private IP address.")
-        }
-
-        }
+        })()
+        vtTasks.push(vtTask)
       }
 
       results[ioc] = result
     }
+
+    await Promise.all(vtTasks)
 
     res.send({ results })
   } catch (err) {

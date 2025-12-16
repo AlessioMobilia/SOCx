@@ -1021,9 +1021,6 @@ export const formatVirusTotalData = (vtData: any): string => {
   };
 
 
-  Object.entries(info).forEach(([label, value]) =>
-    allFields.push({ section: isDomain ? "Domain Information" : isIp ? "IP Information" : "IOC Information", label, value })
-  );
 
   // Vendor stats
   const analysis: Record<string, any> = {
