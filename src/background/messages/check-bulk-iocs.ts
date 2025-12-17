@@ -117,7 +117,8 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         const vtTask = (async () => {
           try {
             await respectVirusTotalRateLimit()
-            result.VirusTotal = await checkVirusTotal(ioc, type)
+            const vtData = await checkVirusTotal(ioc, type)
+            result.VirusTotal = vtData ?? { error: "Not found on VirusTotal", ioc }
           } catch (err) {
             console.warn("VirusTotal error:", err)
             result.VirusTotal = { error: "Fetch failed" }

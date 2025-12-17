@@ -76,6 +76,8 @@ type ServiceHighlight = {
   meta?: string
 }
 
+type Severity = "low" | "medium" | "high"
+
 const formatDateLabel = (value: string | number | null | undefined): string | null => {
   if (value === null || value === undefined || value === "") {
     return null
@@ -98,6 +100,91 @@ const formatDateLabel = (value: string | number | null | undefined): string | nu
 
 const getServiceStatus = (entry: BulkCheckSummaryRow, serviceName: string) =>
   entry.serviceStatuses.find((service) => service.name === serviceName)
+
+const SEVERITY_ORDER: Severity[] = ["low", "medium", "high"]
+
+const escalateSeverity = (current: Severity, next: Severity): Severity =>
+  SEVERITY_ORDER[Math.max(SEVERITY_ORDER.indexOf(current), SEVERITY_ORDER.indexOf(next))]
+
+const deriveVirusTotalSeverity = (payload: any): Severity | null => {
+  const stats = payload?.data?.attributes?.last_analysis_stats
+  if (!stats) {
+    return null
+  }
+
+  const malicious = Number(stats.malicious) || 0
+  const suspicious = Number(stats.suspicious) || 0
+  const harmless = Number(stats.harmless) || 0
+  const harmlessBonus = Math.min(harmless * 0.2, 5)
+  const vtScore = malicious * 3 + suspicious - harmlessBonus
+
+  if (vtScore >= 20 || malicious >= 5) {
+    return "high"
+  }
+  if (vtScore >= 5 || malicious > 0 || suspicious > 0) {
+    return "medium"
+  }
+  return "low"
+}
+
+const deriveAbuseSeverity = (payload: any): Severity | null => {
+  const data = payload?.data
+  if (!data) {
+    return null
+  }
+
+  const abuseScore = Number(data.abuseConfidenceScore) || 0
+  const totalReports = Number(data.totalReports) || 0
+  if (abuseScore >= 60 || totalReports >= 10) {
+    return "high"
+  }
+  if (abuseScore >= 20 || totalReports > 0) {
+    return "medium"
+  }
+  return "low"
+}
+
+const applyServiceSeverity = (base: BulkStatusKind, severity: Severity | null): HighlightStatus => {
+  if (!severity || ["pending", "error", "skipped"].includes(base)) {
+    return base
+  }
+  if (severity === "high") {
+    return "flagged-high"
+  }
+  if (severity === "medium") {
+    return "flagged-medium"
+  }
+  return base
+}
+
+const extractProxyCheckDetails = (
+  entry: BulkCheckSummaryRow
+): { proxyPayload: any | null; proxyDetections: any | null } => {
+  const proxyData = entry.result?.ProxyCheck
+  if (!proxyData || typeof proxyData !== "object") {
+    return { proxyPayload: null, proxyDetections: null }
+  }
+  const ipEntryKey = Object.keys(proxyData).find(
+    (key) => key.includes(".") && typeof proxyData[key] === "object"
+  )
+  const proxyPayload = ipEntryKey ? proxyData[ipEntryKey] : proxyData
+  const proxyDetections = proxyPayload?.detections ?? null
+  return { proxyPayload, proxyDetections }
+}
+
+const isAffirmativeFlag = (value: unknown): boolean => {
+  if (typeof value === "boolean") {
+    return value
+  }
+  if (typeof value === "number") {
+    return value > 0
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    return ["true", "yes", "y", "1", "detected"].includes(normalized)
+  }
+  return false
+}
 
 const buildVirusTotalHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
   const status = getServiceStatus(entry, "VirusTotal")
@@ -138,13 +225,7 @@ const buildVirusTotalHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight 
   const total = malicious + suspicious + harmless + undetected
   const scanDate = formatDateLabel(attributes?.last_analysis_date)
 
-  const severity = getSeverityLevel(entry)
-  let severityStatus: HighlightStatus = status.status
-  if (severity === "high" && status.status !== "pending" && status.status !== "error") {
-    severityStatus = "flagged-high"
-  } else if (severity === "medium" && status.status !== "pending" && status.status !== "error") {
-    severityStatus = "flagged-medium"
-  }
+  const severityStatus = applyServiceSeverity(status.status, deriveVirusTotalSeverity(payload))
 
   return {
     label: "VirusTotal",
@@ -176,7 +257,7 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
     }
   }
 
-  const data = payload?.data?.data
+  const data = payload?.data
   if (!data) {
     return {
       label: "AbuseIPDB",
@@ -191,13 +272,7 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
   const lastReported = formatDateLabel(data.lastReportedAt)
   const location = data.countryCode ? `Country ${data.countryCode}` : "Location unknown"
 
-  const severity = getSeverityLevel(entry)
-  let severityStatus: HighlightStatus = status.status
-  if (severity === "high" && status.status !== "pending" && status.status !== "error") {
-    severityStatus = "flagged-high"
-  } else if (severity === "medium" && status.status !== "pending" && status.status !== "error") {
-    severityStatus = "flagged-medium"
-  }
+  const severityStatus = applyServiceSeverity(status.status, deriveAbuseSeverity(payload))
 
   return {
     label: "AbuseIPDB",
@@ -214,53 +289,132 @@ type QuickFact = {
   highlight?: boolean
 }
 
-type Severity = "low" | "medium" | "high"
+const CARD_TONE: Record<Severity, string> = {
+  low: "border-socx-border-light bg-white/95 dark:border-socx-border-dark dark:bg-socx-panel/60",
+  medium: "border-amber-500/50 bg-white/95 dark:border-amber-400/50 dark:bg-socx-panel/60",
+  high: "border-rose-500/50 bg-white/95 dark:border-rose-400/50 dark:bg-socx-panel/60"
+}
 
 const getSeverityLevel = (entry: BulkCheckSummaryRow): Severity => {
   const vt = entry.result?.VirusTotal
   const abuse = entry.result?.AbuseIPDB
+  const ipapiData = entry.result?.Ipapi?.data ?? entry.result?.Ipapi
+  const { proxyPayload, proxyDetections } = extractProxyCheckDetails(entry)
 
-  let vtLevel: Severity = "low"
-  let abuseLevel: Severity = "low"
+  let vtLevel: Severity = deriveVirusTotalSeverity(vt) ?? "low"
+  let abuseLevel: Severity = deriveAbuseSeverity(abuse) ?? "low"
+  let proxyLevel: Severity = "low"
+  let ipapiLevel: Severity = "low"
 
-  if (vt?.data?.attributes?.last_analysis_stats) {
-    const stats = vt.data.attributes.last_analysis_stats
-    const malicious = Number(stats.malicious) || 0
-    const suspicious = Number(stats.suspicious) || 0
-    const harmless = Number(stats.harmless) || 0
-    const harmlessBonus = Math.min(harmless * 0.2, 5)
-    const vtScore = malicious * 3 + suspicious - harmlessBonus
+  if (proxyPayload || proxyDetections) {
+    const parseRiskScore = (value: unknown): number => {
+      if (typeof value === "number") {
+        return value
+      }
+      if (typeof value === "string") {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : 0
+      }
+      return 0
+    }
 
-    if (vtScore >= 20 || malicious >= 5) {
-      vtLevel = "high"
-    } else if (vtScore >= 5 || malicious > 0 || suspicious > 0) {
-      vtLevel = "medium"
+    const rawRisk = proxyDetections?.risk ?? proxyPayload?.risk
+    const riskScore = parseRiskScore(rawRisk)
+    if (riskScore >= 80) {
+      proxyLevel = "high"
+    } else if (riskScore >= 40) {
+      proxyLevel = "medium"
+    }
+
+    const applyDetection = (fields: string[], level: Severity) => {
+      if (!proxyDetections) {
+        return
+      }
+      if (fields.some((field) => isAffirmativeFlag(proxyDetections[field]))) {
+        proxyLevel = escalateSeverity(proxyLevel, level)
+      }
+    }
+
+    applyDetection(["tor", "compromised", "anonymous", "hosting"], "high")
+    applyDetection(["vpn", "proxy", "scraper"], "medium")
+
+    if (proxyPayload) {
+      if (isAffirmativeFlag(proxyPayload.proxy)) {
+        proxyLevel = escalateSeverity(proxyLevel, "medium")
+      }
+      if (typeof proxyPayload.type === "string") {
+        const normalized = proxyPayload.type.toLowerCase()
+        if (["tor", "compromised"].includes(normalized)) {
+          proxyLevel = escalateSeverity(proxyLevel, "high")
+        } else if (["vpn", "proxy", "hosting"].includes(normalized)) {
+          proxyLevel = escalateSeverity(proxyLevel, "medium")
+        }
+      }
     }
   }
 
-  if (abuse?.data?.data) {
-    const abuseScore = Number(abuse.data.data.abuseConfidenceScore) || 0
-    const totalReports = Number(abuse.data.data.totalReports) || 0
-    if (abuseScore >= 60 || totalReports >= 10) {
-      abuseLevel = "high"
-    } else if (abuseScore >= 20 || totalReports > 0) {
-      abuseLevel = "medium"
+  if (ipapiData && typeof ipapiData === "object") {
+    const escalateForFields = (fields: string[], level: Severity) => {
+      if (fields.some((field) => ipapiData?.[field] === true)) {
+        ipapiLevel = escalateSeverity(ipapiLevel, level)
+      }
+    }
+    escalateForFields(["is_tor", "is_abuser"], "high")
+    escalateForFields(["is_proxy", "is_vpn", "is_datacenter"], "medium")
+    if (ipapiData?.vpn?.service) {
+      ipapiLevel = escalateSeverity(ipapiLevel, "medium")
     }
   }
 
-  const order: Severity[] = ["low", "medium", "high"]
-  return order[Math.max(order.indexOf(vtLevel), order.indexOf(abuseLevel))]
+  let severity: Severity = escalateSeverity(vtLevel, abuseLevel)
+  severity = escalateSeverity(severity, proxyLevel)
+  severity = escalateSeverity(severity, ipapiLevel)
+
+  const cleanNoDetections =
+    entry.statusKind !== "flagged" &&
+    typeof entry.statusText === "string" &&
+    entry.statusText.toLowerCase().includes("no detection")
+
+  if (severity === "low") {
+    const abuseStatus = entry.serviceStatuses.find((service) => service.name === "AbuseIPDB")
+    if (abuseStatus) {
+      const scoreMatch = abuseStatus.text.match(/(\d+)%/)
+      const reportsMatch = abuseStatus.text.match(/(\d+)\s+reports?/)
+      const score = scoreMatch ? Number(scoreMatch[1]) : 0
+      const reports = reportsMatch ? Number(reportsMatch[1]) : 0
+      if (score >= 60 || reports >= 10) {
+        severity = "high"
+      } else if (score >= 20 || reports > 0) {
+        severity = "medium"
+      }
+    }
+  }
+
+  if (severity === "low" && entry.statusKind === "flagged") {
+    severity = "medium"
+  }
+
+  const hasPrimaryHigh = vtLevel === "high" || abuseLevel === "high"
+  if (!hasPrimaryHigh && severity === "high") {
+    severity = "medium"
+  }
+
+  if (cleanNoDetections && severity === "high") {
+    severity = "medium"
+  }
+
+  return severity
 }
 
 const getBadgeClass = (entry: BulkCheckSummaryRow): string => {
+  const severity = getSeverityLevel(entry)
+  if (severity === "high") {
+    return "bg-rose-500/25 text-rose-100"
+  }
+  if (severity === "medium") {
+    return "bg-amber-500/25 text-amber-100"
+  }
   if (entry.statusKind === "flagged") {
-    const severity = getSeverityLevel(entry)
-    if (severity === "high") {
-      return "bg-rose-500/25 text-rose-100"
-    }
-    if (severity === "medium") {
-      return "bg-amber-500/25 text-amber-100"
-    }
     return "bg-emerald-500/20 text-emerald-100"
   }
   const map: Record<BulkStatusKind, string> = {
@@ -276,19 +430,9 @@ const getBadgeClass = (entry: BulkCheckSummaryRow): string => {
 const buildQuickFacts = (entry: BulkCheckSummaryRow): QuickFact[] => {
   const highlights: QuickFact[] = []
   const regularFacts: QuickFact[] = []
-  const abuseData = entry.result?.AbuseIPDB?.data?.data
+  const abuseData = entry.result?.AbuseIPDB?.data
   const ipapiData = entry.result?.Ipapi?.data ?? entry.result?.Ipapi
-  const proxyData = entry.result?.ProxyCheck
-
-  let proxyPayload: any = null
-  let proxyDetections: any = null
-
-  if (proxyData && typeof proxyData === "object") {
-    const keys = Object.keys(proxyData)
-    const ipEntryKey = keys.find((key) => key.includes(".") && typeof proxyData[key] === "object")
-    proxyPayload = ipEntryKey ? proxyData[ipEntryKey] : proxyData
-    proxyDetections = proxyPayload?.detections
-  }
+  const { proxyPayload, proxyDetections } = extractProxyCheckDetails(entry)
 
   const addFact = (label: string, value: unknown, options?: { highlight?: boolean }) => {
     if ((value === null || value === undefined || value === "" || value === "N/A") && !options?.highlight) {
@@ -373,44 +517,43 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
     let pending = 0
 
     for (const entry of iocSummaries) {
-      if (entry.statusKind === "flagged") {
+      const severity = getSeverityLevel(entry)
+      if (severity !== "low") {
         flagged += 1
-      } else if (entry.statusKind === "error") {
+      }
+
+      if (entry.statusKind === "error") {
         errors += 1
       } else if (entry.statusKind === "pending") {
         pending += 1
       }
     }
 
-  const highSeverity = iocSummaries.filter(
-    (entry) => entry.statusKind === "flagged" && getSeverityLevel(entry) === "high"
-  ).length
-  const mediumSeverity = iocSummaries.filter(
-    (entry) => entry.statusKind === "flagged" && getSeverityLevel(entry) === "medium"
-  ).length
+    const highSeverity = iocSummaries.filter((entry) => getSeverityLevel(entry) === "high").length
+    const mediumSeverity = iocSummaries.filter((entry) => getSeverityLevel(entry) === "medium").length
 
-  return { total, flagged, errors, pending, highSeverity, mediumSeverity }
-}, [iocSummaries])
+    return { total, flagged, errors, pending, highSeverity, mediumSeverity }
+  }, [iocSummaries])
 
-const flaggedNeutralState = useMemo(
-  () => iocStats.flagged === 0 && iocStats.errors === 0 && iocStats.pending === 0,
-  [iocStats.errors, iocStats.flagged, iocStats.pending]
-)
+  const flaggedNeutralState = useMemo(
+    () => iocStats.flagged === 0 && iocStats.errors === 0 && iocStats.pending === 0,
+    [iocStats.errors, iocStats.flagged, iocStats.pending]
+  )
 
-const flaggedTone = useMemo(() => {
-  if (iocStats.flagged === 0) {
-    return flaggedNeutralState
-      ? "bg-emerald-500/20 text-emerald-900 dark:text-emerald-100"
-      : "bg-socx-cloud-soft/70 dark:bg-socx-panel/70"
-  }
-  if (iocStats.highSeverity > 0) {
-    return "bg-rose-500/25 text-rose-900 dark:text-rose-100"
-  }
-  if (iocStats.mediumSeverity > 0) {
+  const flaggedTone = useMemo(() => {
+    if (iocStats.flagged === 0) {
+      return flaggedNeutralState
+        ? "bg-emerald-500/20 text-emerald-900 dark:text-emerald-100"
+        : "bg-socx-cloud-soft/70 dark:bg-socx-panel/70"
+    }
+    if (iocStats.highSeverity > 0) {
+      return "bg-rose-500/25 text-rose-900 dark:text-rose-100"
+    }
+    if (iocStats.mediumSeverity > 0) {
+      return "bg-amber-500/20 text-amber-900 dark:text-amber-100"
+    }
     return "bg-amber-500/20 text-amber-900 dark:text-amber-100"
-  }
-  return "bg-amber-500/20 text-amber-900 dark:text-amber-100"
-}, [flaggedNeutralState, iocStats.flagged, iocStats.highSeverity, iocStats.mediumSeverity])
+  }, [flaggedNeutralState, iocStats.flagged, iocStats.highSeverity, iocStats.mediumSeverity])
 
   return (
     <div className="min-h-screen bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
@@ -688,27 +831,34 @@ const flaggedTone = useMemo(() => {
               Paste IOCs in the workspace to start tracking their status across services.
             </p>
           ) : (
-            <div className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
               {iocSummaries.map((entry) => {
+                const severity = getSeverityLevel(entry)
                 const badgeClass = getBadgeClass(entry)
                 const formatted = entry.result ? parseAndFormatResults(entry.result) : ""
                 const vtHighlight = buildVirusTotalHighlight(entry)
                 const abuseHighlight = buildAbuseHighlight(entry)
                 const quickFacts = buildQuickFacts(entry)
+                const cardTone = CARD_TONE[severity]
+                const flaggedServiceText = entry.serviceStatuses.find((service) => service.status === "flagged")?.text
+                const displayStatusText =
+                  entry.statusKind === "flagged"
+                    ? flaggedServiceText ?? (severity === "high" ? "High risk indicator" : "Suspicious activity")
+                    : entry.statusText
 
                 return (
                   <div
                     key={entry.ioc}
-                    className="rounded-3xl border border-socx-border-light bg-white/95 p-5 shadow-sm transition hover:shadow-lg dark:border-socx-border-dark dark:bg-socx-panel/60">
+                    className={`rounded-3xl border p-5 shadow-sm transition hover:shadow-lg ${cardTone}`}>
                     <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
                           {entry.displayType}
                         </p>
-                        <h3 className="text-lg font-semibold">{entry.ioc}</h3>
+                        <h3 className="text-lg font-semibold break-words">{entry.ioc}</h3>
                       </div>
                       <span className={`rounded-full px-4 py-1 text-xs font-semibold ${badgeClass}`}>
-                        {entry.statusText}
+                        {displayStatusText}
                       </span>
                     </div>
                     {entry.isPending && (
@@ -747,7 +897,7 @@ const flaggedTone = useMemo(() => {
                       </div>
 
                       <div className="space-y-3">
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-3">
                           {[vtHighlight, abuseHighlight].map((highlight) => (
                             <div
                               key={`${entry.ioc}-${highlight.label}`}

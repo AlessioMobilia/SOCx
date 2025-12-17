@@ -825,6 +825,13 @@ export const formatAbuseIPDBData = (
   const toSafe = (v: unknown): string | number =>
     v === null || v === undefined || v === "" ? "N/A" : (v as any);
 
+  const formatIpAddress = (value: unknown): string | number => {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return defang(value)
+    }
+    return toSafe(value)
+  }
+
   const hostnames =
     Array.isArray(d?.hostnames) && d.hostnames.length > 0
       ? d.hostnames.join(", ")
@@ -839,7 +846,7 @@ export const formatAbuseIPDBData = (
 
   // --- campi principali ------------------------------------------------------
   const fields: Record<string, string | number> = {
-    "IP:": toSafe(d?.ipAddress),
+    "IP:": formatIpAddress(d?.ipAddress),
     "Abuse Score:": `${toSafe(d?.abuseConfidenceScore)}%`,
     "Total Reports:": toSafe(d?.totalReports),
     "ISP:": toSafe(d?.isp),
@@ -988,6 +995,21 @@ export const formatVirusTotalData = (vtData: any): string => {
       : isUrl && typeof attr.url === "string"
       ? defang(attr.url)
       : null;
+  const resolvedIoc =
+    rawIoc ??
+    (typeof attr.url === "string"
+      ? attr.url
+      : typeof d.id === "string"
+      ? d.id
+      : typeof attr.meaningful_name === "string"
+      ? attr.meaningful_name
+      : null)
+  const defangedIoc =
+    typeof resolvedIoc === "string" && resolvedIoc.length > 0
+      ? isAlreadyDefanged(resolvedIoc)
+        ? resolvedIoc
+        : defang(resolvedIoc)
+      : null
   const iocLabel = isUrl || isDomain ? "IOC (defanged):" : "IOC:";
 
   // Base Info
@@ -1061,16 +1083,49 @@ export const formatVirusTotalData = (vtData: any): string => {
     sections[section].push({ label, value });
   });
 
-  const maxLabelLength = Math.max(...allFields.map(f => f.label.length));
+  const detectionEntries = Object.entries(attr.last_analysis_results ?? {})
+    .filter(([, result]) => {
+      const category = result?.category ?? ""
+      return category === "malicious" || category === "suspicious"
+    })
+    .map(([engine, result]) => ({
+      engine,
+      verdict: result?.result ?? result?.category ?? "Flagged"
+    }))
+
+  const labelCandidates = [
+    "IOC:",
+    "VirusTotal Verdict:",
+    ...allFields.map((f) => f.label),
+    ...detectionEntries.slice(0, 6).map(({ engine }) => `${engine}:`)
+  ]
+  const labelWidth = labelCandidates.reduce((max, label) => Math.max(max, label.length), 0)
+  const formatLine = (label: string, value: any) => `- ${label.padEnd(labelWidth)} ${value}`
+
   const lines: string[] = [];
+
+  if (defangedIoc) {
+    lines.push(formatLine("IOC:", defangedIoc))
+  }
+
+  lines.push(
+    formatLine("VirusTotal Verdict:", `${stats.malicious} malicious • ${stats.suspicious} suspicious`)
+  );
 
   for (const [sectionName, fields] of Object.entries(sections)) {
     lines.push(`${sectionName}:`);
     lines.push(
       ...fields.map(({ label, value }) =>
-        `- ${label.padEnd(maxLabelLength)} ${value}`
+        formatLine(label, value)
       )
     );
+  }
+
+  if (detectionEntries.length > 0) {
+    lines.push("Detected engines:");
+    detectionEntries.slice(0, 6).forEach(({ engine, verdict }) => {
+      lines.push(formatLine(`${engine}:`, verdict));
+    });
   }
 
   if (categoriesBlock) lines.push(categoriesBlock);

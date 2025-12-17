@@ -97,8 +97,8 @@ const describeVirusTotalPayload = (payload: any): BulkServiceStatus => {
 }
 
 const describeAbusePayload = (payload: any): BulkServiceStatus => {
-  const score = Number(payload?.data?.data?.abuseConfidenceScore) || 0
-  const reports = Number(payload?.data?.data?.totalReports) || 0
+  const score = Number(payload?.data?.abuseConfidenceScore) || 0
+  const reports = Number(payload?.data?.totalReports) || 0
   if (score >= 50 || reports > 0) {
     return {
       name: "AbuseIPDB",
@@ -132,16 +132,15 @@ const buildServiceStatus = (
     }
   }
 
-  if (isPending) {
-    return {
-      name: service,
-      status: "pending",
-      text: "Running check..."
-    }
-  }
-
   const servicePayload = payload?.[service]
   if (!servicePayload) {
+    if (isPending) {
+      return {
+        name: service,
+        status: "pending",
+        text: "Running check..."
+      }
+    }
     return {
       name: service,
       status: "pending",
@@ -468,66 +467,135 @@ const BulkCheck = () => {
 
     const selectedCopy = [...selectedServices]
     setServicesInUse(selectedCopy)
-    setPendingIocs(requestList)
     setResults({})
     setIsLoading(true)
 
-    const vtEligible = selectedCopy.includes("VirusTotal")
+    const hasVirusTotal = selectedCopy.includes("VirusTotal")
+    const otherServices = selectedCopy.filter((service) => service !== "VirusTotal")
+    const generalQueue = otherServices.length > 0 ? requestList : []
+    const generalServices = otherServices
+
+    const vtEligibleList = hasVirusTotal
       ? requestList.filter((entry) => {
           const type = identifyIOC(entry)
           return Boolean(type) && type !== "MAC"
-        }).length
-      : 0
+        })
+      : []
+    const vtQueue = hasVirusTotal ? requestList : []
+    const vtEligible = vtEligibleList.length
     const vtNote =
-      selectedCopy.includes("VirusTotal") && vtEligible > 0
+      hasVirusTotal && vtEligible > 0
         ? ` • VirusTotal 4 req/min${vtEligible > 4 ? ` (~${Math.ceil(vtEligible / 4)} min)` : ""}`
         : ""
 
-    setMessage(`Bulk check in progress${vtNote} – 0/${requestList.length}`)
+    const pendingTracker = new Map<string, number>()
+    const immediateResults: BulkCheckResults = {}
 
-    const queue = [...requestList]
-    const concurrencyLimit = Math.max(1, selectedCopy.includes("VirusTotal") ? 4 : 8)
-    let completedCount = 0
-    let hadFailures = false
-
-    const runWorker = async () => {
-      while (queue.length > 0) {
-        const next = queue.shift()
-        if (!next) {
-          return
-        }
-        try {
-          const response = await sendToBackground<{ results?: BulkCheckResults }>({
-            name: "check-bulk-iocs",
-            body: {
-              iocList: [next],
-              services: selectedCopy,
-              includeIpapi: false,
-              includeProxyCheck: proxyCheckEnabled
-            }
-          })
-
-          const payload = response?.results?.[next] ?? {}
-          setResults((prev) => ({ ...prev, [next]: payload }))
-        } catch (error) {
-          hadFailures = true
-          console.error("Bulk check failed for IOC:", next, error)
-          setResults((prev) => ({
-            ...prev,
-            [next]: { error: "Error during bulk check." }
-          }))
-        } finally {
-          completedCount += 1
-          setPendingIocs((prev) => prev.filter((entry) => entry !== next))
-          setMessage(
-            `Bulk check in progress${vtNote} – ${completedCount}/${requestList.length}`
-          )
-        }
+    for (const ioc of requestList) {
+      const type = identifyIOC(ioc)
+      const isVtEligible = Boolean(type) && type !== "MAC"
+      const vtCount = hasVirusTotal && isVtEligible ? 1 : 0
+      const generalCount = generalServices.length > 0 ? 1 : 0
+      const totalGroups = vtCount + generalCount
+      if (totalGroups > 0) {
+        pendingTracker.set(ioc, totalGroups)
+      } else {
+        immediateResults[ioc] = {}
       }
     }
 
+    if (Object.keys(immediateResults).length > 0) {
+      setResults((prev) => ({ ...prev, ...immediateResults }))
+    }
+
+    setPendingIocs(Array.from(pendingTracker.keys()))
+
+    const totalIocs = requestList.length
+    let completedCount = totalIocs - pendingTracker.size
+    let hadFailures = false
+
+    setMessage(`Bulk check in progress${vtNote} – ${completedCount}/${totalIocs}`)
+
+    const updateResultsForIoc = (ioc: string, payload: Record<string, any>) => {
+      setResults((prev) => {
+        const previous = prev[ioc] ?? {}
+        return {
+          ...prev,
+          [ioc]: {
+            ...previous,
+            ...payload
+          }
+        }
+      })
+    }
+
+    const markServiceComplete = (ioc: string) => {
+      if (!pendingTracker.has(ioc)) {
+        return
+      }
+      const remaining = (pendingTracker.get(ioc) ?? 0) - 1
+      if (remaining <= 0) {
+        pendingTracker.delete(ioc)
+        setPendingIocs(Array.from(pendingTracker.keys()))
+        completedCount += 1
+        setMessage(`Bulk check in progress${vtNote} – ${completedCount}/${totalIocs}`)
+      } else {
+        pendingTracker.set(ioc, remaining)
+      }
+    }
+
+    const runQueue = async (
+      queueSource: string[],
+      services: string[],
+      concurrency: number
+    ) => {
+      if (queueSource.length === 0 || services.length === 0) {
+        return
+      }
+      const queue = [...queueSource]
+      const worker = async () => {
+        while (queue.length > 0) {
+          const next = queue.shift()
+          if (!next) {
+            return
+          }
+          try {
+            const response = await sendToBackground<{ results?: BulkCheckResults }>({
+              name: "check-bulk-iocs",
+              body: {
+                iocList: [next],
+                services,
+                includeIpapi: false,
+                includeProxyCheck: proxyCheckEnabled
+              }
+            })
+
+            const payload = response?.results?.[next] ?? {}
+            updateResultsForIoc(next, payload)
+          } catch (error) {
+            hadFailures = true
+            console.error(
+              "Bulk check failed for IOC:",
+              next,
+              "services:",
+              services.join(", "),
+              error
+            )
+            updateResultsForIoc(next, { error: "Error during bulk check." })
+          } finally {
+            markServiceComplete(next)
+          }
+        }
+      }
+      const workerCount = Math.min(Math.max(1, concurrency), queue.length)
+      await Promise.all(Array.from({ length: workerCount }, () => worker()))
+    }
+
     try {
-      await Promise.all(Array.from({ length: concurrencyLimit }, () => runWorker()))
+      await Promise.all([
+        runQueue(generalQueue, generalServices, 8),
+        runQueue(vtQueue, hasVirusTotal ? ["VirusTotal"] : [], 4)
+      ])
       setMessage(hadFailures ? "Check completed with some errors." : "Check completed!")
     } catch (error) {
       console.error("Bulk check failed:", error)
