@@ -5,10 +5,10 @@ on:
     inputs:
       edge_notes:
         required: false
-        default: ''
+        default: ""
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: read
@@ -18,63 +18,60 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      NODE_VERSION: '20'
-      CHROME_TARGET: chrome-mv3
-      EDGE_TARGET: edge-mv3
-      # scegli quello giusto per il tuo progetto:
-      FIREFOX_TARGET: firefox  # oppure: firefox-mv2
-
-      # percorsi dei file generati da Plasmo (--zip)
+      NODE_VERSION: "20"
       CHROME_ZIP: build/chrome-mv3-prod.zip
       EDGE_ZIP: build/edge-mv3-prod.zip
-      FIREFOX_XPI: build/firefox-prod.zip   # se usi mv2 -> firefox-mv2-prod.zip
+      FIREFOX_XPI: build/firefox-prod.zip
       FIREFOX_SOURCE_ZIP: dist/source_${{ github.sha }}.zip
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # come nell'esempio: installa pnpm PRIMA di setup-node
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
-          # se vuoi far partire subito l'install:
-          # run_install: true
+          version: 11.19.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      # ---- Build & zip con Plasmo ----
       - name: Build+zip Chrome
-        run: pnpm dlx plasmo build --target=${{ env.CHROME_TARGET }} --zip
+        run: pnpm run package:chrome
 
       - name: Build+zip Edge
-        run: pnpm dlx plasmo build --target=${{ env.EDGE_TARGET }} --zip
+        run: pnpm run package:edge
 
       - name: Build+zip Firefox
-        run: pnpm dlx plasmo build --target=${{ env.FIREFOX_TARGET }} --zip
+        run: pnpm run package:firefox
 
+      - name: Typecheck and validate manifests
+        run: pnpm run typecheck && pnpm run validate:builds
+
+      - name: Package source for Firefox review
+        run: |
+          mkdir -p dist
+          git archive --format=zip --output="${{ env.FIREFOX_SOURCE_ZIP }}" HEAD
 
       - name: Validate SUBMIT_KEYS JSON
         run: node -e 'JSON.parse(process.env.SUBMIT_KEYS); console.log("SUBMIT_KEYS OK")'
         env:
           SUBMIT_KEYS: ${{ secrets.SUBMIT_KEYS }}
 
-      # ---- Pubblicazione con BPP ----
       - name: Browser Platform Publisher
         uses: PlasmoHQ/bpp@v3.8.0
         with:
-          keys: ${{ secrets.SUBMIT_KEYS }}         # JSON credenziali (Chrome/Edge/Firefox)
+          keys: ${{ secrets.SUBMIT_KEYS }}
           chrome-file: ${{ env.CHROME_ZIP }}
           edge-file: ${{ env.EDGE_ZIP }}
-          firefox-file: ${{ env.FIREFOX_XPI }}    # accetta .zip per Firefox
+          firefox-file: ${{ env.FIREFOX_XPI }}
+          source-file: ${{ env.FIREFOX_SOURCE_ZIP }}
           edge-notes: ${{ github.event.inputs.edge_notes }}
           version-file: package.json
           verbose: true

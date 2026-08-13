@@ -1,0 +1,19 @@
+{
+  "$schema": "https://github.com/PlasmoHQ/bpp/raw/v3.8.0/keys.schema.json",
+  "chrome": {
+    "extId": "nanabcjeikkjaiabmlncionjliiobcaf",
+    "clientId": "REPLACE_ME",
+    "clientSecret": "REPLACE_ME",
+    "refreshToken": "REPLACE_ME"
+  },
+  "firefox": {
+    "extId": "{017bef1c-5ecb-4a2e-a111-244174e2d9d8}",
+    "apiKey": "REPLACE_ME",
+    "apiSecret": "REPLACE_ME"
+  },
+  "edge": {
+    "productId": "REPLACE_ME",
+    "clientId": "REPLACE_ME",
+    "apiKey": "REPLACE_ME"
+  }
+}

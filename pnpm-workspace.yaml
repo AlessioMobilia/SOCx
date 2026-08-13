@@ -1,0 +1,34 @@
+packages:
+  - .
+
+overrides:
+  "@babel/core@^7": 7.29.6
+  baseline-browser-mapping: 2.11.13
+  "brace-expansion@^2": 2.1.4
+  content-security-policy-parser: 0.6.0
+  esbuild: 0.25.12
+  immutable: 5.1.9
+  "js-yaml@^4": 4.3.1
+  "minimatch@^9": 9.0.9
+  msgpackr: 1.11.5
+  "nanoid@^3": 3.3.18
+  "nanoid@^5": 5.1.16
+  "picomatch@^2": 2.3.2
+  "rollup@^3": 3.30.0
+  sharp: 0.35.3
+  svelte: 5.56.9
+  "svgo@^2": 2.8.3
+  tsup: 8.5.1
+  "yaml@^1": 1.10.3
+  "yaml@^2": 2.9.0
+
+allowBuilds:
+  "@parcel/watcher": true
+  "@swc/core": true
+  esbuild: true
+  lmdb: true
+  msgpackr-extract: true
+  sharp: true
+
+patchedDependencies:
+  "@plasmohq/parcel-resolver@0.14.1": patches/@plasmohq__parcel-resolver@0.14.1.patch
