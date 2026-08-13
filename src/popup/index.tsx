@@ -7,6 +7,11 @@ import { showNotification } from "~src/utility/utils"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 const storage = new Storage({ area: "local" })
+type CrossBrowserExtensionApi = typeof chrome & {
+  sidebarAction?: {
+    open: () => void | Promise<void>
+  }
+}
 
 const Popup = () => {
   const [iocHistory, setIocHistory] = useState<
@@ -86,11 +91,25 @@ const Popup = () => {
   }
 
   const handleOpenSidePanelClick = () => {
-    if ("sidePanel" in chrome && chrome.sidePanel?.open && windowId !== null) {
-      chrome.sidePanel.open({ windowId })
-    } else {
-      showNotification("Error", "You must open manually the side panel.")
+    const extensionApi = chrome as CrossBrowserExtensionApi
+
+    if (extensionApi.sidePanel?.open && windowId !== null) {
+      void extensionApi.sidePanel.open({ windowId }).catch((error) => {
+        console.error("Unable to open the side panel:", error)
+        showNotification("Error", "Unable to open the side panel.")
+      })
+      return
     }
+
+    if (extensionApi.sidebarAction?.open) {
+      void Promise.resolve(extensionApi.sidebarAction.open()).catch((error) => {
+        console.error("Unable to open the Firefox sidebar:", error)
+        showNotification("Error", "Unable to open the sidebar.")
+      })
+      return
+    }
+
+    showNotification("Error", "Open the browser side panel manually.")
   }
 
   const handleClearHistory = () => {

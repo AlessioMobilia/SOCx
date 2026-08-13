@@ -71,7 +71,11 @@ const THEMES: Record<"virustotal" | "abuse" | "magic", ButtonTheme> = {
 
 const applyBaseStyling = (button: HTMLButtonElement, theme: ButtonTheme, label: string) => {
   button.type = "button"
-  button.innerHTML = ICONS[theme.icon]
+  const iconDocument = new DOMParser().parseFromString(
+    ICONS[theme.icon],
+    "image/svg+xml"
+  )
+  button.replaceChildren(document.importNode(iconDocument.documentElement, true))
 
   // dimensioni / layout
   button.style.width = "36px"

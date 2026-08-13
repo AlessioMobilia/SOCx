@@ -188,13 +188,18 @@ export const showToast = (message: string, variant: string = "primary") => {
   toast.setAttribute("aria-live", "assertive");
   toast.setAttribute("aria-atomic", "true");
 
-  toast.innerHTML = `
-    <div class="socx-toast__message">${message}</div>
-    <button class="socx-toast__close" aria-label="Close">&times;</button>
-  `;
+  const messageElement = document.createElement("div");
+  messageElement.className = "socx-toast__message";
+  messageElement.textContent = message;
 
-  const closeBtn = toast.querySelector("button");
-  closeBtn?.addEventListener("click", () => toast.remove());
+  const closeButton = document.createElement("button");
+  closeButton.className = "socx-toast__close";
+  closeButton.type = "button";
+  closeButton.setAttribute("aria-label", "Close");
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", () => toast.remove());
+
+  toast.append(messageElement, closeButton);
 
   container.appendChild(toast);
 
@@ -1083,7 +1088,15 @@ export const formatVirusTotalData = (vtData: any): string => {
     sections[section].push({ label, value });
   });
 
-  const detectionEntries = Object.entries(attr.last_analysis_results ?? {})
+  type VirusTotalAnalysisResult = {
+    category?: string
+    result?: string
+  }
+  const analysisResults = (attr.last_analysis_results ?? {}) as Record<
+    string,
+    VirusTotalAnalysisResult
+  >
+  const detectionEntries = Object.entries(analysisResults)
     .filter(([, result]) => {
       const category = result?.category ?? ""
       return category === "malicious" || category === "suspicious"
@@ -2097,10 +2110,6 @@ function cleanContent(container: HTMLElement): void {
       }
     });
 
-    // Rimuovi anche &nbsp; come entità HTML
-    if (el.innerHTML.includes("&nbsp;")) {
-      el.innerHTML = el.innerHTML.replace(/&nbsp;/g, " ");
-    }
   });
 
   // Rimuovi <td>, <tr>, <th> vuoti

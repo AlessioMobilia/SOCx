@@ -1,0 +1,9 @@
+import "@plasmohq/messaging"
+
+declare module "@plasmohq/messaging" {
+  interface MessagesMetadata {
+    "check-bulk-iocs": {}
+    "check-subnet-abuse": {}
+    "magic-ioc-request": {}
+  }
+}

@@ -12,20 +12,24 @@ const SidePanel = () => {
   // Carica il testo salvato e la preferenza della dark mode
   useEffect(() => {
     chrome.storage.local.get(["note"], (result) => {
-      if (result.note) {
+      if (typeof result.note === "string") {
         setNote(result.note);
       }
     });
     chrome.storage.local.get(["isDarkMode"], (result) => {
-      if (result.isDarkMode !== undefined) {
+      if (typeof result.isDarkMode === "boolean") {
         setIsDarkMode(result.isDarkMode);
       }
     });
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const handleMessage: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (message, sender, sendResponse) => {
       if (message.action === "updateText") {
         const { oldText, newText } = message;
+        if (typeof oldText !== "string" || typeof newText !== "string") {
+          sendResponse({ success: false });
+          return;
+        }
         chrome.storage.local.get(["note"], (result) => {
-          if (result.note) {
+          if (typeof result.note === "string") {
             const newNote = result.note.replaceAll(oldText.trim().replace(/(\r\n|\n|\r)/gm, ""), newText);
             setNote(newNote);
             saveNote(newNote);
@@ -33,12 +37,10 @@ const SidePanel = () => {
         });
         sendResponse({ success: true });
       }
-    });
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, []);
-
-  useEffect(() => {
-    document.body.className = isDarkMode ? "dark-mode" : "light-mode";
-  }, [isDarkMode]);
 
   // Applica il colore di sfondo al body
   useEffect(() => {

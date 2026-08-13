@@ -9,13 +9,13 @@ import {
   TrashIcon
 } from "@heroicons/react/24/outline"
 import {
-  ExtractedIPMap,
   computeIPv4Subnet,
   computeIPv6Subnet,
   extractIPAddresses,
   isPrivateIP,
   uniqueStrings
 } from "../utility/utils"
+import type { ExtractedIPMap } from "../utility/utils"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 type SubnetSummary = {

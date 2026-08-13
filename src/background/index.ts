@@ -1,14 +1,24 @@
 import { setupContextMenus } from "./menus"
 import { handleMenuClick } from "./menu-handler"
 
+type ChromiumExtensionApi = typeof chrome & {
+  sidePanel?: {
+    setOptions?: (options: { enabled: boolean }) => Promise<void>
+  }
+}
+
+const extensionApi = chrome as ChromiumExtensionApi
+
 console.log("Background script loaded")
 
 // Eseguito al primo avvio o aggiornamento dell'estensione
 chrome.runtime.onInstalled.addListener(async () => {
   try {
-    // Se usi Side Panel API (non ancora pienamente supportata da Plasmo)
-    if (chrome.sidePanel?.setOptions) {
-      await chrome.sidePanel.setOptions({ enabled: true })
+    const isFirefox = ["firefox", "gecko"].includes(
+      process.env.PLASMO_BROWSER ?? ""
+    )
+    if (!isFirefox && extensionApi.sidePanel?.setOptions) {
+      await extensionApi.sidePanel.setOptions({ enabled: true })
     }
 
     await setupContextMenus()

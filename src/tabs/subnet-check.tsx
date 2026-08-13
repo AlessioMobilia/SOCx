@@ -626,7 +626,7 @@ const SubnetCheck = () => {
                           </p>
                         </td>
                         <td className="py-3">IPv{entry.version}</td>
-                        <td className="py-3">{formatHostCount(entry.hostCount)}</td>
+                        <td className="py-3">{entry.hostCount}</td>
                         <td className="py-3">
                           <span
                             className={`rounded-full px-3 py-1 text-xs font-semibold ${

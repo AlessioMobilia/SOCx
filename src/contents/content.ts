@@ -112,10 +112,10 @@ const availableServices = servicesConfig.availableServices as Record<string, str
           return
         }
         const change = changes["floatingButtonsEnabled"]
-        if (change.newValue!=undefined){
+        if (typeof change?.newValue === "boolean") {
           floatingButtonsEnabled = change.newValue
           console.log("[SOCx] Updated floatingButtonsEnabled to:", floatingButtonsEnabled)
-        }        
+        }
         if (!floatingButtonsEnabled) {
           clearSelectionUI()
         }

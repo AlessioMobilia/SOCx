@@ -16,6 +16,13 @@ import type { BulkCheckSummaryRow, BulkServiceStatus, BulkStatusKind } from "./b
 
 type IOCSummary = Record<string, string[]>
 type BulkCheckResults = Record<string, any>
+type BulkCheckRequest = {
+  iocList: string[]
+  services: string[]
+  includeIpapi: boolean
+  includeProxyCheck: boolean
+}
+type BulkCheckResponse = { results?: BulkCheckResults }
 
 const storage = new Storage({ area: "local" })
 
@@ -267,7 +274,7 @@ const BulkCheck = () => {
       return
     }
     const keys = getCounterKeys()
-    const values = await new Promise<Record<string, number>>((resolve) => {
+    const values = await new Promise<Record<string, unknown>>((resolve) => {
       chrome.storage.local.get([keys.vt, keys.abuse, keys.proxy], (items) => resolve(items))
     })
     setDailyCounters({
@@ -560,7 +567,10 @@ const BulkCheck = () => {
             return
           }
           try {
-            const response = await sendToBackground<{ results?: BulkCheckResults }>({
+            const response = await sendToBackground<
+              BulkCheckRequest,
+              BulkCheckResponse
+            >({
               name: "check-bulk-iocs",
               body: {
                 iocList: [next],
