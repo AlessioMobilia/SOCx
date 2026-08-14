@@ -8,11 +8,7 @@ import {
 import React, { useMemo } from "react"
 
 import {
-  buildAbuseIntel,
-  buildVirusTotalIntel,
   classifyIntelTextLine,
-  type IntelField,
-  type IntelSummary,
   type IntelTone
 } from "../utility/intelFormatting"
 import { parseAndFormatResults } from "../utility/utils"
@@ -89,36 +85,9 @@ type ServiceHighlight = {
   label: string
   status: HighlightStatus
   headline: string
-  subline: string
-  meta?: string
-  details?: ServiceDetail[]
 }
-
-type ServiceDetail = IntelField & { section: string }
 
 type Severity = "low" | "medium" | "high"
-
-const formatDateLabel = (
-  value: string | number | null | undefined
-): string | null => {
-  if (value === null || value === undefined || value === "") {
-    return null
-  }
-  const numeric = typeof value === "number" ? value : Number(value)
-  const timestamp =
-    typeof value === "number"
-      ? value
-      : Number.isFinite(numeric) && numeric > 0 && `${value}`.length <= 10
-        ? numeric
-        : null
-  const date = timestamp
-    ? new Date(timestamp > 10_000_000_000 ? timestamp : timestamp * 1000)
-    : new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-  return date.toISOString().split("T")[0]
-}
 
 const getServiceStatus = (entry: BulkCheckSummaryRow, serviceName: string) =>
   entry.serviceStatuses.find((service) => service.name === serviceName)
@@ -140,24 +109,6 @@ const INTEL_PILL_TONE: Record<IntelTone, string> = {
     "bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
   neutral:
     "bg-socx-cloud-soft text-socx-ink dark:bg-socx-panel/70 dark:text-white"
-}
-
-const selectIntelDetails = (
-  summary: IntelSummary | null,
-  sectionLimits: Record<string, number>,
-  totalLimit = 8
-): ServiceDetail[] => {
-  if (!summary) return []
-  const details: ServiceDetail[] = []
-  summary.sections.forEach((section) => {
-    if (section.title === "Overview") return
-    const limit = sectionLimits[section.title] ?? 0
-    section.fields.slice(0, limit).forEach((field) => {
-      if (details.length < totalLimit)
-        details.push({ ...field, section: section.title })
-    })
-  })
-  return details
 }
 
 const escalateSeverity = (current: Severity, next: Severity): Severity =>
@@ -256,8 +207,7 @@ const buildVirusTotalHighlight = (
     return {
       label: "VirusTotal",
       status: "skipped",
-      headline: "Not selected",
-      subline: "Enable VirusTotal to enrich non-IP IOCs."
+      headline: "Not selected"
     }
   }
 
@@ -266,11 +216,8 @@ const buildVirusTotalHighlight = (
     return {
       label: "VirusTotal",
       status: "error",
-      headline: "Fetch failed",
-      subline:
-        typeof payload.error === "string"
-          ? payload.error
-          : "Unable to retrieve data"
+      headline:
+        typeof payload.error === "string" ? payload.error : "Fetch failed"
     }
   }
 
@@ -280,45 +227,23 @@ const buildVirusTotalHighlight = (
     return {
       label: "VirusTotal",
       status: status.status,
-      headline: status.text,
-      subline:
-        status.status === "pending"
-          ? "Awaiting last analysis..."
-          : "No telemetry yet"
+      headline:
+        status.status === "pending" ? "Awaiting last analysis..." : status.text
     }
   }
 
   const malicious = Number(stats.malicious) || 0
   const suspicious = Number(stats.suspicious) || 0
-  const harmless = Number(stats.harmless) || 0
-  const undetected = Number(stats.undetected) || 0
-  const total = malicious + suspicious + harmless + undetected
-  const scanDate = formatDateLabel(attributes?.last_analysis_date)
 
   const severityStatus = applyServiceSeverity(
     status.status,
     deriveVirusTotalSeverity(payload)
   )
-  const details = selectIntelDetails(
-    buildVirusTotalIntel(payload),
-    {
-      File: 3,
-      "Digital signature": 2,
-      WHOIS: 4,
-      Network: 2,
-      "HTTPS certificate": 2,
-      "Top detections": 2
-    },
-    8
-  )
 
   return {
     label: "VirusTotal",
     status: severityStatus,
-    headline: `${malicious} malicious • ${suspicious} suspicious`,
-    subline: `${total} engines (${harmless} harmless, ${undetected} undetected)`,
-    meta: scanDate ? `Last scan ${scanDate}` : undefined,
-    details
+    headline: `${malicious} malicious • ${suspicious} suspicious`
   }
 }
 
@@ -328,8 +253,7 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
     return {
       label: "AbuseIPDB",
       status: "skipped",
-      headline: "Not selected",
-      subline: "Enable AbuseIPDB for public IP indicators."
+      headline: "Not selected"
     }
   }
 
@@ -338,11 +262,8 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
     return {
       label: "AbuseIPDB",
       status: "error",
-      headline: "Fetch failed",
-      subline:
-        typeof payload.error === "string"
-          ? payload.error
-          : "Unable to retrieve data"
+      headline:
+        typeof payload.error === "string" ? payload.error : "Fetch failed"
     }
   }
 
@@ -351,38 +272,23 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
     return {
       label: "AbuseIPDB",
       status: status.status,
-      headline: status.text,
-      subline:
-        status.status === "pending"
-          ? "Awaiting response..."
-          : "No reports fetched"
+      headline:
+        status.status === "pending" ? "Awaiting response..." : status.text
     }
   }
 
   const score = Number(data.abuseConfidenceScore) || 0
   const reports = Number(data.totalReports) || 0
-  const lastReported = formatDateLabel(data.lastReportedAt)
-  const location = data.countryCode
-    ? `Country ${data.countryCode}`
-    : "Location unknown"
 
   const severityStatus = applyServiceSeverity(
     status.status,
     deriveAbuseSeverity(payload)
   )
-  const details = selectIntelDetails(
-    buildAbuseIntel(payload),
-    { Network: 5, Signals: 3 },
-    8
-  )
 
   return {
     label: "AbuseIPDB",
     status: severityStatus,
-    headline: `${score}% confidence • ${reports} reports`,
-    subline: `${location}${data.isp ? ` • ISP ${data.isp}` : ""}`,
-    meta: lastReported ? `Last report ${lastReported}` : undefined,
-    details
+    headline: `${score}% confidence • ${reports} reports`
   }
 }
 
@@ -1097,34 +1003,6 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                               <p className="mt-2 text-sm font-semibold">
                                 {highlight.headline}
                               </p>
-                              <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-                                {highlight.subline}
-                              </p>
-                              {highlight.meta && (
-                                <p className="mt-1 text-[11px] text-socx-muted dark:text-socx-muted-dark">
-                                  {highlight.meta}
-                                </p>
-                              )}
-                              {highlight.details &&
-                                highlight.details.length > 0 && (
-                                  <dl className="mt-3 space-y-1.5 border-t border-current/10 pt-3 text-xs">
-                                    {highlight.details.map((detail, index) => (
-                                      <div
-                                        key={`${entry.ioc}-${highlight.label}-${detail.section}-${detail.label}-${index}`}
-                                        className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
-                                        <dt
-                                          className="truncate text-socx-muted dark:text-socx-muted-dark"
-                                          title={`${detail.section} · ${detail.label}`}>
-                                          {detail.label}
-                                        </dt>
-                                        <dd
-                                          className={`break-words text-right font-medium ${INTEL_TEXT_TONE[detail.tone ?? "neutral"]}`}>
-                                          {detail.value}
-                                        </dd>
-                                      </div>
-                                    ))}
-                                  </dl>
-                                )}
                             </div>
                           ))}
                         </div>
