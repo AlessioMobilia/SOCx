@@ -180,7 +180,9 @@ Run this matrix on all three browsers before a release:
    domains verify compact WHOIS/certificate details; for AbuseIPDB verify capped
    hostnames, distinct reporters, TOR, and whitelist signals. Copied results
    must use one aligned field list per provider, without intermediate section
-   headings. In the right-hand summary, provider cards must show only their
+   headings. Confirm that copied IOC fields are defanged by default, then disable
+   **Sanitize copied intelligence** in Options and confirm they are copied in
+   active form. In the right-hand summary, provider cards must show only their
    risk verdict/counts; contextual fields belong in the result text and the
    capped **Quick facts** list.
 7. Test IPv4 and IPv6 subnet extraction, private subnets, invalid prefixes, the

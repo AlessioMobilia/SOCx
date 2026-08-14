@@ -19,6 +19,7 @@ import {
   isPrivateIP
 } from "../utility/utils"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
+import { prepareIntelClipboardText } from "../utility/clipboardSanitization"
 
 type SubnetCheckResult = {
   reportedCount?: number
@@ -412,7 +413,9 @@ const SubnetCheck = () => {
         setMessage("There are no results to copy yet.")
         return
       }
-      await navigator.clipboard.writeText(payload)
+      await navigator.clipboard.writeText(
+        await prepareIntelClipboardText(payload)
+      )
       setMessage("Subnet report copied to clipboard.")
     } catch (error) {
       console.error("Copy failed:", error)

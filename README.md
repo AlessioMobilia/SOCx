@@ -38,7 +38,8 @@ You can install SOCx directly from your browser’s official store:
   VirusTotal and AbuseIPDB results highlight high-confidence risk and positive
   signals without dumping raw responses. File aliases, digital signatures,
   WHOIS, certificate, network, and reporting details are capped to useful
-  investigation context.
+  investigation context. Clipboard copies defang active indicators by default;
+  this behavior can be disabled from Extension Settings.
 
 - ✨ **Smart selection formatting**
   Selected EDR, SIEM, OSINT, JSON, CEF, logfmt, key/value, CSV, HTML table, and

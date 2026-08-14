@@ -8,6 +8,10 @@ import { defaultServices } from "../utility/defaultServices"
 import type { CustomService } from "../utility/iocTypes"
 import { Storage } from "@plasmohq/storage"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
+import {
+  CLIPBOARD_SANITIZATION_KEY,
+  DEFAULT_CLIPBOARD_SANITIZATION_ENABLED
+} from "../utility/clipboardSanitization"
 
 const storage = new Storage({ area: "local" })
 
@@ -24,6 +28,8 @@ const Options = () => {
   const [ipapiEnabled, setIpapiEnabled] = useState(false)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
   const [floatingButtonsEnabled, setFloatingButtonsEnabled] = useState(true)
+  const [clipboardSanitizationEnabled, setClipboardSanitizationEnabled] =
+    useState(DEFAULT_CLIPBOARD_SANITIZATION_ENABLED)
   const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
   const notifyFloatingButtonsListeners = useCallback((enabled: boolean) => {
     if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
@@ -81,6 +87,7 @@ const Options = () => {
     storage.set("ipapiEnrichmentEnabled", ipapiEnabled)
     storage.set("proxyCheckEnabled", proxyCheckEnabled)
     storage.set("floatingButtonsEnabled", floatingButtonsEnabled)
+    storage.set(CLIPBOARD_SANITIZATION_KEY, clipboardSanitizationEnabled)
   }, [
     virusTotalApiKey,
     abuseIPDBApiKey,
@@ -90,7 +97,8 @@ const Options = () => {
     isDarkMode,
     ipapiEnabled,
     proxyCheckEnabled,
-    floatingButtonsEnabled
+    floatingButtonsEnabled,
+    clipboardSanitizationEnabled
   ])
 
   useEffect(() => {
@@ -147,6 +155,9 @@ const Options = () => {
       const ipapiSetting = await storage.get("ipapiEnrichmentEnabled")
       const proxySetting = await storage.get("proxyCheckEnabled")
       const floatingButtonsSetting = await storage.get("floatingButtonsEnabled")
+      const clipboardSanitizationSetting = await storage.get(
+        CLIPBOARD_SANITIZATION_KEY
+      )
 
       if (vtKey) setVirusTotalApiKey(vtKey)
       if (abKey) setAbuseIPDBApiKey(abKey)
@@ -178,6 +189,11 @@ const Options = () => {
       const shouldShowFloatingButtons =
         typeof floatingButtonsSetting === "boolean" ? floatingButtonsSetting : true
       setFloatingButtonsEnabled(shouldShowFloatingButtons)
+      setClipboardSanitizationEnabled(
+        typeof clipboardSanitizationSetting === "boolean"
+          ? clipboardSanitizationSetting
+          : DEFAULT_CLIPBOARD_SANITIZATION_ENABLED
+      )
     } catch (err) {
       console.error("Failed to load settings:", err)
       setSelectedServices(defaultServices)
@@ -317,6 +333,7 @@ const Options = () => {
       selectedServices={selectedServices}
       customServices={customServices}
       floatingButtonsEnabled={floatingButtonsEnabled}
+      clipboardSanitizationEnabled={clipboardSanitizationEnabled}
       onDarkModeToggle={() => setIsDarkMode((prev) => !prev)}
       onServiceChange={handleServiceChange}
       onVirusTotalApiKeyChange={setVirusTotalApiKey}
@@ -325,6 +342,7 @@ const Options = () => {
       onIpapiToggle={handleIpapiToggle}
       onProxyCheckToggle={handleProxyCheckToggle}
       onFloatingButtonsToggle={handleFloatingButtonsToggle}
+      onClipboardSanitizationToggle={setClipboardSanitizationEnabled}
       onTestKeys={handleTestKeys}
       onAddCustomService={handleAddCustomService}
       onRemoveCustomService={handleRemoveCustomService}

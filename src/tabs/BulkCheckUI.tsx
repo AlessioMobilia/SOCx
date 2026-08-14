@@ -12,6 +12,7 @@ import {
   type IntelTone
 } from "../utility/intelFormatting"
 import { parseAndFormatResults } from "../utility/utils"
+import { prepareIntelClipboardText } from "../utility/clipboardSanitization"
 import type { BulkCheckSummaryRow, BulkStatusKind } from "./bulk-check.types"
 
 interface BulkCheckUIProps {
@@ -742,7 +743,7 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const formatted = Object.entries(results)
                       .filter(([_, result]) => {
                         const content = parseAndFormatResults(result).trim()
@@ -756,7 +757,7 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
 
                     if (formatted) {
                       navigator.clipboard
-                        .writeText(formatted)
+                        .writeText(await prepareIntelClipboardText(formatted))
                         .then(() =>
                           alert("Formatted IOCs copied to clipboard!")
                         )
@@ -952,7 +953,7 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                           </p>
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               if (!formatted) {
                                 return
                               }
@@ -961,7 +962,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                                 return
                               }
                               navigator.clipboard
-                                .writeText(formatted)
+                                .writeText(
+                                  await prepareIntelClipboardText(formatted)
+                                )
                                 .catch(() => alert("Unable to copy raw intel."))
                             }}
                             disabled={!formatted}

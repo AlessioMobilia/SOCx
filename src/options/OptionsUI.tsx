@@ -21,6 +21,7 @@ interface OptionsUIProps {
   ipapiEnabled: boolean
   proxyCheckEnabled: boolean
   floatingButtonsEnabled: boolean
+  clipboardSanitizationEnabled: boolean
   selectedServices: { [key: string]: string[] }
   customServices: CustomService[]
   onDarkModeToggle: () => void
@@ -31,6 +32,7 @@ interface OptionsUIProps {
   onIpapiToggle: (value: boolean) => void
   onProxyCheckToggle: (value: boolean) => void
   onFloatingButtonsToggle: (value: boolean) => void
+  onClipboardSanitizationToggle: (value: boolean) => void
   onTestKeys: () => void
   onAddCustomService: (s: CustomService) => void
   onRemoveCustomService: (index: number) => void
@@ -59,6 +61,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   ipapiEnabled,
   proxyCheckEnabled,
   floatingButtonsEnabled,
+  clipboardSanitizationEnabled,
   selectedServices,
   customServices,
   onDarkModeToggle,
@@ -69,6 +72,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   onIpapiToggle,
   onProxyCheckToggle,
   onFloatingButtonsToggle,
+  onClipboardSanitizationToggle,
   onTestKeys,
   onAddCustomService,
   onRemoveCustomService,
@@ -161,6 +165,16 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
       helper: "Displays quick-action buttons next to your text selection.",
       enabled: floatingButtonsEnabled,
       onToggle: () => onFloatingButtonsToggle(!floatingButtonsEnabled),
+      disabled: false
+    },
+    {
+      id: "clipboardSanitization",
+      label: "Sanitize copied intelligence",
+      helper:
+        "Defangs VirusTotal and AbuseIPDB IOCs before copying them (recommended).",
+      enabled: clipboardSanitizationEnabled,
+      onToggle: () =>
+        onClipboardSanitizationToggle(!clipboardSanitizationEnabled),
       disabled: false
     }
   ]
