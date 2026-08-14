@@ -54,6 +54,12 @@ Expected artifacts:
 | Microsoft Edge Add-ons | `build/edge-mv3-prod.zip`   |
 | Firefox AMO            | `build/firefox-prod.zip`    |
 
+These ZIP files are store-upload artifacts. In particular,
+`build/firefox-prod.zip` is not expected to install persistently in Firefox
+Release before Mozilla signs it. Use the temporary development procedure in
+`docs/DEVELOPMENT.md` for local testing, and install the signed XPI returned by
+AMO for the final smoke test.
+
 Run the manifest validator again after packaging:
 
 ```bash

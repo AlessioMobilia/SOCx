@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises"
+import { access, readdir, readFile } from "node:fs/promises"
 import path from "node:path"
 
 const targets = [
@@ -27,6 +27,18 @@ const targets = [
 
 const failures = []
 
+const runtimeModuleSpecifiers = [
+  "@heroicons/react",
+  "@plasmohq/messaging",
+  "@plasmohq/storage",
+  "react",
+  "react/jsx-runtime",
+  "react-dom/client",
+  "react-icons",
+  "tippy.js",
+  "xlsx-js-style"
+]
+
 const assert = (condition, message) => {
   if (!condition) failures.push(message)
 }
@@ -36,6 +48,38 @@ const assertFile = async (root, relativePath, context) => {
     await access(path.join(root, relativePath))
   } catch {
     failures.push(`${context}: missing referenced file ${relativePath}`)
+  }
+}
+
+const findFiles = async (root, extension) => {
+  const entries = await readdir(root, { withFileTypes: true })
+  const nestedFiles = await Promise.all(
+    entries.map((entry) => {
+      const entryPath = path.join(root, entry.name)
+      return entry.isDirectory()
+        ? findFiles(entryPath, extension)
+        : entry.name.endsWith(extension)
+          ? [entryPath]
+          : []
+    })
+  )
+
+  return nestedFiles.flat()
+}
+
+const assertRuntimeModulesAreBundled = async (root, context) => {
+  const javascriptFiles = await findFiles(root, ".js")
+
+  for (const file of javascriptFiles) {
+    const contents = await readFile(file, "utf8")
+    const unresolvedModules = runtimeModuleSpecifiers.filter((specifier) =>
+      contents.includes(`"${specifier}":"${specifier}"`)
+    )
+
+    assert(
+      unresolvedModules.length === 0,
+      `${context}: ${path.relative(root, file)} leaves runtime modules external: ${unresolvedModules.join(", ")}`
+    )
   }
 }
 
@@ -105,6 +149,7 @@ for (const target of targets) {
   await Promise.all(
     referencedFiles.map((file) => assertFile(root, file, target.name))
   )
+  await assertRuntimeModulesAreBundled(root, target.name)
 }
 
 if (failures.length > 0) {
@@ -112,5 +157,7 @@ if (failures.length > 0) {
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exitCode = 1
 } else {
-  console.log("Chrome, Edge, and Firefox build manifests are valid.")
+  console.log(
+    "Chrome, Edge, and Firefox manifests, files, and runtime bundles are valid."
+  )
 }

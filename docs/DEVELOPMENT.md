@@ -63,7 +63,31 @@ pnpm dev:edge
 pnpm dev:firefox
 ```
 
-The default `pnpm dev` command targets Chrome MV3.
+The default `pnpm dev` command targets Chrome MV3. Keep the watcher running
+while testing: it writes the unpacked development extension to the directory
+shown in the table above.
+
+### Chrome development build
+
+From a PowerShell terminal in the repository root:
+
+```powershell
+corepack prepare pnpm@11.19.0 --activate
+pnpm install --frozen-lockfile
+pnpm dev:chrome
+```
+
+Then open `chrome://extensions`, enable **Developer mode**, choose **Load
+unpacked**, and select the complete `build/chrome-mv3-dev` directory (not its
+ZIP and not an individual file). If SOCx was already loaded, use its **Reload**
+button or remove the old copy before loading the new directory.
+
+After a source change, wait for the terminal to report a successful rebuild,
+reload SOCx from `chrome://extensions`, and reload the web page under test.
+Clicking the toolbar icon must open the popup. The SOCx context menu is
+selection-only: select text on a normal `http://` or `https://` page, then
+right-click the selection. It is intentionally unavailable on `chrome://`
+pages.
 
 Load the generated directory:
 
@@ -71,8 +95,17 @@ Load the generated directory:
   unpacked**, and select `build/chrome-mv3-dev`.
 - Edge: open `edge://extensions`, enable Developer mode, choose **Load
   unpacked**, and select `build/edge-mv3-dev`.
-- Firefox: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary
-  Add-on**, and select `build/firefox-dev/manifest.json`.
+- Firefox: keep `pnpm dev:firefox` running, open
+  `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and
+  select `build/firefox-dev/manifest.json`. This temporary installation is
+  removed when Firefox restarts.
+
+Do not install `build/firefox-prod.zip` through `about:addons` as if it were a
+released XPI. The ZIP is the AMO submission artifact and is unsigned; release
+and beta Firefox require Mozilla signing for a persistent installation. For a
+local unsigned test, use **Load Temporary Add-on** as described above. For the
+final installable package, upload the ZIP to AMO and test the signed XPI that
+AMO returns.
 
 After changing a content script or manifest setting, reload both the extension
 and the page being tested. Browser extensions cannot inject into browser-owned
@@ -106,8 +139,10 @@ pnpm dlx web-ext@10.6.0 lint --source-dir build/firefox-prod
 ```
 
 `pnpm verify` runs formatter/enrichment regression tests, TypeScript, all three
-production targets, and generated-manifest checks. A successful build does not
-replace interactive browser testing.
+production targets, and generated-manifest checks. The validator also rejects
+bundles that leave runtime packages unresolved, which would otherwise produce
+a blank popup or a background process that cannot create its context menus. A
+successful build does not replace interactive browser testing.
 
 The smart-formatting fixtures use Vitest with Happy DOM. When changing
 selection parsing, add a fixture for both the newly supported markup and a
@@ -166,6 +201,10 @@ store credentials to Git.
   narrow patch to Plasmo's Parcel resolver so relative imports resolve
   consistently on Windows. Keep that patch until the upstream resolver ships
   an equivalent fix and all three builds have been retested without it.
+- The `targets.default.includeNodeModules` setting in `package.json` is
+  required for store builds. Without it, this Plasmo/Parcel setup can emit
+  extension entry points that still refer to Node package names; browsers
+  cannot resolve them at runtime.
 
 ## Troubleshooting
 
@@ -183,6 +222,12 @@ exists in `src/messaging.d.ts`, then rebuild once to refresh `.plasmo`.
 If a context menu is missing after an update, reload the extension so the
 `runtime.onInstalled` setup runs again and inspect the background console.
 
+If the popup is blank or every context menu is missing, first rebuild and load
+the generated target directory rather than the repository root. In Chrome,
+open the extension card's **Errors** or service-worker inspector and check for
+`Cannot find module` errors. Run `pnpm verify`; its build validator fails when
+a runtime dependency was accidentally left outside the generated bundles.
+
 `pnpm audit --prod` covers packages shipped with the extension. A full
 `pnpm audit` also includes Plasmo/Parcel build-only packages; review those
 findings separately and never force a newer Parcel major/minor underneath the
@@ -192,4 +237,6 @@ version pinned by Plasmo.
 
 - [Chrome extension manifest](https://developer.chrome.com/docs/extensions/reference/manifest)
 - [Firefox WebExtensions compatibility](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Chrome_incompatibilities)
+- [Firefox temporary installation](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/)
+- [Firefox signing and distribution](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/)
 - [Microsoft Edge extension overview](https://learn.microsoft.com/en-us/microsoft-edge/extensions/)

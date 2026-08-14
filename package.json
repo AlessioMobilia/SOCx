@@ -6,6 +6,13 @@
   "engines": {
     "node": ">=20"
   },
+  "targets": {
+    "default": {
+      "context": "browser",
+      "includeNodeModules": true,
+      "isLibrary": false
+    }
+  },
   "description": "Simple OSINT Centralized eXtension",
   "author": "Alessio Mobilia",
   "privacy_policy": "https://socx.alessiomobilia.com/privacy.html",
