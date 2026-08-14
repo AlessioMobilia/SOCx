@@ -29,8 +29,21 @@ You can install SOCx directly from your browser’s official store:
 - 🌐 **Integration with over 20 OSINT services**
   Support for the most widely used services in the threat intelligence industry.
 
-- 🛡️ **Total privacy**
-  No data is tracked, saved, or shared. Everything happens locally.
+- 🛡️ **Privacy-first processing**
+  SOCx does not run analytics or send investigation data to SOCx servers.
+  Indicators, selected website content, and API keys are sent only when needed
+  directly to the OSINT providers configured by the user.
+
+- 🧾 **Compact threat-intelligence summaries**
+  VirusTotal and AbuseIPDB results highlight high-confidence risk and positive
+  signals without dumping raw responses. File aliases, digital signatures,
+  WHOIS, certificate, network, and reporting details are capped to useful
+  investigation context.
+
+- ✨ **Smart selection formatting**
+  Selected EDR, SIEM, OSINT, JSON, CEF, logfmt, key/value, CSV, HTML table, and
+  ARIA grid data can be normalized for copying. Partial table selections reuse
+  real headers when available and otherwise use neutral column names.
 
 - 🧠 **Clean and intuitive interface**
   Designed to be lightweight and immediate. No frills, just OSINT.

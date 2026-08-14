@@ -81,6 +81,9 @@ pages such as `chrome://`, `edge://`, or `about:` pages.
 ## Build and verification commands
 
 ```bash
+# Unit and DOM fixture tests
+pnpm test
+
 # TypeScript only
 pnpm typecheck
 
@@ -102,9 +105,14 @@ pnpm verify
 pnpm dlx web-ext@10.6.0 lint --source-dir build/firefox-prod
 ```
 
-`pnpm verify` runs TypeScript, builds all three production targets, and checks
-the generated manifests. A successful build does not replace interactive
-browser testing.
+`pnpm verify` runs formatter/enrichment regression tests, TypeScript, all three
+production targets, and generated-manifest checks. A successful build does not
+replace interactive browser testing.
+
+The smart-formatting fixtures use Vitest with Happy DOM. When changing
+selection parsing, add a fixture for both the newly supported markup and a
+nearby case that must remain unmodified, such as URLs, timestamps, IPv6 values,
+empty table cells, or clipped first/last rows.
 
 ## Cross-browser manual test matrix
 
@@ -118,10 +126,15 @@ Run this matrix on all three browsers before a release:
 4. Select an IP, domain, URL, hash, email, and CVE on an HTTPS page. Confirm
    the SOCx context menus and floating buttons appear and open the expected
    service URLs.
-5. Test refang, defang, CVE copy, and key/value formatting. Confirm clipboard
-   fallbacks work when the page Clipboard API is unavailable.
+5. Test refang, defang, CVE copy, and key/value formatting. Include an EDR/SIEM
+   grid selected with and without its header, a two-column property table, CEF
+   or logfmt text, URLs, timestamps, and IPv6. Confirm clipboard fallbacks work
+   when the page Clipboard API is unavailable.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
-   list. Confirm errors remain per IOC and do not abort the queue.
+   list. Confirm errors remain per IOC and do not abort the queue. For VT files,
+   verify capped aliases and valid/invalid/unsigned signature states; for
+   domains verify compact WHOIS/certificate details; for AbuseIPDB verify capped
+   hostnames, distinct reporters, TOR, and whitelist signals.
 7. Test IPv4 and IPv6 subnet extraction, private subnets, invalid prefixes, the
    AbuseIPDB subnet flow, clipboard export, and spreadsheet export.
 8. Open Field Notes from the popup. Chrome and Edge must open `sidePanel`;
