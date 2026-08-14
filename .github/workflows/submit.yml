@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   PNPM_VERSION: "11.19.0"
   RELEASE_ARTIFACT: browser-extension-packages
   CHROME_ZIP: build/chrome-mv3-prod.zip

@@ -60,7 +60,7 @@ For a more complete, always up‑to‑date guide with examples, screenshots, and
 
 ## 🛠️ Development and release documentation
 
-SOCx uses Node.js 20+ and pnpm 11.19.0. Install dependencies with the
+SOCx uses Node.js 22.13+ and pnpm 11.19.0. Install dependencies with the
 version pinned in `package.json`:
 
 ```bash

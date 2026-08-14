@@ -20,7 +20,7 @@ requirements, so it must be tested and released deliberately.
 ## Prerequisites
 
 - Git.
-- Node.js 20 or newer. CI uses Node.js 20.
+- Node.js 22.13 or newer. CI uses the latest Node.js 22 release.
 - Corepack and pnpm 11.19.0, pinned by `packageManager` in `package.json`.
 - Current stable Chrome, Edge, and Firefox installations for manual testing.
 

@@ -96,7 +96,7 @@ Upload `dist/source.zip` as the source archive when AMO requests it. In reviewer
 notes, provide these exact reproducibility commands:
 
 ```text
-Required: Node.js 20 and pnpm 11.19.0
+Required: Node.js 22.13 or newer and pnpm 11.19.0
 corepack prepare pnpm@11.19.0 --activate
 pnpm install --frozen-lockfile
 pnpm package:firefox
