@@ -93,6 +93,11 @@ selection-only: select text on a normal `http://` or `https://` page, then
 right-click the selection. It is intentionally unavailable on `chrome://`
 pages.
 
+Firefox receives the native `menus` permission through the Plasmo manifest
+override. Its persistent background page reconciles menu registrations both at
+startup and after installation or updates; Chrome and Edge retain the
+`contextMenus` permission.
+
 Load the generated directory:
 
 - Chrome: open `chrome://extensions`, enable Developer mode, choose **Load

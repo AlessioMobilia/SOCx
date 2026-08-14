@@ -117,6 +117,14 @@ for (const target of targets) {
 
   if (target.name === "Firefox") {
     assert(
+      manifest.permissions?.includes("menus"),
+      "Firefox: missing native menus permission"
+    )
+    assert(
+      !manifest.permissions?.includes("contextMenus"),
+      "Firefox: contextMenus permission must be replaced by menus"
+    )
+    assert(
       manifest.browser_specific_settings?.gecko?.id ===
         "{017bef1c-5ecb-4a2e-a111-244174e2d9d8}",
       "Firefox: missing or unexpected AMO extension ID"
@@ -128,6 +136,11 @@ for (const target of targets) {
       requiredData.includes("authenticationInfo") &&
         requiredData.includes("websiteContent"),
       "Firefox: missing required data-collection declarations"
+    )
+  } else {
+    assert(
+      manifest.permissions?.includes("contextMenus"),
+      `${target.name}: missing contextMenus permission`
     )
   }
 
