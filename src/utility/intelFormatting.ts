@@ -420,14 +420,41 @@ export const buildAbuseIntel = (
 }
 
 export const formatIntelSummary = (summary: IntelSummary): string => {
+  const contextualizeLabel = (section: string, label: string): string => {
+    if (section === "HTTPS certificate") return `Certificate ${label}`
+    if (section === "Digital signature") {
+      if (label === "Status") return "Signature"
+      if (label === "Signer") return "Signature signer"
+      if (label === "Product") return "Signed product"
+      if (label === "Description") return "Signed description"
+    }
+    if (section === "Top detections" && label !== "Additional detections") {
+      return `Detection (${label})`
+    }
+    return label
+  }
+
+  const flattened = summary.sections.flatMap((section) =>
+    section.fields.map((field) => ({
+      ...field,
+      section: section.title,
+      label: contextualizeLabel(section.title, field.label)
+    }))
+  )
+  const labelOccurrences = new Map<string, number>()
+  const fields = flattened.map((field) => {
+    const normalizedLabel = field.label.toLowerCase()
+    const occurrence = labelOccurrences.get(normalizedLabel) ?? 0
+    labelOccurrences.set(normalizedLabel, occurrence + 1)
+    return occurrence === 0
+      ? field
+      : { ...field, label: `${field.section} ${field.label}` }
+  })
+  const labels = fields.map((field) => `${field.label}:`)
+  const width = Math.max(0, ...labels.map((label) => label.length))
   const lines: string[] = [summary.title]
-  summary.sections.forEach((section) => {
-    lines.push(section.title)
-    const labels = section.fields.map((field) => `${field.label}:`)
-    const width = Math.max(...labels.map((label) => label.length))
-    section.fields.forEach((field, index) => {
-      lines.push(`- ${labels[index].padEnd(width, " ")} ${field.value}`)
-    })
+  fields.forEach((field, index) => {
+    lines.push(`- ${labels[index].padEnd(width, " ")} ${field.value}`)
   })
   return lines.join("\n")
 }

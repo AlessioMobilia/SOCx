@@ -169,7 +169,9 @@ Run this matrix on all three browsers before a release:
    list. Confirm errors remain per IOC and do not abort the queue. For VT files,
    verify capped aliases and valid/invalid/unsigned signature states; for
    domains verify compact WHOIS/certificate details; for AbuseIPDB verify capped
-   hostnames, distinct reporters, TOR, and whitelist signals.
+   hostnames, distinct reporters, TOR, and whitelist signals. Copied results
+   must use one aligned field list per provider, without intermediate section
+   headings.
 7. Test IPv4 and IPv6 subnet extraction, private subnets, invalid prefixes, the
    AbuseIPDB subnet flow, clipboard export, and spreadsheet export.
 8. Open Field Notes from the popup. Chrome and Edge must open `sidePanel`;

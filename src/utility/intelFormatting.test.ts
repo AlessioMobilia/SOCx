@@ -59,7 +59,9 @@ describe("compact intelligence formatting", () => {
     expect(text).toMatch(
       /Other names:\s+invoice\.exe, update\.exe, viewer\.scr \(\+1\)/
     )
-    expect(text).toContain("Status:  Signed — valid")
+    expect(text).toMatch(/Signature:\s+Signed — valid/)
+    expect(text).toMatch(/Signature signer:\s+Example Software S\.p\.A\./)
+    expect(text).toMatch(/Detection \(Microsoft\):\s+Trojan:Win32\/FakeDoc/)
     expect(text).toContain("Additional detections: +1")
     expect(
       summary?.sections.find((section) => section.title === "Digital signature")
@@ -108,14 +110,26 @@ describe("compact intelligence formatting", () => {
             "Registry Expiry Date: 2026-11-07T00:00:00Z",
             "Registrant Organization: Example Hosting Ltd",
             "Registrant Country: NL"
-          ].join("\n")
+          ].join("\n"),
+          last_https_certificate: {
+            subject: { CN: "example.test" },
+            issuer: { CN: "Example CA" },
+            validity: {
+              not_before: "2026-01-01T00:00:00Z",
+              not_after: "2026-04-01T00:00:00Z"
+            }
+          }
         }
       }
     })
     const text = formatIntelSummary(summary!)
+    expect(text).not.toContain("\nOverview\n")
+    expect(text).not.toContain("\nWHOIS\n")
     expect(text).toMatch(/Registrar:\s+Example Registrar LLC/)
     expect(text).toMatch(/Organization:\s+Example Hosting Ltd/)
     expect(text).toMatch(/Country:\s+NL/)
+    expect(text).toMatch(/Certificate Subject:\s+example\.test/)
+    expect(text).toMatch(/Certificate Issuer:\s+Example CA/)
   })
 
   it("caps AbuseIPDB hostnames and distinguishes whitelist from risk signals", () => {
@@ -133,7 +147,11 @@ describe("compact intelligence formatting", () => {
       }
     })
     const text = formatIntelSummary(summary!)
-    expect(text).toContain("Hostnames: one.test, two.test, three.test (+1)")
+    expect(text).not.toContain("\nNetwork\n")
+    expect(text).not.toContain("\nSignals\n")
+    expect(text).toMatch(
+      /Hostnames:\s+one\.test, two\.test, three\.test \(\+1\)/
+    )
     expect(
       summary?.sections[0].fields.find((field) => field.label === "Abuse score")
         ?.tone
