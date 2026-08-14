@@ -148,8 +148,15 @@ and [Firefox data-collection consent](https://extensionworkshop.com/documentatio
 ## 5. Automated publication from GitHub Actions
 
 `.github/workflows/submit.yml` runs only for a manually dispatched workflow or
-a pushed `v*` tag. It builds each browser separately, validates TypeScript and
-manifests, creates the Firefox source archive, and invokes Plasmo BPP 3.8.0.
+a pushed `v*` tag. It creates and validates all three packages once, stores the
+verified artifacts, and then publishes Chrome, Firefox, and Edge in independent
+jobs. A failure or a long-running Edge submission therefore does not prevent
+the other store jobs from reporting their own result.
+
+Firefox uses Mozilla's current `web-ext` listed-submission flow and uploads the
+reviewer source archive together with the generated extension. Chrome and Edge
+use the store REST APIs directly so their asynchronous states can be handled
+explicitly.
 
 Create the GitHub `SUBMIT_KEYS` secret from
 `configs/bpp.keys.example.json`. Replace every `REPLACE_ME` value locally and
@@ -157,10 +164,26 @@ store the whole JSON object as the secret; do not commit the populated file.
 
 Before enabling automated publication, verify:
 
-- Chrome `extId`, OAuth client ID/secret, and refresh token;
+- Chrome `publisherId`, `extId`, OAuth client ID/secret, and refresh token;
 - Firefox `extId`, API key, and API secret;
 - Edge Partner Center product ID, client ID, and API key;
 - that the first store submission already exists and accepts API updates.
+
+Chrome publication uses Web Store API V2 when `chrome.publisherId` is present
+in `SUBMIT_KEYS`. Obtain it from **Publisher > Settings** in the Chrome Web
+Store Developer Dashboard. A temporary V1 fallback remains for the existing
+secret, but Google ends V1 support on 15 October 2026; update the secret before
+that date.
+
+Edge publication does not use BPP's short polling window. The repository's
+publisher uploads to the official `/submissions/draft/package` endpoint, which
+replaces the current draft package, waits for upload completion, submits it,
+and polls the returned publication operation. If Partner Center is temporarily
+processing another submission, the job retries for up to 330 minutes. A newer
+workflow dispatch cancels an older workflow run so the latest package wins.
+The public Edge Add-ons API has no endpoint for cancelling a submission that is
+already under human review; in that state the job waits for the API to accept a
+new draft, or reports a timeout instead of incorrectly claiming success.
 
 The workflow publishes externally. Creating or pushing a release tag is
 therefore a deliberate release action, not a build/test step.

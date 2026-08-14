@@ -2,6 +2,7 @@
   "$schema": "https://github.com/PlasmoHQ/bpp/raw/v3.8.0/keys.schema.json",
   "chrome": {
     "extId": "nanabcjeikkjaiabmlncionjliiobcaf",
+    "publisherId": "REPLACE_ME",
     "clientId": "REPLACE_ME",
     "clientSecret": "REPLACE_ME",
     "refreshToken": "REPLACE_ME"

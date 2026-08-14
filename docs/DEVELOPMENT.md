@@ -46,6 +46,10 @@ lock and is also used by the publication workflow.
 - `src/tabs`: bulk and subnet tools opened as extension tabs.
 - `src/utility`: IOC parsing, API clients, exports, storage, and UI helpers.
 - `scripts/validate-builds.mjs`: validates target manifests and referenced files.
+- `scripts/publish-chrome.mjs`: Chrome Web Store V2 publisher with temporary V1
+  compatibility.
+- `scripts/publish-edge.mjs`: retrying and status-verified Edge publisher.
+- `scripts/publish-firefox.mjs`: current `web-ext` listed-submission publisher.
 - `.github/workflows/submit.yml`: tag-triggered publication workflow.
 
 When adding a new Plasmo message handler, also add its name to

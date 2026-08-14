@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       edge_notes:
+        description: Optional certification notes for Microsoft Edge reviewers
         required: false
         default: ""
   push:
@@ -13,16 +14,24 @@ on:
 permissions:
   contents: read
 
-jobs:
-  publish:
-    runs-on: ubuntu-latest
+concurrency:
+  group: publish-browser-extension
+  cancel-in-progress: true
 
-    env:
-      NODE_VERSION: "20"
-      CHROME_ZIP: build/chrome-mv3-prod.zip
-      EDGE_ZIP: build/edge-mv3-prod.zip
-      FIREFOX_XPI: build/firefox-prod.zip
-      FIREFOX_SOURCE_ZIP: dist/source_${{ github.sha }}.zip
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "11.19.0"
+  RELEASE_ARTIFACT: browser-extension-packages
+  CHROME_ZIP: build/chrome-mv3-prod.zip
+  EDGE_ZIP: build/edge-mv3-prod.zip
+  FIREFOX_XPI: build/firefox-prod.zip
+  FIREFOX_SOURCE_ZIP: dist/source_${{ github.sha }}.zip
+
+jobs:
+  build:
+    name: Build and verify store packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -31,47 +40,124 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 11.19.0
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          cache: pnpm
 
-      - name: Install deps
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build+zip Chrome
-        run: pnpm run package:chrome
+      - name: Test and typecheck
+        run: pnpm test && pnpm typecheck
 
-      - name: Build+zip Edge
-        run: pnpm run package:edge
+      - name: Build store packages
+        run: pnpm package
 
-      - name: Build+zip Firefox
-        run: pnpm run package:firefox
-
-      - name: Typecheck and validate manifests
-        run: pnpm run typecheck && pnpm run validate:builds
+      - name: Validate manifests and runtime bundles
+        run: pnpm validate:builds
 
       - name: Package source for Firefox review
         run: |
           mkdir -p dist
           git archive --format=zip --output="${{ env.FIREFOX_SOURCE_ZIP }}" HEAD
 
-      - name: Validate SUBMIT_KEYS JSON
-        run: node -e 'JSON.parse(process.env.SUBMIT_KEYS); console.log("SUBMIT_KEYS OK")'
+      - name: Upload verified packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_ARTIFACT }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ env.CHROME_ZIP }}
+            ${{ env.EDGE_ZIP }}
+            ${{ env.FIREFOX_XPI }}
+            build/firefox-prod/**
+            ${{ env.FIREFOX_SOURCE_ZIP }}
+
+  publish-chrome:
+    name: Publish Chrome
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout publisher scripts
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download verified packages
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RELEASE_ARTIFACT }}
+
+      - name: Publish latest Chrome package
         env:
           SUBMIT_KEYS: ${{ secrets.SUBMIT_KEYS }}
+        run: node scripts/publish-chrome.mjs
 
-      - name: Browser Platform Publisher
-        uses: PlasmoHQ/bpp@v3.8.0
+  publish-firefox:
+    name: Publish Firefox
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout publisher scripts
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          keys: ${{ secrets.SUBMIT_KEYS }}
-          chrome-file: ${{ env.CHROME_ZIP }}
-          edge-file: ${{ env.EDGE_ZIP }}
-          firefox-file: ${{ env.FIREFOX_XPI }}
-          source-file: ${{ env.FIREFOX_SOURCE_ZIP }}
-          edge-notes: ${{ github.event.inputs.edge_notes }}
-          version-file: package.json
-          verbose: true
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download verified packages
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RELEASE_ARTIFACT }}
+
+      - name: Publish Firefox package
+        env:
+          SUBMIT_KEYS: ${{ secrets.SUBMIT_KEYS }}
+          FIREFOX_SOURCE_DIR: build/firefox-prod
+        run: node scripts/publish-firefox.mjs
+
+  publish-edge:
+    name: Publish Edge
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout publisher scripts
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download verified packages
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RELEASE_ARTIFACT }}
+
+      - name: Replace Edge draft and publish latest package
+        env:
+          SUBMIT_KEYS: ${{ secrets.SUBMIT_KEYS }}
+          EDGE_NOTES: ${{ github.event.inputs.edge_notes }}
+          EDGE_MAX_WAIT_MINUTES: "330"
+          EDGE_RETRY_SECONDS: "30"
+        run: node scripts/publish-edge.mjs
