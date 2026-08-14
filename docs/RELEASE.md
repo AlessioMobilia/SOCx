@@ -122,12 +122,11 @@ Official guide: [Publish a Microsoft Edge extension](https://learn.microsoft.com
 
 ### Firefox AMO
 
-Before uploading, review Mozilla's data-collection declaration. SOCx can send
-user-selected IOC/website content and API requests to third-party OSINT
-services, so do not declare `required: ["none"]`. Decide the exact Mozilla
-taxonomy with the product/privacy owner, keep the privacy policy and AMO form
-consistent, then add the approved `browser_specific_settings.gecko.data_collection_permissions`
-entry. Until this is approved, `web-ext lint` reports one expected warning.
+SOCx declares `authenticationInfo` and `websiteContent` because API keys and
+user-selected IOC/website content can be transmitted directly to third-party
+OSINT services. Keep this declaration, the privacy policy, and the AMO privacy
+form aligned. Do not replace it with `required: ["none"]` while those features
+are present.
 
 1. Open the existing SOCx listing in the AMO Developer Hub.
 2. Upload `build/firefox-prod.zip`; AMO signs the accepted extension.

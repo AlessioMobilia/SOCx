@@ -1,7 +1,7 @@
 {
   "name": "so-cx",
   "displayName": "SOCx",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=20"
@@ -86,7 +86,13 @@
     ],
     "browser_specific_settings": {
       "gecko": {
-        "id": "{017bef1c-5ecb-4a2e-a111-244174e2d9d8}"
+        "id": "{017bef1c-5ecb-4a2e-a111-244174e2d9d8}",
+        "data_collection_permissions": {
+          "required": [
+            "authenticationInfo",
+            "websiteContent"
+          ]
+        }
       }
     },
     "web_accessible_resources": [

@@ -77,6 +77,14 @@ for (const target of targets) {
         "{017bef1c-5ecb-4a2e-a111-244174e2d9d8}",
       "Firefox: missing or unexpected AMO extension ID"
     )
+    const requiredData =
+      manifest.browser_specific_settings?.gecko?.data_collection_permissions
+        ?.required ?? []
+    assert(
+      requiredData.includes("authenticationInfo") &&
+        requiredData.includes("websiteContent"),
+      "Firefox: missing required data-collection declarations"
+    )
   }
 
   const referencedFiles = [
