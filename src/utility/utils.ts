@@ -1,28 +1,36 @@
 // src/utils.ts
+import * as XLSX from "xlsx-js-style"
+
 import { sendToContentScript } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
-import * as XLSX from "xlsx-js-style"
+
+import {
+  buildAbuseIntel,
+  buildVirusTotalIntel,
+  formatCappedValues,
+  formatIntelSummary,
+  getVirusTotalSignatureFields
+} from "./intelFormatting"
+import { formatSmartSelection } from "./smartFormatting"
 
 // Defang e Refang
 export const defang = (text: string): string => {
-  return text
-    .replace(/https?:\/\//gi, "hxxp://")
-    .replace(/\./g, "[.]");
-};
+  return text.replace(/https?:\/\//gi, "hxxp://").replace(/\./g, "[.]")
+}
 
 export const refang = (text: string): string => {
-  const normalizedText = text.trim().toLowerCase();
+  const normalizedText = text.trim().toLowerCase()
   return normalizedText
     .replace(/^hxxp:\/\//i, "http://")
     .replace(/^hxxps:\/\//i, "https://")
     .replace(/\[\.\]/g, ".")
     .replace(/\(\.\)/g, ".")
-    .replace(/{\.}/g, ".");
-};
+    .replace(/{\.}/g, ".")
+}
 
 export const isAlreadyDefanged = (text: string): boolean => {
-  return /\[\.\]|hxxp:\/\/|hxxps:\/\//i.test(text);
-};
+  return /\[\.\]|hxxp:\/\/|hxxps:\/\//i.test(text)
+}
 
 export const uniqueStrings = (values: string[]): string[] => {
   const seen = new Set<string>()
@@ -39,8 +47,7 @@ export const uniqueStrings = (values: string[]): string[] => {
 }
 
 const IPV6_SEGMENT = "[0-9a-fA-F]{1,4}"
-const IPV4_BYTE =
-  "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
+const IPV4_BYTE = "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
 const IPV4_ADDRESS = `(?:${IPV4_BYTE}\\.){3}${IPV4_BYTE}`
 const IPV6_REGEX_PARTS = [
   `(?:${IPV6_SEGMENT}:){7}${IPV6_SEGMENT}`,
@@ -59,93 +66,90 @@ const IPV6_REGEX_PARTS = [
 export const IPV6_REGEX_SOURCE = `(?:${IPV6_REGEX_PARTS.join("|")})`
 const STRICT_IPV6_REGEX = new RegExp(`^${IPV6_REGEX_SOURCE}$`, "i")
 
-
 // Logic to identify the type of IOC
 export const identifyIOC = (text: string): string | null => {
   // Regex to validate IP, hash, domain, URL, email, MAC address, and ASN
-  const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
-  const hashRegex = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/;
-  const domainRegex = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
-  const urlRegex = /https?:\/\/[^\s]+/;
-  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  const macAddressRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
-  const asnRegex = /^AS\d{1,5}(?:\.\d{1,5})?$/i;
+  const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
+  const hashRegex = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/
+  const domainRegex = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
+  const urlRegex = /https?:\/\/[^\s]+/
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+  const macAddressRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/
+  const asnRegex = /^AS\d{1,5}(?:\.\d{1,5})?$/i
 
   // Check if the input is a MAC address
   if (macAddressRegex.test(text)) {
-    return "MAC";
+    return "MAC"
   }
 
   // Check if the input is an ASN
   if (asnRegex.test(text)) {
-    return "ASN";
+    return "ASN"
   }
 
   // Check if the input is an IP (IPv4 or IPv6)
   if (ipRegex.test(text) || STRICT_IPV6_REGEX.test(text)) {
     if (isPrivateIP(text)) {
       //showNotification("Error", text + " is a Private IP");
-      return "Private IP";
+      return "Private IP"
     } else {
-      return "IP";
+      return "IP"
     }
   }
 
   // Check if the input is a hash
-  if (hashRegex.test(text)) return "Hash";
+  if (hashRegex.test(text)) return "Hash"
 
   // Check if the input is a domain
-  if (domainRegex.test(text)) return "Domain";
+  if (domainRegex.test(text)) return "Domain"
 
   // Check if the input is a URL
-  if (urlRegex.test(text)) return "URL";
+  if (urlRegex.test(text)) return "URL"
 
   // Check if the input is an email
-  if (emailRegex.test(text)) return "Email";
+  if (emailRegex.test(text)) return "Email"
 
   // If it doesn't match any IoC, return null
-  return null;
-};
-
-
+  return null
+}
 
 // Check if IP is private
 export const isPrivateIP = (ip: string): boolean => {
   // Controlla se è un IPv4
-  const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(ip);
+  const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)
   if (isIPv4) {
     // Dividi l'IP in parti
-    const parts = ip.split(".").map(Number);
+    const parts = ip.split(".").map(Number)
     // Verifica se l'IP ha 4 parti e che ogni parte sia un numero valido
-    if (parts.length !== 4 || parts.some((part) => isNaN(part) || part < 0 || part > 255)) {
-      return false;
+    if (
+      parts.length !== 4 ||
+      parts.some((part) => isNaN(part) || part < 0 || part > 255)
+    ) {
+      return false
     }
     // Controlla se l'IP è privato (IPv4)
-    const [first, second] = parts;
+    const [first, second] = parts
     // Classe A: 10.0.0.0 - 10.255.255.255
-    if (first === 10) return true;
+    if (first === 10) return true
     // Classe B: 172.16.0.0 - 172.31.255.255
-    if (first === 172 && second >= 16 && second <= 31) return true;
+    if (first === 172 && second >= 16 && second <= 31) return true
     // Classe C: 192.168.0.0 - 192.168.255.255
-    if (first === 192 && second === 168) return true;
+    if (first === 192 && second === 168) return true
     // Se non è privato
-    return false;
+    return false
   }
 
   // Controlla se è un IPv6
   // Verifica se l'indirizzo è un IPv6 valido
   if (STRICT_IPV6_REGEX.test(ip)) {
     // Controlla se l'IPv6 è privato (fc00::/7)
-    const prefix = ip.substring(0, 2).toLowerCase();
-    return prefix === "fc" || prefix === "fd";
+    const prefix = ip.substring(0, 2).toLowerCase()
+    return prefix === "fc" || prefix === "fd"
   }
 
   // Se non è né IPv4 né IPv6
-  return false;
-};
-
-
-
+  return false
+}
 
 export const showNotification = (title: string, message: string): void => {
   if (typeof chrome !== "undefined" && chrome.notifications?.create) {
@@ -165,84 +169,74 @@ export const showNotification = (title: string, message: string): void => {
   }
 }
 
-
-
 export const showToast = (message: string, variant: string = "primary") => {
-  let container = document.getElementById("socx-toast-container");
+  let container = document.getElementById("socx-toast-container")
   if (!container) {
-    container = document.createElement("div");
-    container.id = "socx-toast-container";
-    container.style.position = "fixed";
-    container.style.bottom = "20px";
-    container.style.right = "20px";
-    container.style.zIndex = "9999";
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.gap = "8px";
-    document.body.appendChild(container);
+    container = document.createElement("div")
+    container.id = "socx-toast-container"
+    container.style.position = "fixed"
+    container.style.bottom = "20px"
+    container.style.right = "20px"
+    container.style.zIndex = "9999"
+    container.style.display = "flex"
+    container.style.flexDirection = "column"
+    container.style.gap = "8px"
+    document.body.appendChild(container)
   }
 
-  const toast = document.createElement("div");
-  toast.className = `socx-toast socx-toast--${variant}`;
-  toast.setAttribute("role", "alert");
-  toast.setAttribute("aria-live", "assertive");
-  toast.setAttribute("aria-atomic", "true");
+  const toast = document.createElement("div")
+  toast.className = `socx-toast socx-toast--${variant}`
+  toast.setAttribute("role", "alert")
+  toast.setAttribute("aria-live", "assertive")
+  toast.setAttribute("aria-atomic", "true")
 
-  const messageElement = document.createElement("div");
-  messageElement.className = "socx-toast__message";
-  messageElement.textContent = message;
+  const messageElement = document.createElement("div")
+  messageElement.className = "socx-toast__message"
+  messageElement.textContent = message
 
-  const closeButton = document.createElement("button");
-  closeButton.className = "socx-toast__close";
-  closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close");
-  closeButton.textContent = "×";
-  closeButton.addEventListener("click", () => toast.remove());
+  const closeButton = document.createElement("button")
+  closeButton.className = "socx-toast__close"
+  closeButton.type = "button"
+  closeButton.setAttribute("aria-label", "Close")
+  closeButton.textContent = "×"
+  closeButton.addEventListener("click", () => toast.remove())
 
-  toast.append(messageElement, closeButton);
+  toast.append(messageElement, closeButton)
 
-  container.appendChild(toast);
+  container.appendChild(toast)
 
   setTimeout(() => {
-    toast.remove();
-  }, 3000);
-};
-
-
+    toast.remove()
+  }, 3000)
+}
 
 const storage = new Storage({ area: "local" })
 
 export const saveIOC = async (type: string, text: string): Promise<boolean> => {
-  
   try {
-    
-    const history = await storage.get<any[]>("iocHistory") || []
-    let iocHistory = history || [];
+    const history = (await storage.get<any[]>("iocHistory")) || []
+    let iocHistory = history || []
     // Check if the IOC is already present
     const isDuplicate = iocHistory.some(
       (ioc) => ioc.text === text && ioc.type === type
-    );
+    )
     if (!isDuplicate) {
       // Add the new IOC at the beginning of the array
-      iocHistory.unshift({ type, text, timestamp: new Date().toISOString() });
+      iocHistory.unshift({ type, text, timestamp: new Date().toISOString() })
       // Keep only the latest 20 IOCs
       if (iocHistory.length > 20) {
-        iocHistory = iocHistory.slice(0, 20);
+        iocHistory = iocHistory.slice(0, 20)
       }
       // Save the updated history
-      await storage.set("iocHistory", iocHistory); // Use chrome.storage.local
-      return true;
+      await storage.set("iocHistory", iocHistory) // Use chrome.storage.local
+      return true
     } else {
-      return true; // The IOC is already present, but we consider the operation valid
+      return true // The IOC is already present, but we consider the operation valid
     }
   } catch (error) {
-    return false;
+    return false
   }
-};
-
-
-
-
+}
 
 export const copyToClipboard = async (text: string): Promise<void> => {
   try {
@@ -250,7 +244,7 @@ export const copyToClipboard = async (text: string): Promise<void> => {
       name: "copy-to-clipboard",
       body: { text: text }
     })
-    console.log("Response from content script:", response);
+    console.log("Response from content script:", response)
 
     showNotification("Done", "IOC copied to clipboard")
   } catch (err) {
@@ -258,11 +252,6 @@ export const copyToClipboard = async (text: string): Promise<void> => {
     //console.error("Error copying to clipboard:", err)
   }
 }
-  
-
-
-
-
 
 const IOC_IPV6_REGEX = new RegExp(IPV6_REGEX_SOURCE, "gi")
 const IOC_IPV4_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g
@@ -283,7 +272,10 @@ const COMBINED_IOC_REGEX = new RegExp(
   "gi"
 )
 
-export const extractIOCs = (text: string, refanged: boolean = true): string[] | null => {
+export const extractIOCs = (
+  text: string,
+  refanged: boolean = true
+): string[] | null => {
   if (!text) {
     return null
   }
@@ -296,9 +288,7 @@ export const extractIOCs = (text: string, refanged: boolean = true): string[] | 
   }
 
   const normalizedMatches = refanged
-    ? matches
-        .map((ioc) => refang(ioc).trim())
-        .filter(Boolean)
+    ? matches.map((ioc) => refang(ioc).trim()).filter(Boolean)
     : matches.filter(Boolean)
 
   return normalizedMatches.length > 0 ? normalizedMatches : null
@@ -325,7 +315,10 @@ const normalizeIPv4 = (ip: string): string => {
 
 const expandIPv4SegmentToHex = (segment: string): string[] | null => {
   const octets = segment.split(".").map((value) => parseInt(value, 10))
-  if (octets.length !== 4 || octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) {
+  if (
+    octets.length !== 4 ||
+    octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)
+  ) {
     return null
   }
 
@@ -497,20 +490,24 @@ export const extractIPAddresses = (text: string): ExtractedIPMap => {
   }
 }
 
-export const computeIPv4Subnet = (ip: string, prefix: number): string | null => {
+export const computeIPv4Subnet = (
+  ip: string,
+  prefix: number
+): string | null => {
   const normalizedPrefix = Math.min(32, Math.max(0, prefix))
   const octets = ip.split(".").map((value) => parseInt(value, 10))
-  if (octets.length !== 4 || octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) {
+  if (
+    octets.length !== 4 ||
+    octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)
+  ) {
     return null
   }
 
   const ipValue =
-    (octets[0] << 24) |
-    (octets[1] << 16) |
-    (octets[2] << 8) |
-    octets[3]
+    (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]
 
-  const mask = normalizedPrefix === 0 ? 0 : (~0 << (32 - normalizedPrefix)) >>> 0
+  const mask =
+    normalizedPrefix === 0 ? 0 : (~0 << (32 - normalizedPrefix)) >>> 0
   const network = ipValue & mask
 
   const networkOctets = [
@@ -545,14 +542,18 @@ const bigIntToIPv6 = (value: bigint): string => {
   return compressIPv6FromHextets(hextets)
 }
 
-export const computeIPv6Subnet = (ip: string, prefix: number): string | null => {
+export const computeIPv6Subnet = (
+  ip: string,
+  prefix: number
+): string | null => {
   const normalizedPrefix = Math.min(128, Math.max(0, prefix))
   const numeric = ipv6ToBigInt(ip)
   if (numeric === null) {
     return null
   }
 
-  const hostMask = normalizedPrefix === 128 ? 0n : (1n << BigInt(128 - normalizedPrefix)) - 1n
+  const hostMask =
+    normalizedPrefix === 128 ? 0n : (1n << BigInt(128 - normalizedPrefix)) - 1n
   const networkMask = IPV6_FULL_MASK ^ hostMask
   const networkValue = numeric & networkMask
   const networkString = bigIntToIPv6(networkValue)
@@ -614,7 +615,8 @@ export const normalizeSubnet = (input: string): NormalizedSubnet | null => {
   return { subnet: normalized, version: 4, prefix }
 }
 
-const IPV4_SUBNET_REGEX = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\s*\/\s*(3[0-2]|[12]?\d)\b/gi
+const IPV4_SUBNET_REGEX =
+  /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\s*\/\s*(3[0-2]|[12]?\d)\b/gi
 const IPV6_SUBNET_REGEX = new RegExp(
   `${IPV6_REGEX_SOURCE}\\s*\\/\\s*(?:12[0-8]|1[01]?\\d|\\d?\\d)`,
   "gi"
@@ -654,7 +656,10 @@ const HOST_BITS = {
   6: 128n
 } as const
 
-export const estimateSubnetHostCount = (version: 4 | 6, prefix: number): bigint => {
+export const estimateSubnetHostCount = (
+  version: 4 | 6,
+  prefix: number
+): bigint => {
   const totalBits = HOST_BITS[version]
   const boundedPrefix = Math.min(Math.max(prefix, 0), Number(totalBits))
   const hostBits = totalBits - BigInt(boundedPrefix)
@@ -693,7 +698,9 @@ export type SubnetCheckSummaryRow = {
   hostnames?: string[] | null
 }
 
-export const formatSubnetCheckClipboard = (rows: SubnetCheckSummaryRow[]): string => {
+export const formatSubnetCheckClipboard = (
+  rows: SubnetCheckSummaryRow[]
+): string => {
   if (!Array.isArray(rows) || rows.length === 0) {
     return ""
   }
@@ -708,7 +715,11 @@ export const formatSubnetCheckClipboard = (rows: SubnetCheckSummaryRow[]): strin
     ]
 
     if (row.minAddress || row.maxAddress) {
-      parts.splice(1, 0, `Range: ${row.minAddress ?? "?"} → ${row.maxAddress ?? "?"}`)
+      parts.splice(
+        1,
+        0,
+        `Range: ${row.minAddress ?? "?"} → ${row.maxAddress ?? "?"}`
+      )
     }
 
     if (row.country) {
@@ -733,7 +744,9 @@ export const formatSubnetCheckClipboard = (rows: SubnetCheckSummaryRow[]): strin
   return blocks.join("\n\n")
 }
 
-export const exportSubnetCheckToExcel = (rows: SubnetCheckSummaryRow[]): void => {
+export const exportSubnetCheckToExcel = (
+  rows: SubnetCheckSummaryRow[]
+): void => {
   if (!Array.isArray(rows) || rows.length === 0) {
     return
   }
@@ -779,119 +792,37 @@ export const exportSubnetCheckToExcel = (rows: SubnetCheckSummaryRow[]): void =>
   XLSX.writeFile(workbook, filename)
 }
 
-
-
-
-
-
-
 /**
-* Main function to format combined AbuseIPDB and VirusTotal data.
-* @param data Dati combinati.
-* @returns Stringa formattata.
-*/
+ * Main function to format combined AbuseIPDB and VirusTotal data.
+ * @param data Dati combinati.
+ * @returns Stringa formattata.
+ */
 export const parseAndFormatResults = (data: any): string => {
-  const lines: string[] = [];
-  console.log("Data:", data);
+  const lines: string[] = []
+  console.log("Data:", data)
 
-  const ipIntelSignals = collectIpIntelSignals(data?.Ipapi, data?.ProxyCheck);
-  console.log("IP Intel Signals:", ipIntelSignals);
+  const ipIntelSignals = collectIpIntelSignals(data?.Ipapi, data?.ProxyCheck)
+  console.log("IP Intel Signals:", ipIntelSignals)
 
   if (data?.AbuseIPDB?.data || ipIntelSignals.length > 0) {
-    lines.push(formatAbuseIPDBData(data?.AbuseIPDB, ipIntelSignals));
-    lines.push(""); // Separazione
+    lines.push(formatAbuseIPDBData(data?.AbuseIPDB, ipIntelSignals))
+    lines.push("") // Separazione
   }
 
   if (data?.VirusTotal?.data) {
-    lines.push(formatVirusTotalData(data.VirusTotal));
+    lines.push(formatVirusTotalData(data.VirusTotal))
   }
 
-  return lines.join("\n").trim();
-};
-
-
-
-
-
-
-
-
-
-
-
+  return lines.join("\n").trim()
+}
 
 export const formatAbuseIPDBData = (
   abuseData: any,
   extraSignals: string[] = []
 ): string => {
-  const d = abuseData?.data;
-  if (!d) return "";
-
-  const toSafe = (v: unknown): string | number =>
-    v === null || v === undefined || v === "" ? "N/A" : (v as any);
-
-  const formatIpAddress = (value: unknown): string | number => {
-    if (typeof value === "string" && value.trim().length > 0) {
-      return defang(value)
-    }
-    return toSafe(value)
-  }
-
-  const hostnames =
-    Array.isArray(d?.hostnames) && d.hostnames.length > 0
-      ? d.hostnames.join(", ")
-      : undefined;
-
-  const isWhitelisted =
-    d?.isWhitelisted === true
-      ? "Yes"
-      : d?.isWhitelisted === false
-      ? "No"
-      : "Unknown";
-
-  // --- campi principali ------------------------------------------------------
-  const fields: Record<string, string | number> = {
-    "IP:": formatIpAddress(d?.ipAddress),
-    "Abuse Score:": `${toSafe(d?.abuseConfidenceScore)}%`,
-    "Total Reports:": toSafe(d?.totalReports),
-    "ISP:": toSafe(d?.isp),
-    "Country:": toSafe(d?.countryCode),
-    "Domain:": toSafe(d?.domain),
-    "Usage:": toSafe(d?.usageType),
-    "Version:": d?.ipVersion === 6 ? "IPv6" : "IPv4",
-    "Tor:": d?.isTor ? "Yes" : "No",
-    "Whitelisted:": isWhitelisted,
-    ...(hostnames ? { "Hostnames:": hostnames } : {}),
-    "Last Reported:": toSafe(d?.lastReportedAt ?? "N/A"),
-  };
-
-  // --- aggiunta extraSignals come campi equivalenti --------------------------
-  const normalizeAcronyms = (s: string) =>
-    s
-      .replace(/\bVpn\b/gi, "VPN")
-      .replace(/\bTor\b/gi, "TOR")
-      .replace(/\bUrl\b/gi, "URL")
-      .replace(/\bIp\b/gi, "IP");
-
-  for (const signal of extraSignals) {
-    const [rawKey, rawValue] = signal.split(":").map(s => s.trim());
-    const key = `${normalizeAcronyms(rawKey)}:`; // mantieni il ":"
-    const value = rawValue || "";
-    fields[key] = value;
-  }
-
-  // --- calcolo allineamento --------------------------------------------------
-  const labelWidth = Math.max(...Object.keys(fields).map(k => k.length));
-
-  // --- generazione righe -----------------------------------------------------
-  const lines = Object.entries(fields).map(
-    ([label, value]) => `- ${label.padEnd(labelWidth)} ${value}`
-  );
-
-  return lines.join("\n");
-};
-
-
+  const summary = buildAbuseIntel(abuseData, extraSignals)
+  return summary ? formatIntelSummary(summary) : ""
+}
 
 const formatIpapiLabel = (key: string): string => {
   return key
@@ -912,7 +843,10 @@ const IPAPI_BOOLEAN_FIELDS = [
   "is_abuser"
 ]
 
-export const collectIpIntelSignals = (ipapiData: any, proxyData: any): string[] => {
+export const collectIpIntelSignals = (
+  ipapiData: any,
+  proxyData: any
+): string[] => {
   const signals: string[] = []
 
   const payload = ipapiData?.data ?? ipapiData
@@ -975,47 +909,51 @@ export const collectIpIntelSignals = (ipapiData: any, proxyData: any): string[] 
   return signals
 }
 
-
-
-
 export const formatVirusTotalData = (vtData: any): string => {
-  const d = vtData?.data;
-  if (!d?.attributes) return "";
+  const summary = buildVirusTotalIntel(vtData)
+  return summary
+    ? formatIntelSummary(summary)
+    : formatVirusTotalDataLegacy(vtData)
+}
 
-  const attr = d.attributes;
-  const stats = attr.last_analysis_stats ?? {};
-  const cert = attr.last_https_certificate;
-  const whois = attr.whois || "";
-  const isDomain = d.type === "domain";
-  const isIp = d.type === "ip_address";
-  const isUrl = d.type === "url";
+const formatVirusTotalDataLegacy = (vtData: any): string => {
+  const d = vtData?.data
+  if (!d?.attributes) return ""
 
-  const allFields: { section: string; label: string; value: any }[] = [];
+  const attr = d.attributes
+  const stats = attr.last_analysis_stats ?? {}
+  const cert = attr.last_https_certificate
+  const whois = attr.whois || ""
+  const isDomain = d.type === "domain"
+  const isIp = d.type === "ip_address"
+  const isUrl = d.type === "url"
+
+  const allFields: { section: string; label: string; value: any }[] = []
 
   const rawIoc =
     isDomain && d.id
       ? defang(d.id)
       : isIp && d.id
-      ? d.id
-      : isUrl && typeof attr.url === "string"
-      ? defang(attr.url)
-      : null;
+        ? d.id
+        : isUrl && typeof attr.url === "string"
+          ? defang(attr.url)
+          : null
   const resolvedIoc =
     rawIoc ??
     (typeof attr.url === "string"
       ? attr.url
       : typeof d.id === "string"
-      ? d.id
-      : typeof attr.meaningful_name === "string"
-      ? attr.meaningful_name
-      : null)
+        ? d.id
+        : typeof attr.meaningful_name === "string"
+          ? attr.meaningful_name
+          : null)
   const defangedIoc =
     typeof resolvedIoc === "string" && resolvedIoc.length > 0
       ? isAlreadyDefanged(resolvedIoc)
         ? resolvedIoc
         : defang(resolvedIoc)
       : null
-  const iocLabel = isUrl || isDomain ? "IOC (defanged):" : "IOC:";
+  const iocLabel = isUrl || isDomain ? "IOC (defanged):" : "IOC:"
 
   // Base Info
   const info: Record<string, any> = {
@@ -1028,14 +966,21 @@ export const formatVirusTotalData = (vtData: any): string => {
     ...(attr.size && { "Size:": `${attr.size} bytes` }),
     ...(attr.tld && isDomain && { "TLD:": attr.tld }),
     ...(attr.first_submission_date && {
-      "First Submission:": new Date(attr.first_submission_date * 1000).toISOString().split("T")[0]
+      "First Submission:": new Date(attr.first_submission_date * 1000)
+        .toISOString()
+        .split("T")[0]
     }),
     ...(attr.last_analysis_date && {
-      "Last Analysis:": new Date(attr.last_analysis_date * 1000).toISOString().split("T")[0]
+      "Last Analysis:": new Date(attr.last_analysis_date * 1000)
+        .toISOString()
+        .split("T")[0]
     }),
     ...(attr.reputation !== undefined && { "Reputation:": attr.reputation }),
     ...(attr.tags && attr.tags.length > 0 && { "Tags:": attr.tags.join(", ") }),
-    ...(attr.names && attr.names.length > 0 && { "File Names:": attr.names.slice(0, 5).join(", ") }),
+    ...(attr.names &&
+      attr.names.length > 0 && {
+        "File Names:": attr.names.slice(0, 5).join(", ")
+      }),
     ...(attr.trusted_verdict?.verdict && {
       "Trusted Verdict:": `${attr.trusted_verdict.verdict} (${attr.trusted_verdict.organization || "Unknown"})`
     }),
@@ -1044,10 +989,10 @@ export const formatVirusTotalData = (vtData: any): string => {
     ...(attr.country && { "Country:": attr.country }),
     ...(attr.continent && { "Continent:": attr.continent }),
     ...(attr.network && { "Network:": attr.network }),
-    ...(attr.regional_internet_registry && { "Registry:": attr.regional_internet_registry }),
-  };
-
-
+    ...(attr.regional_internet_registry && {
+      "Registry:": attr.regional_internet_registry
+    })
+  }
 
   // Vendor stats
   const analysis: Record<string, any> = {
@@ -1055,38 +1000,40 @@ export const formatVirusTotalData = (vtData: any): string => {
     ...(stats.suspicious > 0 && { "Suspicious:": stats.suspicious }),
     ...(stats.undetected >= 0 && { "Undetected:": stats.undetected }),
     ...(stats.harmless >= 0 && { "Harmless:": stats.harmless })
-  };
+  }
   Object.entries(analysis).forEach(([label, value]) =>
     allFields.push({ section: "Vendor Analysis", label, value })
-  );
+  )
 
   // HTTPS cert
   const certFields: Record<string, string> = {
-    ...(cert?.validity?.not_after && { "Valid Until:": cert.validity.not_after }),
+    ...(cert?.validity?.not_after && {
+      "Valid Until:": cert.validity.not_after
+    }),
     ...(cert?.issuer?.CN && { "Issuer:": cert.issuer.CN })
-  };
+  }
   Object.entries(certFields).forEach(([label, value]) =>
     allFields.push({ section: "HTTPS Certificate", label, value })
-  );
+  )
 
   // Categories (solo come blocco separato)
   const categoriesBlock =
     attr.categories && Object.values(attr.categories).length > 0
       ? `Categories:\n- ${Object.values(attr.categories).join(", ")}`
-      : "";
+      : ""
 
   // Whois
   const whoisBlock =
     whois && extractKeyWhoisInfo(whois).trim()
       ? `Whois Information:\n${extractKeyWhoisInfo(whois)}`
-      : "";
+      : ""
 
   // 🔧 Raggruppa per sezione con label padding uniforme
-  const sections: Record<string, { label: string; value: any }[]> = {};
+  const sections: Record<string, { label: string; value: any }[]> = {}
   allFields.forEach(({ section, label, value }) => {
-    if (!sections[section]) sections[section] = [];
-    sections[section].push({ label, value });
-  });
+    if (!sections[section]) sections[section] = []
+    sections[section].push({ label, value })
+  })
 
   type VirusTotalAnalysisResult = {
     category?: string
@@ -1112,43 +1059,43 @@ export const formatVirusTotalData = (vtData: any): string => {
     ...allFields.map((f) => f.label),
     ...detectionEntries.slice(0, 6).map(({ engine }) => `${engine}:`)
   ]
-  const labelWidth = labelCandidates.reduce((max, label) => Math.max(max, label.length), 0)
-  const formatLine = (label: string, value: any) => `- ${label.padEnd(labelWidth)} ${value}`
+  const labelWidth = labelCandidates.reduce(
+    (max, label) => Math.max(max, label.length),
+    0
+  )
+  const formatLine = (label: string, value: any) =>
+    `- ${label.padEnd(labelWidth)} ${value}`
 
-  const lines: string[] = [];
+  const lines: string[] = []
 
   if (defangedIoc) {
     lines.push(formatLine("IOC:", defangedIoc))
   }
 
   lines.push(
-    formatLine("VirusTotal Verdict:", `${stats.malicious} malicious • ${stats.suspicious} suspicious`)
-  );
+    formatLine(
+      "VirusTotal Verdict:",
+      `${stats.malicious} malicious • ${stats.suspicious} suspicious`
+    )
+  )
 
   for (const [sectionName, fields] of Object.entries(sections)) {
-    lines.push(`${sectionName}:`);
-    lines.push(
-      ...fields.map(({ label, value }) =>
-        formatLine(label, value)
-      )
-    );
+    lines.push(`${sectionName}:`)
+    lines.push(...fields.map(({ label, value }) => formatLine(label, value)))
   }
 
   if (detectionEntries.length > 0) {
-    lines.push("Detected engines:");
+    lines.push("Detected engines:")
     detectionEntries.slice(0, 6).forEach(({ engine, verdict }) => {
-      lines.push(formatLine(`${engine}:`, verdict));
-    });
+      lines.push(formatLine(`${engine}:`, verdict))
+    })
   }
 
-  if (categoriesBlock) lines.push(categoriesBlock);
-  if (whoisBlock) lines.push(whoisBlock);
+  if (categoriesBlock) lines.push(categoriesBlock)
+  if (whoisBlock) lines.push(whoisBlock)
 
-  return lines.join("\n");
-};
-
-
-
+  return lines.join("\n")
+}
 
 /**
  * Estrae tutte le CVE da un testo.
@@ -1157,14 +1104,14 @@ export const formatVirusTotalData = (vtData: any): string => {
  */
 export const extractCVEs = (text: string): string[] => {
   // Regex per trovare le CVE
-  const cveRegex = /CVE-\d{4}-\d{4,}/g;
+  const cveRegex = /CVE-\d{4}-\d{4,}/g
 
   // Esegui la regex sul testo e restituisci i risultati
-  const matches = text.match(cveRegex);
+  const matches = text.match(cveRegex)
 
   // Se non ci sono corrispondenze, restituisci un array vuoto
-  return matches || [];
-};
+  return matches || []
+}
 
 /**
  * Estrae le CVE da un testo e le restituisce formattate.
@@ -1174,23 +1121,23 @@ export const extractCVEs = (text: string): string[] => {
  */
 export const formatCVEs = (text: string, asCSV: boolean): string => {
   // Estrae le CVE dal testo
-  const cves = extractCVEs(text);
+  const cves = extractCVEs(text)
 
   // Restituisce le CVE formattate
   if (asCSV) {
     // Formato CSV: "CVE1","CVE2","CVE3"
-    return cves.map((cve) => `"${cve}"`).join(",");
+    return cves.map((cve) => `"${cve}"`).join(",")
   } else {
     // Formato con ritorno a capo: CVE1\nCVE2\nCVE3
-    return cves.join("\n");
+    return cves.join("\n")
   }
-};
+}
 
-
-
-
-
-const applyConditionalFormatting = (sheet: XLSX.WorkSheet, data: any[][], columns: number[]) => {
+const applyConditionalFormatting = (
+  sheet: XLSX.WorkSheet,
+  data: any[][],
+  columns: number[]
+) => {
   const getColor = (value: number): string => {
     if (value >= 30) return "#f8d7da" // High: red
     if (value >= 10) return "#fff3cd" // Medium: yellow
@@ -1211,9 +1158,10 @@ const applyConditionalFormatting = (sheet: XLSX.WorkSheet, data: any[][], column
   }
 }
 
-
 // === CSV EXPORT ===
-export const convertResultsToCSV = (results: { [key: string]: any }): string => {
+export const convertResultsToCSV = (results: {
+  [key: string]: any
+}): string => {
   const rows = [["IOC", "Servizio", "Tipo", "Valore"]]
 
   for (const [ioc, result] of Object.entries(results)) {
@@ -1223,34 +1171,99 @@ export const convertResultsToCSV = (results: { [key: string]: any }): string => 
     if (vt) {
       const stats = vt.last_analysis_stats || {}
       rows.push([ioc, "VirusTotal", "Malicious", formatValue(stats.malicious)])
-      rows.push([ioc, "VirusTotal", "Suspicious", formatValue(stats.suspicious)])
+      rows.push([
+        ioc,
+        "VirusTotal",
+        "Suspicious",
+        formatValue(stats.suspicious)
+      ])
       rows.push([ioc, "VirusTotal", "Harmless", formatValue(stats.harmless)])
-      rows.push([ioc, "VirusTotal", "Undetected", formatValue(stats.undetected)])
+      rows.push([
+        ioc,
+        "VirusTotal",
+        "Undetected",
+        formatValue(stats.undetected)
+      ])
+      rows.push([
+        ioc,
+        "VirusTotal",
+        "Primary Name",
+        formatValue(vt.meaningful_name)
+      ])
+      rows.push([
+        ioc,
+        "VirusTotal",
+        "File Names",
+        formatValue(formatCappedValues(vt.names, 3))
+      ])
+      const [signatureStatus, signatureSigner, signatureProduct] =
+        getVirusTotalSignatureFields(vt.signature_info)
+      rows.push([ioc, "VirusTotal", "Signature Status", signatureStatus])
+      rows.push([ioc, "VirusTotal", "Signature Signer", signatureSigner])
+      rows.push([ioc, "VirusTotal", "Signature Product", signatureProduct])
 
       const whois = vt.whois || ""
-      const creation = extractSingleFromWhois(whois, /Created:\s*(.+)/gi, "earliest")
-      const expiry = extractSingleFromWhois(whois, /Expiry Date:\s*(.+)/gi, "earliest")
-      const registrar = extractSingleFromWhois(whois, /Registrar(?: Name)?:\s*(.+)/gi, "first")
+      const creation = extractSingleFromWhois(
+        whois,
+        /Created:\s*(.+)/gi,
+        "earliest"
+      )
+      const expiry = extractSingleFromWhois(
+        whois,
+        /Expiry Date:\s*(.+)/gi,
+        "earliest"
+      )
+      const registrar = extractSingleFromWhois(
+        whois,
+        /Registrar(?: Name)?:\s*(.+)/gi,
+        "first"
+      )
       const org = extractBestOrganization(whois)
 
       rows.push([ioc, "VirusTotal", "WHOIS - Creation", formatValue(creation)])
       rows.push([ioc, "VirusTotal", "WHOIS - Expiry", formatValue(expiry)])
-      rows.push([ioc, "VirusTotal", "WHOIS - Registrar", formatValue(registrar)])
+      rows.push([
+        ioc,
+        "VirusTotal",
+        "WHOIS - Registrar",
+        formatValue(registrar)
+      ])
       rows.push([ioc, "VirusTotal", "WHOIS - Organization", formatValue(org)])
     }
 
     if (ab) {
-      rows.push([ioc, "AbuseIPDB", "Abuse Score", formatValue(ab.abuseConfidenceScore)])
+      rows.push([
+        ioc,
+        "AbuseIPDB",
+        "Abuse Score",
+        formatValue(ab.abuseConfidenceScore)
+      ])
       rows.push([ioc, "AbuseIPDB", "Reports", formatValue(ab.totalReports)])
+      rows.push([
+        ioc,
+        "AbuseIPDB",
+        "Distinct Reporters",
+        formatValue(ab.numDistinctUsers)
+      ])
       rows.push([ioc, "AbuseIPDB", "Country", formatValue(ab.countryCode)])
       rows.push([ioc, "AbuseIPDB", "ISP", formatValue(ab.isp)])
+      rows.push([ioc, "AbuseIPDB", "Domain", formatValue(ab.domain)])
+      rows.push([
+        ioc,
+        "AbuseIPDB",
+        "Hostnames",
+        formatValue(formatCappedValues(ab.hostnames, 3))
+      ])
     }
   }
 
   return rows.map((row) => row.map((c) => `"${c}"`).join(",")).join("\n")
 }
 
-export const formatValue = (value: any, defaultValue: string = "N/A"): string => {
+export const formatValue = (
+  value: any,
+  defaultValue: string = "N/A"
+): string => {
   if (value === 0 || value === false) return value.toString()
   return value || defaultValue
 }
@@ -1259,6 +1272,7 @@ export const ABUSE_FIELDS = [
   "IP",
   "Abuse Score",
   "Total Reports",
+  "Distinct Reporters",
   "ISP",
   "Country",
   "Domain",
@@ -1269,7 +1283,6 @@ export const ABUSE_FIELDS = [
   "Hostnames",
   "Last Reported"
 ]
-
 
 export const VT_FIELDS = [
   "IOC",
@@ -1285,6 +1298,9 @@ export const VT_FIELDS = [
   "Reputation",
   "Tags",
   "File Names",
+  "Signature Status",
+  "Signature Signer",
+  "Signature Product",
   "Trusted Verdict",
   "ASN",
   "AS Owner",
@@ -1305,31 +1321,24 @@ export const VT_FIELDS = [
   "WHOIS Organization"
 ]
 
-
-
-
-
-
 export const getAbuseExportFields = (abuse: any): string[] => {
   const d = abuse?.data ?? abuse
   if (!d || typeof d !== "object") return ABUSE_FIELDS.map(() => "N/A")
 
-  const hostnames =
-    Array.isArray(d.hostnames) && d.hostnames.length > 0
-      ? d.hostnames.join(", ")
-      : "N/A"
+  const hostnames = formatCappedValues(d.hostnames, 3) || "N/A"
 
   const isWhitelisted =
     d.isWhitelisted === true
       ? "Yes"
       : d.isWhitelisted === false
-      ? "No"
-      : "Unknown"
+        ? "No"
+        : "Unknown"
 
   return [
     d.ipAddress ?? "N/A",
     `${d.abuseConfidenceScore ?? 0}%`,
     d.totalReports?.toString() ?? "0",
+    d.numDistinctUsers?.toString() ?? "N/A",
     d.isp ?? "N/A",
     d.countryCode ?? "N/A",
     d.domain ?? "N/A",
@@ -1341,7 +1350,6 @@ export const getAbuseExportFields = (abuse: any): string[] => {
     d.lastReportedAt ?? "N/A"
   ]
 }
-
 
 export const getVirusTotalExportFields = (attr: any, d?: any): string[] => {
   const stats = attr?.last_analysis_stats ?? {}
@@ -1367,9 +1375,11 @@ export const getVirusTotalExportFields = (attr: any, d?: any): string[] => {
     extractSingleFromWhois(whois, /Sponsoring Registrar:\s*(.+)/gi, "first")
 
   const organization = extractBestOrganization(whois)
+  const [signatureStatus, signatureSigner, signatureProduct] =
+    getVirusTotalSignatureFields(attr?.signature_info)
 
   return [
-    d?.id ?? "N/A",                                  // IOC
+    d?.id ?? "N/A", // IOC
     attr.md5 ?? "N/A",
     attr.sha1 ?? "N/A",
     attr.sha256 ?? "N/A",
@@ -1385,7 +1395,10 @@ export const getVirusTotalExportFields = (attr: any, d?: any): string[] => {
       : "N/A",
     attr.reputation?.toString() ?? "N/A",
     attr.tags?.join(", ") ?? "N/A",
-    attr.names?.slice(0, 5).join(", ") ?? "N/A",
+    formatCappedValues(attr.names, 3) || "N/A",
+    signatureStatus,
+    signatureSigner,
+    signatureProduct,
     attr.trusted_verdict?.verdict
       ? `${attr.trusted_verdict.verdict} (${attr.trusted_verdict.organization || "Unknown"})`
       : "N/A",
@@ -1408,9 +1421,6 @@ export const getVirusTotalExportFields = (attr: any, d?: any): string[] => {
     organization ?? "N/A"
   ]
 }
-
-
-
 
 export const exportResultsByEngine = (results: { [key: string]: any }) => {
   const vtRows = [["IOC", ...VT_FIELDS.slice(1)]]
@@ -1440,7 +1450,11 @@ const escape = (value: any): string => {
 }
 
 // Funzione per scaricare il CSV
-const downloadCSV = (rows: any[][], filename: string, delimiter: string = ",") => {
+const downloadCSV = (
+  rows: any[][],
+  filename: string,
+  delimiter: string = ","
+) => {
   const escape = (value: any): string => {
     const str = String(value ?? "N/A")
     return `"${str.replace(/"/g, '""').replace(/\r?\n/g, " ")}"`
@@ -1453,18 +1467,20 @@ const downloadCSV = (rows: any[][], filename: string, delimiter: string = ",") =
 
   // Trova colonne non vuote (almeno un valore non vuoto e diverso da "N/A")
   const nonEmptyColumnIndices = headers.map((_, colIdx) =>
-    dataRows.some(row => {
+    dataRows.some((row) => {
       const val = row[colIdx]
       return val !== "" && val !== null && val !== undefined && val !== "N/A"
     })
   )
 
   // Filtra colonne vuote
-  const filteredRows = rows.map(row =>
+  const filteredRows = rows.map((row) =>
     row.filter((_, colIdx) => nonEmptyColumnIndices[colIdx])
   )
 
-  const csv = filteredRows.map((row) => row.map(escape).join(delimiter)).join("\n")
+  const csv = filteredRows
+    .map((row) => row.map(escape).join(delimiter))
+    .join("\n")
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
@@ -1474,8 +1490,6 @@ const downloadCSV = (rows: any[][], filename: string, delimiter: string = ",") =
   a.click()
   URL.revokeObjectURL(url)
 }
-
-
 
 export const exportResultsToExcel = (results: { [key: string]: any }) => {
   const vtSheetData: (string | number)[][] = [["IOC", ...VT_FIELDS]]
@@ -1501,13 +1515,13 @@ export const exportResultsToExcel = (results: { [key: string]: any }) => {
     const rows = data.slice(1)
 
     const nonEmptyCols = headers.map((_, colIdx) =>
-      rows.some(row => {
+      rows.some((row) => {
         const val = row[colIdx]
         return val !== "" && val !== null && val !== undefined && val !== "N/A"
       })
     )
 
-    return data.map(row => row.filter((_, i) => nonEmptyCols[i]))
+    return data.map((row) => row.filter((_, i) => nonEmptyCols[i]))
   }
 
   const cleanedVt = cleanSheet(vtSheetData)
@@ -1523,17 +1537,16 @@ export const exportResultsToExcel = (results: { [key: string]: any }) => {
     XLSX.utils.book_append_sheet(workbook, abuseSheet, "AbuseIPDB")
   }
 
-  XLSX.writeFile(workbook, `SOCx_IOC_Report_${new Date().toISOString().split("T")[0]}.xlsx`)
+  XLSX.writeFile(
+    workbook,
+    `SOCx_IOC_Report_${new Date().toISOString().split("T")[0]}.xlsx`
+  )
 }
-
 
 export function toBase64NoPadding(str) {
-  const b64 = btoa(str);
-  return b64.replace(/=+$/, ""); // remove trailing '='
+  const b64 = btoa(str)
+  return b64.replace(/=+$/, "") // remove trailing '='
 }
-
-
-
 
 export const extractSingleFromWhois = (
   whois: string,
@@ -1542,66 +1555,69 @@ export const extractSingleFromWhois = (
 ): string | null => {
   const matches = [...whois.matchAll(regex)]
     .map((m) => (m[1] ? m[1].trim() : null))
-    .filter((v): v is string => !!v);
+    .filter((v): v is string => !!v)
 
-  if (matches.length === 0) return null;
+  if (matches.length === 0) return null
 
   const normalizeDate = (dateStr: string) =>
-    /^\d{4}-\d{2}-\d{2}/.test(dateStr) ? dateStr.slice(0, 10) : dateStr;
+    /^\d{4}-\d{2}-\d{2}/.test(dateStr) ? dateStr.slice(0, 10) : dateStr
 
   if (strategy === "earliest") {
     const validDates = matches
       .map(normalizeDate)
       .map((d) => new Date(d))
       .filter((d) => !isNaN(d.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime());
+      .sort((a, b) => a.getTime() - b.getTime())
 
-    return validDates.length > 0 ? validDates[0].toISOString().split("T")[0] : null;
+    return validDates.length > 0
+      ? validDates[0].toISOString().split("T")[0]
+      : null
   }
 
-  const first = normalizeDate(matches[0]);
-  return first;
-};
-
+  const first = normalizeDate(matches[0])
+  return first
+}
 
 // Extracts key information from the whois field
 const extractKeyWhoisInfo = (whois: string): string => {
-  if (!whois) return "No information available.";
+  if (!whois) return "No information available."
 
   const extractMultiple = (regex: RegExp): string[] => {
-    const matches = [...whois.matchAll(regex)];
-    return matches.map((m) => m[1].trim());
-  };
+    const matches = [...whois.matchAll(regex)]
+    return matches.map((m) => m[1].trim())
+  }
 
-  const dedup = (arr: string[]) =>
-    Array.from(new Set(arr.map((s) => s.trim())));
+  const dedup = (arr: string[]) => Array.from(new Set(arr.map((s) => s.trim())))
 
-  const lines: string[] = [];
+  const lines: string[] = []
 
   // ✅ Prendi solo la data di creazione più vecchia
   const creationDate = extractSingleFromWhois(
     whois,
     /(?:Creation Date|Created On|Created|Domain Registration Date)[^:\w]?[:\s]*([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T\s][0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|\+\d{4})?)?)/gi,
     "earliest"
-  );
+  )
 
   if (creationDate) {
-    lines.push("Creation Date:");
-    lines.push(`  - ${creationDate}`);
+    lines.push("Creation Date:")
+    lines.push(`  - ${creationDate}`)
   }
 
-  const orgs = dedup(extractMultiple(/(?:Registrant Organization|Sponsoring Organization|Organization|Org(?:Name|-name))[^:\w]?[:\s]*(.+)/gi));
+  const orgs = dedup(
+    extractMultiple(
+      /(?:Registrant Organization|Sponsoring Organization|Organization|Org(?:Name|-name))[^:\w]?[:\s]*(.+)/gi
+    )
+  )
 
   if (orgs.length > 0) {
-    lines.push("Organization:");
-    orgs.forEach((o) => lines.push(`  - ${o}`));
+    lines.push("Organization:")
+    orgs.forEach((o) => lines.push(`  - ${o}`))
   }
 
   return lines.length > 0
     ? lines.join("\n")
-    : "No key information found in the Whois record.";
-};
-
+    : "No key information found in the Whois record."
+}
 
 export const extractBestOrganization = (whois: string): string => {
   const matches = [...whois.matchAll(/Organization:\s*(.+)/gi)]
@@ -1617,186 +1633,218 @@ export const extractBestOrganization = (whois: string): string => {
   return preferred ?? matches[0] ?? "N/A"
 }
 
-
-
-
-
-
-
-
-
-
 // Funzione per inviare un messaggio al content script format-selection
-export const formatAndCopySelection = async (tabId: number, frameId: number): Promise<void> => {
+export const formatAndCopySelection = async (
+  tabId: number,
+  frameId: number
+): Promise<void> => {
   try {
-    const response = await chrome.tabs.sendMessage(tabId, {
-      name: "format-selection",
-    }, { frameId });
+    const response = await chrome.tabs.sendMessage(
+      tabId,
+      {
+        name: "format-selection"
+      },
+      { frameId }
+    )
 
-    const formattedText = response?.formatted;
-    console.log("Response:", response);
+    const formattedText = response?.formatted
+    console.log("Response:", response)
 
-    if (typeof formattedText === "string" && formattedText.trim() !== "" && response?.success) {
-      console.log("Formatted text to copy:", formattedText);
-      await copyToClipboard(formattedText);
+    if (
+      typeof formattedText === "string" &&
+      formattedText.trim() !== "" &&
+      response?.success
+    ) {
+      console.log("Formatted text to copy:", formattedText)
+      await copyToClipboard(formattedText)
     } else {
-      showNotification("Nothing to copy", "No formatted text received.");
+      showNotification("Nothing to copy", "No formatted text received.")
     }
   } catch (error) {
-    showNotification("Error", "Could not format or copy selection.");
-    console.error("formatAndCopySelection error:", error);
+    showNotification("Error", "Could not format or copy selection.")
+    console.error("formatAndCopySelection error:", error)
   }
-};
+}
 
 export function formatSelectedText(lastValidSelection: Selection): string {
-  console.log("Formatting selected text:", lastValidSelection);
-  if (!lastValidSelection || lastValidSelection.rangeCount === 0) return "";
+  const smartResult = formatSmartSelection(lastValidSelection)
+  if (smartResult && smartResult.score >= 72) {
+    return smartResult.text
+  }
 
-  const range = lastValidSelection.getRangeAt(0);
-  const fragment = range.cloneContents();
+  return formatSelectedTextLegacy(lastValidSelection)
+}
+
+function formatSelectedTextLegacy(lastValidSelection: Selection): string {
+  console.log("Formatting selected text:", lastValidSelection)
+  if (!lastValidSelection || lastValidSelection.rangeCount === 0) return ""
+
+  const range = lastValidSelection.getRangeAt(0)
+  const fragment = range.cloneContents()
   const rawSelectionText =
-    (typeof lastValidSelection.toString === "function" ? lastValidSelection.toString() : "") ||
+    (typeof lastValidSelection.toString === "function"
+      ? lastValidSelection.toString()
+      : "") ||
     fragment.textContent ||
-    "";
+    ""
 
-  const div = document.createElement("div");
-  div.appendChild(fragment);
-  console.log("Selected HTML before cleanup:", div.innerHTML);
+  const div = document.createElement("div")
+  div.appendChild(fragment)
+  console.log("Selected HTML before cleanup:", div.innerHTML)
 
   // Pulizia del contenuto
-  cleanContent(div);
+  cleanContent(div)
 
-  console.log("Selected HTML after cleanup:", div.innerHTML);
-  const orderedBlocks: string[] = [];
-  const seenBlocks = new Set<string>();
-  const seenCanonicalBlocks = new Set<string>();
-  const seenAggressiveBlocks = new Set<string>(); // tenuto per futura estensione, ma non usato nel check
+  console.log("Selected HTML after cleanup:", div.innerHTML)
+  const orderedBlocks: string[] = []
+  const seenBlocks = new Set<string>()
+  const seenCanonicalBlocks = new Set<string>()
+  const seenAggressiveBlocks = new Set<string>() // tenuto per futura estensione, ma non usato nel check
 
   const appendBlock = (block: string | string[] | null, label: string) => {
-    if (!block) return;
+    if (!block) return
 
-    const values = Array.isArray(block) ? block : [block];
+    const values = Array.isArray(block) ? block : [block]
 
     values.forEach((value) => {
-      const normalized = normalizeOutputBlock(value);
-      if (!normalized) return;
+      const normalized = normalizeOutputBlock(value)
+      if (!normalized) return
 
-      const canonical = canonicalizeOutputBlock(normalized);
+      const canonical = canonicalizeOutputBlock(normalized)
       // deduplica meno aggressiva: niente aggressiveCanonical nel check
       if (seenBlocks.has(normalized) || seenCanonicalBlocks.has(canonical)) {
-        return;
+        return
       }
 
-      console.log(`Dati ${label} estratti:`, normalized);
-      seenBlocks.add(normalized);
-      seenCanonicalBlocks.add(canonical);
+      console.log(`Dati ${label} estratti:`, normalized)
+      seenBlocks.add(normalized)
+      seenCanonicalBlocks.add(canonical)
 
       // mantengo comunque il calcolo aggressivo per uso futuro/debug
-      const aggressive = aggressiveCanonicalizeOutputBlock(normalized);
+      const aggressive = aggressiveCanonicalizeOutputBlock(normalized)
       if (aggressive) {
-        seenAggressiveBlocks.add(aggressive);
+        seenAggressiveBlocks.add(aggressive)
       }
 
-      orderedBlocks.push(normalized);
-    });
-  };
+      orderedBlocks.push(normalized)
+    })
+  }
 
   // Ordine estrattori
-  appendBlock(extractJsonBlocks(div), "JSON");
-  appendBlock(extractSplunkKeyValue(div), "Splunk");
-  appendBlock(extractGridcellKeyValue(div), "gridcell");
-  appendBlock(extractTableLikeData(div), "table-like");
-  appendBlock(extractGridTable(div), "grid-table");
-  appendBlock(extractMultiElementTable(div), "multi-table");
-  appendBlock(extractListBlocks(div), "lists");
-  appendBlock(extractAnchorValueRows(div), "anchor value");
-  appendBlock(extractInlineRowKeyValue(div), "inline key-value");
-  appendBlock(extractPairDivKeyValue(div), "div key-value");
-  appendBlock(extractDtDdKeyValue(div), "dt/dl");
-  appendBlock(extractLabelKeyValue(div), "label key-value");
-  appendBlock(extractSpanKeyValue(div), "span key-value");
+  appendBlock(extractJsonBlocks(div), "JSON")
+  appendBlock(extractSplunkKeyValue(div), "Splunk")
+  appendBlock(extractGridcellKeyValue(div), "gridcell")
+  appendBlock(extractTableLikeData(div), "table-like")
+  appendBlock(extractGridTable(div), "grid-table")
+  appendBlock(extractMultiElementTable(div), "multi-table")
+  appendBlock(extractListBlocks(div), "lists")
+  appendBlock(extractAnchorValueRows(div), "anchor value")
+  appendBlock(extractInlineRowKeyValue(div), "inline key-value")
+  appendBlock(extractPairDivKeyValue(div), "div key-value")
+  appendBlock(extractDtDdKeyValue(div), "dt/dl")
+  appendBlock(extractLabelKeyValue(div), "label key-value")
+  appendBlock(extractSpanKeyValue(div), "span key-value")
 
   // Estrattore testuale "nuovo"
-  const strictTextKeyValue = extractTextKeyValue(div);
-  appendBlock(strictTextKeyValue, "text key-value");
+  const strictTextKeyValue = extractTextKeyValue(div)
+  appendBlock(strictTextKeyValue, "text key-value")
 
   if (!strictTextKeyValue) {
     // versione più permissiva
     appendBlock(
       extractTextKeyValue(div, { removeNodes: false, allowSimpleLines: true }),
       "loose text key-value"
-    );
+    )
 
     // fallback legacy (versione vecchia semplificata)
-    appendBlock(legacyExtractTextKeyValue(div), "legacy text key-value");
+    appendBlock(legacyExtractTextKeyValue(div), "legacy text key-value")
   }
 
-  const remainingText = extractRemainingText(div);
-  appendBlock(remainingText, strictTextKeyValue ? "remaining text (fallback)" : "remaining text");
+  const remainingText = extractRemainingText(div)
+  appendBlock(
+    remainingText,
+    strictTextKeyValue ? "remaining text (fallback)" : "remaining text"
+  )
 
   if (orderedBlocks.length === 0) {
-    const fallback = normalizeOutputBlock(rawSelectionText || div.textContent || "");
+    const fallback = normalizeOutputBlock(
+      rawSelectionText || div.textContent || ""
+    )
     if (fallback) {
-      orderedBlocks.push(fallback);
+      orderedBlocks.push(fallback)
     }
   }
 
-  const finalText = orderedBlocks.join("\n\n").trim();
-  console.log("Final formatted text:", finalText);
-  return finalText;
+  const finalText = orderedBlocks.join("\n\n").trim()
+  console.log("Final formatted text:", finalText)
+  return finalText
 }
 
 // ============================================================================
 // Normalizzazione e deduplica
 // ============================================================================
 
-const JSON_ATTRIBUTE_CANDIDATES = ["data-json", "data-clipboard-text", "data-raw", "data-payload", "data-copy-text"];
-const JSON_SELECTOR_CANDIDATES = ["pre", "code", "textarea", "[data-json]", "[data-testid*='json']", "[data-component*='json']", "[class*='json']"];
+const JSON_ATTRIBUTE_CANDIDATES = [
+  "data-json",
+  "data-clipboard-text",
+  "data-raw",
+  "data-payload",
+  "data-copy-text"
+]
+const JSON_SELECTOR_CANDIDATES = [
+  "pre",
+  "code",
+  "textarea",
+  "[data-json]",
+  "[data-testid*='json']",
+  "[data-component*='json']",
+  "[class*='json']"
+]
 
 function normalizeOutputBlock(value: string): string {
-  if (!value) return "";
+  if (!value) return ""
 
-  const replaced = value.replace(/\u00A0/g, " ").replace(/\r/g, "");
-  const trimmed = replaced.trim();
+  const replaced = value.replace(/\u00A0/g, " ").replace(/\r/g, "")
+  const trimmed = replaced.trim()
 
   if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
-    return trimmed;
+    return trimmed
   }
 
   const lines = replaced
     .split("\n")
-    .map((line) => line.replace(/\t/g, "    ").replace(/[ ]+$/g, ""));
+    .map((line) => line.replace(/\t/g, "    ").replace(/[ ]+$/g, ""))
   const filtered = lines.filter((line, index, array) => {
-    if (line.trim() !== "") return true;
-    const previous = array[index - 1];
-    return previous && previous.trim() !== "";
-  });
+    if (line.trim() !== "") return true
+    const previous = array[index - 1]
+    return previous && previous.trim() !== ""
+  })
 
-  return filtered.join("\n").trim();
+  return filtered.join("\n").trim()
 }
 
 function canonicalizeOutputBlock(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
+  const trimmed = value.trim()
+  if (!trimmed) return ""
 
-  const isCodeFence = /^```/.test(trimmed) && /```$/.test(trimmed);
-  if (isCodeFence) return trimmed;
+  const isCodeFence = /^```/.test(trimmed) && /```$/.test(trimmed)
+  if (isCodeFence) return trimmed
 
   return trimmed
     .replace(/\s+/g, " ")
     .replace(/\s+([.,;:])/g, "$1")
-    .toLowerCase();
+    .toLowerCase()
 }
 
 function aggressiveCanonicalizeOutputBlock(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
+  const trimmed = value.trim()
+  if (!trimmed) return ""
 
   if (/^```/.test(trimmed) && /```$/.test(trimmed)) {
-    return trimmed.toLowerCase();
+    return trimmed.toLowerCase()
   }
 
-  return trimmed.replace(/\s+/g, "").toLowerCase();
+  return trimmed.replace(/\s+/g, "").toLowerCase()
 }
 
 // ============================================================================
@@ -1804,185 +1852,188 @@ function aggressiveCanonicalizeOutputBlock(value: string): string {
 // ============================================================================
 
 function extractJsonBlocks(container: HTMLElement): string[] | null {
-  const candidates = new Set<string>();
+  const candidates = new Set<string>()
 
   const tryAddCandidate = (value?: string | null) => {
-    if (!value) return;
-    const trimmed = value.trim();
-    if (!trimmed || trimmed.length < 2) return;
+    if (!value) return
+    const trimmed = value.trim()
+    if (!trimmed || trimmed.length < 2) return
     if (looksLikeJsonStructure(trimmed)) {
-      candidates.add(trimmed);
+      candidates.add(trimmed)
     }
-  };
+  }
 
-  tryAddCandidate(container.textContent);
+  tryAddCandidate(container.textContent)
 
   JSON_SELECTOR_CANDIDATES.forEach((selector) => {
     container.querySelectorAll<HTMLElement>(selector).forEach((el) => {
-      tryAddCandidate(el.textContent);
-    });
-  });
+      tryAddCandidate(el.textContent)
+    })
+  })
 
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
     JSON_ATTRIBUTE_CANDIDATES.forEach((attr) => {
       if (el.hasAttribute(attr)) {
-        tryAddCandidate(el.getAttribute(attr));
+        tryAddCandidate(el.getAttribute(attr))
       }
-    });
-  });
+    })
+  })
 
-  const formattedBlocks: string[] = [];
+  const formattedBlocks: string[] = []
   candidates.forEach((candidate) => {
-    const parsedBlocks = parseJsonFromSource(candidate);
-    parsedBlocks.forEach((block) => formattedBlocks.push(block));
-  });
+    const parsedBlocks = parseJsonFromSource(candidate)
+    parsedBlocks.forEach((block) => formattedBlocks.push(block))
+  })
 
-  return formattedBlocks.length > 0 ? formattedBlocks : null;
+  return formattedBlocks.length > 0 ? formattedBlocks : null
 }
 
 function looksLikeJsonStructure(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  const startsWith = trimmed[0];
-  const endsWith = trimmed[trimmed.length - 1];
-  return (startsWith === "{" && endsWith === "}") || (startsWith === "[" && endsWith === "]");
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  const startsWith = trimmed[0]
+  const endsWith = trimmed[trimmed.length - 1]
+  return (
+    (startsWith === "{" && endsWith === "}") ||
+    (startsWith === "[" && endsWith === "]")
+  )
 }
 
 function parseJsonFromSource(source: string): string[] {
-  const trimmed = source.trim();
-  const blocks: string[] = [];
+  const trimmed = source.trim()
+  const blocks: string[] = []
 
   if (looksLikeJsonStructure(trimmed)) {
-    const parsed = safeParseJsonString(trimmed);
+    const parsed = safeParseJsonString(trimmed)
     if (parsed !== null) {
-      blocks.push(formatJsonBlock(parsed));
-      return blocks;
+      blocks.push(formatJsonBlock(parsed))
+      return blocks
     }
   }
 
   const lines = trimmed
     .split(/\r?\n+/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
 
-  let parsedLine = false;
+  let parsedLine = false
   lines.forEach((line) => {
-    if (!looksLikeJsonStructure(line)) return;
-    const parsed = safeParseJsonString(line);
+    if (!looksLikeJsonStructure(line)) return
+    const parsed = safeParseJsonString(line)
     if (parsed !== null) {
-      parsedLine = true;
-      blocks.push(formatJsonBlock(parsed));
+      parsedLine = true
+      blocks.push(formatJsonBlock(parsed))
     }
-  });
-  if (parsedLine) return blocks;
+  })
+  if (parsedLine) return blocks
 
-  const looseBlocks = extractLooseJsonBlocks(trimmed);
+  const looseBlocks = extractLooseJsonBlocks(trimmed)
   looseBlocks.forEach((block) => {
-    const parsed = safeParseJsonString(block);
+    const parsed = safeParseJsonString(block)
     if (parsed !== null) {
-      blocks.push(formatJsonBlock(parsed));
+      blocks.push(formatJsonBlock(parsed))
     }
-  });
+  })
 
-  return blocks;
+  return blocks
 }
 
 function extractLooseJsonBlocks(text: string): string[] {
-  const blocks: string[] = [];
-  let inString: string | null = null;
-  let escaped = false;
-  let start = -1;
-  const stack: string[] = [];
+  const blocks: string[] = []
+  let inString: string | null = null
+  let escaped = false
+  let start = -1
+  const stack: string[] = []
 
   for (let i = 0; i < text.length; i++) {
-    const char = text[i];
+    const char = text[i]
 
     if (inString) {
       if (char === "\\" && !escaped) {
-        escaped = true;
-        continue;
+        escaped = true
+        continue
       }
       if (char === inString && !escaped) {
-        inString = null;
+        inString = null
       } else {
-        escaped = false;
+        escaped = false
       }
-      continue;
+      continue
     }
 
     if (char === '"' || char === "'") {
-      inString = char;
-      escaped = false;
-      continue;
+      inString = char
+      escaped = false
+      continue
     }
 
     if (char === "{" || char === "[") {
       if (stack.length === 0) {
-        start = i;
+        start = i
       }
-      stack.push(char === "{" ? "}" : "]");
+      stack.push(char === "{" ? "}" : "]")
     } else if ((char === "}" || char === "]") && stack.length > 0) {
-      const expected = stack.pop();
+      const expected = stack.pop()
       if (expected === char && stack.length === 0 && start !== -1) {
-        const block = text.slice(start, i + 1).trim();
+        const block = text.slice(start, i + 1).trim()
         if (looksLikeJsonStructure(block)) {
-          blocks.push(block);
+          blocks.push(block)
         }
-        start = -1;
+        start = -1
       }
     }
   }
 
-  return blocks;
+  return blocks
 }
 
 function safeParseJsonString(value: string): unknown {
-  const attempts = new Set<string>();
-  attempts.add(value);
-  attempts.add(removeTrailingCommas(value));
-  attempts.add(normalizeSingleQuotes(value));
-  attempts.add(quoteUnquotedJsonKeys(value));
-  attempts.add(quoteUnquotedJsonKeys(removeTrailingCommas(value)));
-  attempts.add(quoteUnquotedJsonKeys(normalizeSingleQuotes(value)));
+  const attempts = new Set<string>()
+  attempts.add(value)
+  attempts.add(removeTrailingCommas(value))
+  attempts.add(normalizeSingleQuotes(value))
+  attempts.add(quoteUnquotedJsonKeys(value))
+  attempts.add(quoteUnquotedJsonKeys(removeTrailingCommas(value)))
+  attempts.add(quoteUnquotedJsonKeys(normalizeSingleQuotes(value)))
   attempts.add(
     quoteUnquotedJsonKeys(removeTrailingCommas(normalizeSingleQuotes(value)))
-  );
+  )
 
   for (const attempt of attempts) {
     try {
-      return JSON.parse(attempt);
+      return JSON.parse(attempt)
     } catch {
-      continue;
+      continue
     }
   }
 
-  return null;
+  return null
 }
 
 function removeTrailingCommas(value: string): string {
-  return value.replace(/,\s*([}\]])/g, "$1");
+  return value.replace(/,\s*([}\]])/g, "$1")
 }
 
 function normalizeSingleQuotes(value: string): string {
-  if (!/'/.test(value)) return value;
+  if (!/'/.test(value)) return value
 
   const convert = (match: string, prefix: string, content: string) => {
-    const escaped = content.replace(/"/g, '\\"');
-    return `${prefix}"${escaped}"`;
-  };
+    const escaped = content.replace(/"/g, '\\"')
+    return `${prefix}"${escaped}"`
+  }
 
   return value
     .replace(/([{\[,]\s*)'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*:)/g, convert)
     .replace(/(:\s*)'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*([,}\]]))/g, convert)
-    .replace(/([[\s,])'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*([,\]]))/g, convert);
+    .replace(/([[\s,])'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*([,\]]))/g, convert)
 }
 
 function quoteUnquotedJsonKeys(value: string): string {
-  return value.replace(/([{,]\s*)([A-Za-z0-9_\-]+)\s*:(?!\/\/)/g, '$1"$2":');
+  return value.replace(/([{,]\s*)([A-Za-z0-9_\-]+)\s*:(?!\/\/)/g, '$1"$2":')
 }
 
 function formatJsonBlock(value: unknown): string {
-  return `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
+  return `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``
 }
 
 // ============================================================================
@@ -1990,32 +2041,32 @@ function formatJsonBlock(value: unknown): string {
 // ============================================================================
 
 function extractListBlocks(container: HTMLElement): string | null {
-  const lines: string[] = [];
-  const lists = container.querySelectorAll("ul, ol");
+  const lines: string[] = []
+  const lists = container.querySelectorAll("ul, ol")
 
   lists.forEach((list) => {
-    if (!container.contains(list)) return;
+    if (!container.contains(list)) return
 
     const children = Array.from(list.children).filter(
       (child): child is HTMLElement => child.tagName.toLowerCase() === "li"
-    );
+    )
 
-    if (children.length === 0) return;
+    if (children.length === 0) return
 
-    const isOrdered = list.tagName.toLowerCase() === "ol";
-    let index = 1;
+    const isOrdered = list.tagName.toLowerCase() === "ol"
+    let index = 1
 
     children.forEach((child) => {
-      const text = child.textContent?.replace(/\s+/g, " ").trim();
-      if (!text) return;
-      lines.push(isOrdered ? `${index}. ${text}` : `- ${text}`);
-      index += 1;
-    });
+      const text = child.textContent?.replace(/\s+/g, " ").trim()
+      if (!text) return
+      lines.push(isOrdered ? `${index}. ${text}` : `- ${text}`)
+      index += 1
+    })
 
-    list.remove();
-  });
+    list.remove()
+  })
 
-  return lines.length > 0 ? lines.join("\n") : null;
+  return lines.length > 0 ? lines.join("\n") : null
 }
 
 // ============================================================================
@@ -2023,15 +2074,15 @@ function extractListBlocks(container: HTMLElement): string | null {
 // ============================================================================
 
 function unwrapElement(el: HTMLElement): void {
-  const parent = el.parentNode;
+  const parent = el.parentNode
   if (!parent) {
-    return;
+    return
   }
 
   while (el.firstChild) {
-    parent.insertBefore(el.firstChild, el);
+    parent.insertBefore(el.firstChild, el)
   }
-  parent.removeChild(el);
+  parent.removeChild(el)
 }
 
 function cleanContent(container: HTMLElement): void {
@@ -2047,57 +2098,59 @@ function cleanContent(container: HTMLElement): void {
     "template",
     "iframe",
     "object",
-    "embed",
-  ];
+    "embed"
+  ]
   selectorsToRemove.forEach((selector) => {
-    const elements = container.querySelectorAll(selector);
-    elements.forEach((el) => el.remove());
-  });
+    const elements = container.querySelectorAll(selector)
+    elements.forEach((el) => el.remove())
+  })
 
   // Rimuovi elementi hidden (con attributo hidden o stile display: none)
   // e gestisci aria-hidden solo se non c'è testo significativo
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
-    const hasHiddenAttr = el.hasAttribute("hidden");
-    const isDisplayNone = getComputedStyle(el).display === "none";
-    const isAriaHidden = el.getAttribute("aria-hidden") === "true";
-    const hasVisibleText = !!el.textContent?.trim();
+    const hasHiddenAttr = el.hasAttribute("hidden")
+    const isDisplayNone = getComputedStyle(el).display === "none"
+    const isAriaHidden = el.getAttribute("aria-hidden") === "true"
+    const hasVisibleText = !!el.textContent?.trim()
 
     if (hasHiddenAttr || isDisplayNone || (isAriaHidden && !hasVisibleText)) {
-      el.remove();
+      el.remove()
     }
-  });
+  })
 
   // Rimuovi elementi tooltip (id o class con 'tooltip', case-insensitive)
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
-    const id = el.id?.toLowerCase() || "";
-    const className = (el.className as string | undefined)?.toLowerCase?.() || "";
-    const dataTestId = el.getAttribute("data-testid")?.toLowerCase() || "";
+    const id = el.id?.toLowerCase() || ""
+    const className =
+      (el.className as string | undefined)?.toLowerCase?.() || ""
+    const dataTestId = el.getAttribute("data-testid")?.toLowerCase() || ""
     if (id.includes("tooltip") || className.includes("tooltip")) {
-      const hasContent = !!el.textContent?.trim();
+      const hasContent = !!el.textContent?.trim()
       const isSemanticTooltip =
         el.getAttribute("role") === "tooltip" ||
         dataTestId.includes("tooltip") ||
         el.getAttribute("aria-hidden") === "true" ||
-        el.hasAttribute("hidden");
+        el.hasAttribute("hidden")
 
       if (!hasContent || isSemanticTooltip) {
-        el.remove();
+        el.remove()
       } else {
-        unwrapElement(el);
+        unwrapElement(el)
       }
     }
-  });
+  })
 
   // Rimuovi elementi con class che contengono 'copy', case-insensitive
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
-    const className = (el.className as string | undefined)?.toLowerCase?.() || "";
+    const className =
+      (el.className as string | undefined)?.toLowerCase?.() || ""
     if (className.includes("copy")) {
-      el.remove();
+      el.remove()
     }
-  });
+  })
 
   // Rimuovi tutti i tag <br>
-  container.querySelectorAll("br").forEach((el) => el.remove());
+  container.querySelectorAll("br").forEach((el) => el.remove())
 
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
     el.childNodes.forEach((node) => {
@@ -2106,32 +2159,33 @@ function cleanContent(container: HTMLElement): void {
           ?.replace(/\u00A0/g, " ") // Sostituisce spazi non separabili
           .replace(/[\u200B-\u200D\uFEFF]/g, " ") // Caratteri invisibili
           .replace(/\s+/g, " ") // Spazi multipli in uno solo
-          .trim();
+          .trim()
       }
-    });
-
-  });
+    })
+  })
 
   // Rimuovi <td>, <tr>, <th> vuoti
   container.querySelectorAll<HTMLElement>("td, tr, th").forEach((el) => {
-    const text = el.textContent?.replace(/[\u00A0\u200B-\u200D\uFEFF\t\r\n ]/g, "").trim();
+    const text = el.textContent
+      ?.replace(/[\u00A0\u200B-\u200D\uFEFF\t\r\n ]/g, "")
+      .trim()
     if (!text) {
-      el.remove();
+      el.remove()
     }
-  });
+  })
 
   // Rimuovi elementi con solo testo =, :, [-], [+] o singole parentesi
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
-    const text = el.textContent?.trim() || "";
+    const text = el.textContent?.trim() || ""
     if (
       /^[:=]+$/.test(text) ||
       /^\[\-\]$/.test(text) ||
       /^\[\+\]$/.test(text) ||
       /^[\(\)\[\]\{\}]$/.test(text)
     ) {
-      el.remove();
+      el.remove()
     }
-  });
+  })
 
   // Rimuovi elementi con attributi icona
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
@@ -2141,29 +2195,30 @@ function cleanContent(container: HTMLElement): void {
       el.hasAttribute("jscollapse") ||
       el.hasAttribute("jsexpands")
     ) {
-      el.remove();
+      el.remove()
     } else {
       const iconDescendant = el.querySelector(
         ":scope > [data-icon-name], :scope > [data-icon], :scope > svg"
-      );
+      )
       if (iconDescendant) {
-        iconDescendant.remove();
+        iconDescendant.remove()
       }
     }
-  });
+  })
 
   // Rimuovi solo i tag <i> che sembrano icone
   container.querySelectorAll<HTMLElement>("i").forEach((el) => {
-    const className = (el.className as string | undefined)?.toLowerCase?.() || "";
+    const className =
+      (el.className as string | undefined)?.toLowerCase?.() || ""
     if (
       className.includes("fa") ||
       className.includes("fa-icon") ||
       className.includes("dropdown") ||
       className.includes("ms-layer")
     ) {
-      el.remove();
+      el.remove()
     }
-  });
+  })
 
   // Rimuovi attributi indesiderati
   const attributesToRemove = [
@@ -2174,18 +2229,18 @@ function cleanContent(container: HTMLElement): void {
     "onload",
     "onmouseout",
     "onmouseenter",
-    "onmouseleave",
-  ];
+    "onmouseleave"
+  ]
   container.querySelectorAll<HTMLElement>("*").forEach((el) => {
-    attributesToRemove.forEach((attr) => el.removeAttribute(attr));
-  });
+    attributesToRemove.forEach((attr) => el.removeAttribute(attr))
+  })
 
   // Bottoni vuoti
   container.querySelectorAll<HTMLButtonElement>("button").forEach((el) => {
     if (el.textContent?.trim() === "") {
-      el.remove();
+      el.remove()
     }
-  });
+  })
 }
 
 // ============================================================================
@@ -2193,118 +2248,117 @@ function cleanContent(container: HTMLElement): void {
 // ============================================================================
 
 function extractTableLikeData(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const trElements = container.querySelectorAll("tr");
+  const keyValuePairs: string[][] = []
+  const trElements = container.querySelectorAll("tr")
 
   trElements.forEach((tr) => {
     const cells = Array.from(tr.querySelectorAll("td, th")).map(
       (cell) => cell.textContent?.trim() || ""
-    );
+    )
 
     if (cells.length === 2) {
-      const [key, value] = cells;
+      const [key, value] = cells
       if (key && value) {
-        keyValuePairs.push([key, value]);
+        keyValuePairs.push([key, value])
       }
-      tr.remove();
+      tr.remove()
     }
-  });
+  })
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 function extractGridcellKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const rowElements = container.querySelectorAll('[role="row"]');
+  const keyValuePairs: string[][] = []
+  const rowElements = container.querySelectorAll('[role="row"]')
 
   rowElements.forEach((row) => {
-    if (!container.contains(row)) return;
-    if (row.closest('[role="gridcell"]')) return;
+    if (!container.contains(row)) return
+    if (row.closest('[role="gridcell"]')) return
 
-    const gridcells = Array.from(row.querySelectorAll('[role="gridcell"]'));
-    let extracted = false;
+    const gridcells = Array.from(row.querySelectorAll('[role="gridcell"]'))
+    let extracted = false
 
     // gridcell con esattamente due figli (key/value)
     for (const gridcell of gridcells) {
-      const children = Array.from(gridcell.children).filter(
-        (el) => el.textContent?.trim()
-      );
+      const children = Array.from(gridcell.children).filter((el) =>
+        el.textContent?.trim()
+      )
       if (children.length === 2) {
-        const key = (children[0].textContent || "").trim();
-        const value = (children[1].textContent || "").trim();
+        const key = (children[0].textContent || "").trim()
+        const value = (children[1].textContent || "").trim()
         if (key && value) {
-          keyValuePairs.push([key, value]);
-          row.remove();
-          extracted = true;
-          break;
+          keyValuePairs.push([key, value])
+          row.remove()
+          extracted = true
+          break
         }
       }
     }
 
     // gridcell separati
     if (!extracted && gridcells.length >= 2) {
-      const key = (gridcells[0].textContent || "").trim();
-      const value = (gridcells[1].textContent || "").trim();
+      const key = (gridcells[0].textContent || "").trim()
+      const value = (gridcells[1].textContent || "").trim()
       if (key && value) {
-        keyValuePairs.push([key, value]);
-        row.remove();
+        keyValuePairs.push([key, value])
+        row.remove()
       }
     }
-  });
+  })
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 function extractGridTable(container: HTMLElement): string | null {
-  const rows: string[][] = [];
-  const rowElements = container.querySelectorAll('[role="row"]');
+  const rows: string[][] = []
+  const rowElements = container.querySelectorAll('[role="row"]')
 
   rowElements.forEach((rowEl) => {
-    if (!container.contains(rowEl)) return;
-    if (rowEl.closest('[role="gridcell"]')) return;
+    if (!container.contains(rowEl)) return
+    if (rowEl.closest('[role="gridcell"]')) return
 
     const cells = Array.from(rowEl.querySelectorAll('[role="gridcell"]')).map(
       (cell) => (cell as Element).textContent?.trim().replace(/\s+/g, " ") || ""
-    );
+    )
 
     if (cells.length > 0 && cells.some((cell) => cell !== "")) {
-      rows.push(cells);
-      rowEl.remove();
+      rows.push(cells)
+      rowEl.remove()
     }
-  });
+  })
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0) return null
 
-  return formatTableData(rows);
+  return formatTableData(rows)
 }
 
 function extractMultiElementTable(container: HTMLElement): string | null {
-  const tableRows: string[][] = [];
+  const tableRows: string[][] = []
 
-  const trElements = container.querySelectorAll("tr");
-  trElements.forEach(tr => {
-    const cells = Array.from(tr.querySelectorAll("td, th")).map(cell =>
+  const trElements = container.querySelectorAll("tr")
+  trElements.forEach((tr) => {
+    const cells = Array.from(tr.querySelectorAll("td, th")).map((cell) =>
       (cell.textContent || "").trim().replace(/\s+/g, " ")
-    );
+    )
 
     // Aggiungi solo righe con almeno 3 colonne
     if (cells.length >= 3) {
-      tableRows.push(cells);
+      tableRows.push(cells)
     }
 
     // Rimuove la riga dal DOM
-    tr.remove();
-  });
+    tr.remove()
+  })
 
-  if (tableRows.length === 0) return null;
+  if (tableRows.length === 0) return null
 
-  return formatTableData(tableRows);
+  return formatTableData(tableRows)
 }
-
 
 function formatKeyValue(rows: string[][]): string {
   const isSpecialCase = (text: string) => {
@@ -2315,95 +2369,98 @@ function formatKeyValue(rows: string[][]): string {
       /\d{4}-\d{2}-\d{2}/.test(text) || // data ISO
       /\bUTC[+-]?\d{1,2}:\d{2}\b/.test(text) || // timezone
       /\/[\w\/\-:.]+/.test(text)
-    );
-  };
+    )
+  }
 
   const removeSurroundingQuotes = (text: string) => {
     if (
       (text.startsWith('"') && text.endsWith('"')) ||
       (text.startsWith("'") && text.endsWith("'"))
     ) {
-      return text.slice(1, -1);
+      return text.slice(1, -1)
     }
-    return text;
-  };
+    return text
+  }
 
   const cleanText = (text: string) =>
     text
       .replace(/[\r\n]+/g, " ")
       .replace(/\s+/g, " ")
-      .trim();
+      .trim()
 
   const cleanedKeys = rows
     .filter((r) => r.length === 2)
     .map(([key]) => {
-      let cleanedKey = cleanText(key);
+      let cleanedKey = cleanText(key)
       if (!isSpecialCase(cleanedKey)) {
-        cleanedKey = removeSurroundingQuotes(cleanedKey);
-        cleanedKey = cleanedKey.replace(/[:=]+$/, "");
+        cleanedKey = removeSurroundingQuotes(cleanedKey)
+        cleanedKey = cleanedKey.replace(/[:=]+$/, "")
       }
-      return cleanedKey + ":";
-    });
+      return cleanedKey + ":"
+    })
 
-  const maxKeyLength = Math.max(...cleanedKeys.map((k) => k.length));
+  const maxKeyLength = Math.max(...cleanedKeys.map((k) => k.length))
 
   return rows
     .filter((r) => r.length === 2)
     .map(([key, value], index) => {
-      let cleanedValue = cleanText(value);
+      let cleanedValue = cleanText(value)
       if (!isSpecialCase(cleanedValue)) {
-        cleanedValue = cleanedValue.replace(/[,;]+$/, "");
-        cleanedValue = removeSurroundingQuotes(cleanedValue);
+        cleanedValue = cleanedValue.replace(/[,;]+$/, "")
+        cleanedValue = removeSurroundingQuotes(cleanedValue)
       }
 
-      return `${cleanedKeys[index].padEnd(maxKeyLength, " ")} ${cleanedValue}`;
+      return `${cleanedKeys[index].padEnd(maxKeyLength, " ")} ${cleanedValue}`
     })
-    .join("\n");
+    .join("\n")
 }
 
 function formatTableData(rows: string[][]): string {
-  if (rows.length === 0) return "";
+  if (rows.length === 0) return ""
 
-  const columnCount = Math.max(...rows.map((r) => r.length));
+  const columnCount = Math.max(...rows.map((r) => r.length))
 
   const cleanedRows = rows.map((row) =>
     row.map((cell) => cell.replace(/[\r\n]+/g, " ").trim())
-  );
+  )
 
   if (columnCount === 2) {
-    return formatKeyValue(cleanedRows);
+    return formatKeyValue(cleanedRows)
   } else {
-    return formatMarkdownTable(cleanedRows);
+    return formatMarkdownTable(cleanedRows)
   }
 }
 
 function formatMarkdownTable(rows: string[][]): string {
-  if (rows.length === 0) return "";
+  if (rows.length === 0) return ""
 
-  const columnCount = Math.max(...rows.map((r) => r.length));
+  const columnCount = Math.max(...rows.map((r) => r.length))
 
   const cleanedRows = rows.map((row) =>
     row.map((cell) =>
-      (cell || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
+      (cell || "")
+        .replace(/[\r\n]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
     )
-  );
+  )
 
-  const colWidths: number[] = Array(columnCount).fill(0);
+  const colWidths: number[] = Array(columnCount).fill(0)
   cleanedRows.forEach((row) => {
     row.forEach((cell, index) => {
-      colWidths[index] = Math.max(colWidths[index], cell.length);
-    });
-  });
+      colWidths[index] = Math.max(colWidths[index], cell.length)
+    })
+  })
 
   const formatRow = (row: string[]) => {
     const padded = row.map((cell, i) => {
-      const content = cell || "";
-      return content.padEnd(colWidths[i], " ");
-    });
-    return "| " + padded.join(" | ") + " |";
-  };
+      const content = cell || ""
+      return content.padEnd(colWidths[i], " ")
+    })
+    return "| " + padded.join(" | ") + " |"
+  }
 
-  return cleanedRows.map(formatRow).join("\n");
+  return cleanedRows.map(formatRow).join("\n")
 }
 
 // ============================================================================
@@ -2411,133 +2468,133 @@ function formatMarkdownTable(rows: string[][]): string {
 // ============================================================================
 
 function extractLabelKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const labels = container.querySelectorAll("label");
+  const keyValuePairs: string[][] = []
+  const labels = container.querySelectorAll("label")
 
   labels.forEach((label) => {
-    const key = (label.textContent || "").trim();
+    const key = (label.textContent || "").trim()
 
-    let sibling = label.nextElementSibling;
+    let sibling = label.nextElementSibling
     while (sibling && sibling.textContent?.trim() === "") {
-      sibling = sibling.nextElementSibling;
+      sibling = sibling.nextElementSibling
     }
 
     if (sibling) {
-      const value = (sibling.textContent || "").trim();
-      keyValuePairs.push([key, value]);
-      sibling.remove();
+      const value = (sibling.textContent || "").trim()
+      keyValuePairs.push([key, value])
+      sibling.remove()
     }
 
-    label.remove();
-  });
+    label.remove()
+  })
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 function extractSpanKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const nodes = Array.from(container.querySelectorAll("*"));
+  const keyValuePairs: string[][] = []
+  const nodes = Array.from(container.querySelectorAll("*"))
 
-  let lastSpan: HTMLElement | null = null;
+  let lastSpan: HTMLElement | null = null
 
   nodes.forEach((node: Element) => {
     if (node.tagName.toLowerCase() === "span" && container.contains(node)) {
       if (lastSpan) {
-        const key = lastSpan.textContent?.trim() || "";
-        const value = node.textContent?.trim() || "";
+        const key = lastSpan.textContent?.trim() || ""
+        const value = node.textContent?.trim() || ""
 
         if (key && value) {
-          keyValuePairs.push([key, value]);
-          lastSpan.remove();
-          node.remove();
-          lastSpan = null;
+          keyValuePairs.push([key, value])
+          lastSpan.remove()
+          node.remove()
+          lastSpan = null
         }
       } else {
-        lastSpan = node as HTMLElement;
+        lastSpan = node as HTMLElement
       }
     }
-  });
+  })
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 function extractDtDdKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const elements = Array.from(container.querySelectorAll("dt, dd"));
+  const keyValuePairs: string[][] = []
+  const elements = Array.from(container.querySelectorAll("dt, dd"))
 
   for (let i = 0; i < elements.length; i++) {
-    const el = elements[i];
+    const el = elements[i]
 
     if (el instanceof Element && el.tagName.toLowerCase() === "dt") {
-      const key = el.textContent?.trim() || "";
+      const key = el.textContent?.trim() || ""
 
-      const next = elements[i + 1];
+      const next = elements[i + 1]
       if (next instanceof Element && next.tagName.toLowerCase() === "dd") {
-        const value = next.textContent?.trim() || "";
+        const value = next.textContent?.trim() || ""
         if (key && value) {
-          keyValuePairs.push([key, value]);
-          el.remove();
-          next.remove();
+          keyValuePairs.push([key, value])
+          el.remove()
+          next.remove()
         }
-        i++;
+        i++
       }
     }
   }
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 function extractPairDivKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  let lastKey: string | null = null;
+  const keyValuePairs: string[][] = []
+  let lastKey: string | null = null
 
-  const parents = container.querySelectorAll<HTMLElement>("*");
+  const parents = container.querySelectorAll<HTMLElement>("*")
   parents.forEach((parent) => {
-    if (!container.contains(parent)) return;
+    if (!container.contains(parent)) return
 
-    const children = Array.from(parent.children);
+    const children = Array.from(parent.children)
 
     if (children.length === 2) {
-      const key = (children[0].textContent || "").trim();
-      const value = (children[1].textContent || "").trim();
-      let extracted = false;
+      const key = (children[0].textContent || "").trim()
+      const value = (children[1].textContent || "").trim()
+      let extracted = false
 
       if (key && value) {
-        keyValuePairs.push([key, value]);
-        lastKey = key;
-        extracted = true;
+        keyValuePairs.push([key, value])
+        lastKey = key
+        extracted = true
       } else if (!key && value && lastKey) {
-        keyValuePairs.push([lastKey, value]);
-        extracted = true;
+        keyValuePairs.push([lastKey, value])
+        extracted = true
       } else if (key && !value) {
         // lascio nel DOM per altri tentativi
-        lastKey = key;
+        lastKey = key
       }
 
       if (extracted) {
-        children[0].remove();
-        children[1].remove();
-        parent.remove();
+        children[0].remove()
+        children[1].remove()
+        parent.remove()
       }
     }
-  });
+  })
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 // ============================================================================
 // Inline row key-value / anchor row
 // ============================================================================
 
-const INLINE_LABEL_PATTERN = /[:：]\s*$/;
+const INLINE_LABEL_PATTERN = /[:：]\s*$/
 
 const getInlineNodeText = (node: Node): string => {
   if (node.nodeType === Node.TEXT_NODE) {
@@ -2546,7 +2603,7 @@ const getInlineNodeText = (node: Node): string => {
         ?.replace(/\u00A0/g, " ")
         .replace(/\s+/g, " ")
         .trim() ?? ""
-    );
+    )
   }
 
   if (node instanceof HTMLElement) {
@@ -2555,133 +2612,133 @@ const getInlineNodeText = (node: Node): string => {
         ?.replace(/\u00A0/g, " ")
         .replace(/\s+/g, " ")
         .trim() ?? ""
-    );
+    )
   }
 
-  return "";
-};
+  return ""
+}
 
 const normalizeLabelKey = (key: string): string => {
-  return key.replace(/[:：\s]+$/, "").trim();
-};
+  return key.replace(/[:：\s]+$/, "").trim()
+}
 
 function extractAnchorValueRows(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const candidates = container.querySelectorAll<HTMLElement>("p, div, li");
+  const keyValuePairs: string[][] = []
+  const candidates = container.querySelectorAll<HTMLElement>("p, div, li")
 
   candidates.forEach((node) => {
-    if (!container.contains(node)) return;
+    if (!container.contains(node)) return
 
-    if (node.closest("table, thead, tbody, tfoot, tr, dl")) return;
+    if (node.closest("table, thead, tbody, tfoot, tr, dl")) return
 
     const elementChildren = Array.from(node.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement
-    );
+    )
 
-    if (elementChildren.length < 2 || elementChildren.length > 4) return;
+    if (elementChildren.length < 2 || elementChildren.length > 4) return
 
-    const labelEl = elementChildren[0];
-    const valueEls = elementChildren.slice(1);
+    const labelEl = elementChildren[0]
+    const valueEls = elementChildren.slice(1)
 
-    const labelText = getInlineNodeText(labelEl);
-    if (!labelText || labelText.length > 80) return;
+    const labelText = getInlineNodeText(labelEl)
+    if (!labelText || labelText.length > 80) return
 
     const labelQualifies =
       labelEl.matches("a, strong, span") ||
       labelEl.hasAttribute("href") ||
-      /filter-option|title|label/i.test(labelEl.className);
+      /filter-option|title|label/i.test(labelEl.className)
 
-    if (!labelQualifies) return;
+    if (!labelQualifies) return
 
     const values = valueEls
       .map((child) => getInlineNodeText(child))
-      .filter(Boolean);
+      .filter(Boolean)
 
-    if (values.length === 0) return;
+    if (values.length === 0) return
 
     const containsAnotherLabel = values.some((text) =>
       INLINE_LABEL_PATTERN.test(text ?? "")
-    );
-    if (containsAnotherLabel) return;
+    )
+    if (containsAnotherLabel) return
 
-    const valueText = values.join(" ").trim();
-    if (!valueText) return;
+    const valueText = values.join(" ").trim()
+    if (!valueText) return
 
-    keyValuePairs.push([normalizeLabelKey(labelText), valueText]);
-    node.remove();
-  });
+    keyValuePairs.push([normalizeLabelKey(labelText), valueText])
+    node.remove()
+  })
 
-  return keyValuePairs.length > 0 ? formatKeyValue(keyValuePairs) : null;
+  return keyValuePairs.length > 0 ? formatKeyValue(keyValuePairs) : null
 }
 
 function extractInlineRowKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const parents = container.querySelectorAll<HTMLElement>("*");
+  const keyValuePairs: string[][] = []
+  const parents = container.querySelectorAll<HTMLElement>("*")
 
   parents.forEach((parent) => {
-    if (!container.contains(parent)) return;
-    if (parent.closest("table, thead, tbody, tfoot, tr, dl")) return;
+    if (!container.contains(parent)) return
+    if (parent.closest("table, thead, tbody, tfoot, tr, dl")) return
 
     const elementChildren = Array.from(parent.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement
-    );
+    )
 
-    if (elementChildren.length < 2 || elementChildren.length > 6) return;
+    if (elementChildren.length < 2 || elementChildren.length > 6) return
 
     const labelChild = elementChildren.find((child) => {
-      const text = getInlineNodeText(child);
-      return text && INLINE_LABEL_PATTERN.test(text);
-    });
+      const text = getInlineNodeText(child)
+      return text && INLINE_LABEL_PATTERN.test(text)
+    })
 
-    if (!labelChild) return;
+    if (!labelChild) return
 
-    const keyText = getInlineNodeText(labelChild);
-    if (!keyText || keyText.length > 80) return;
+    const keyText = getInlineNodeText(labelChild)
+    if (!keyText || keyText.length > 80) return
 
-    const labelIndex = elementChildren.indexOf(labelChild);
-    const valueCandidates = elementChildren.slice(labelIndex + 1);
+    const labelIndex = elementChildren.indexOf(labelChild)
+    const valueCandidates = elementChildren.slice(labelIndex + 1)
 
-    const values: string[] = [];
-    const consumedNodes: Node[] = [];
+    const values: string[] = []
+    const consumedNodes: Node[] = []
 
     if (valueCandidates.length > 0) {
       const containsAnotherLabel = valueCandidates.some((child) =>
         INLINE_LABEL_PATTERN.test(getInlineNodeText(child))
-      );
-      if (containsAnotherLabel) return;
+      )
+      if (containsAnotherLabel) return
 
       valueCandidates.forEach((child) => {
-        const text = getInlineNodeText(child);
-        if (text) values.push(text);
-        consumedNodes.push(child);
-      });
+        const text = getInlineNodeText(child)
+        if (text) values.push(text)
+        consumedNodes.push(child)
+      })
     }
 
     if (values.length === 0) {
-      let sibling: ChildNode | null = labelChild.nextSibling;
+      let sibling: ChildNode | null = labelChild.nextSibling
       while (sibling) {
-        const text = getInlineNodeText(sibling);
-        if (text && INLINE_LABEL_PATTERN.test(text)) break;
+        const text = getInlineNodeText(sibling)
+        if (text && INLINE_LABEL_PATTERN.test(text)) break
 
-        if (text) values.push(text);
-        consumedNodes.push(sibling);
-        sibling = sibling.nextSibling;
+        if (text) values.push(text)
+        consumedNodes.push(sibling)
+        sibling = sibling.nextSibling
       }
     }
 
-    if (values.length === 0) return;
+    if (values.length === 0) return
 
-    keyValuePairs.push([normalizeLabelKey(keyText), values.join(" ")]);
+    keyValuePairs.push([normalizeLabelKey(keyText), values.join(" ")])
 
     consumedNodes.forEach((node) => {
       if (node.parentNode) {
-        node.parentNode.removeChild(node);
+        node.parentNode.removeChild(node)
       }
-    });
-    labelChild.remove();
-  });
+    })
+    labelChild.remove()
+  })
 
-  return keyValuePairs.length > 0 ? formatKeyValue(keyValuePairs) : null;
+  return keyValuePairs.length > 0 ? formatKeyValue(keyValuePairs) : null
 }
 
 // ============================================================================
@@ -2689,74 +2746,86 @@ function extractInlineRowKeyValue(container: HTMLElement): string | null {
 // ============================================================================
 
 function collectStructuredLines(container: HTMLElement): string[] {
-  const doc = container.ownerDocument ?? document;
+  const doc = container.ownerDocument ?? document
   const walker = doc.createTreeWalker(
     container,
     NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
     null
-  );
-  const lines: string[] = [];
-  let currentLine = "";
+  )
+  const lines: string[] = []
+  let currentLine = ""
 
   const flushLine = () => {
-    const normalized = currentLine.trim();
+    const normalized = currentLine.trim()
     if (normalized) {
-      lines.push(normalized);
+      lines.push(normalized)
     }
-    currentLine = "";
-  };
+    currentLine = ""
+  }
 
   while (walker.nextNode()) {
-    const node = walker.currentNode;
+    const node = walker.currentNode
 
     if (node.nodeType === Node.TEXT_NODE) {
-      const rawText = node.textContent ?? "";
-      if (!rawText) continue;
+      const rawText = node.textContent ?? ""
+      if (!rawText) continue
 
-      const segments = rawText.split(/[\r\n]+/);
+      const segments = rawText.split(/[\r\n]+/)
       segments.forEach((segment, index) => {
-        const text = segment.replace(/\s+/g, " ").trim();
+        const text = segment.replace(/\s+/g, " ").trim()
         if (text) {
-          currentLine += (currentLine ? " " : "") + text;
+          currentLine += (currentLine ? " " : "") + text
         }
         if (index < segments.length - 1) {
-          flushLine();
+          flushLine()
         }
-      });
+      })
     } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const element = node as Element;
-      const tag = element.tagName.toLowerCase();
+      const element = node as Element
+      const tag = element.tagName.toLowerCase()
 
       if (tag === "li") {
-        flushLine();
-        currentLine = "-";
+        flushLine()
+        currentLine = "-"
       } else if (["strong", "b", "i", "em", "u", "span"].includes(tag)) {
-        continue;
+        continue
       } else if (
-        ["p", "div", "section", "article", "header", "footer", "br", "table", "tr", "pre", "code"].includes(tag)
+        [
+          "p",
+          "div",
+          "section",
+          "article",
+          "header",
+          "footer",
+          "br",
+          "table",
+          "tr",
+          "pre",
+          "code"
+        ].includes(tag)
       ) {
-        flushLine();
+        flushLine()
       }
     }
   }
 
-  flushLine();
-  return lines;
+  flushLine()
+  return lines
 }
 
 function extractTextKeyValue(
   container: HTMLElement,
   options: { removeNodes?: boolean; allowSimpleLines?: boolean } = {}
 ): string | null {
-  const keyValuePairs: string[][] = [];
-  const textNodes = Array.from(container.querySelectorAll("*"));
+  const keyValuePairs: string[][] = []
+  const textNodes = Array.from(container.querySelectorAll("*"))
 
-  const structuredLines = collectStructuredLines(container);
+  const structuredLines = collectStructuredLines(container)
   const fallbackLines = (container.textContent || "")
     .split(/\r\n|\n|\r/)
     .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-  const lines = structuredLines.length > 0 ? structuredLines : fallbackLines;
+    .filter(Boolean)
+  const lines = structuredLines.length > 0 ? structuredLines : fallbackLines
 
   const isSpecialCase = (text: string) =>
     /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) || // ora
@@ -2764,19 +2833,19 @@ function extractTextKeyValue(
     /^\S+@\S+\.\S+$/.test(text) || // email
     /^\d{4}-\d{2}-\d{2}$/.test(text) || // data ISO
     /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) || // timezone
-    /^\/[\w\/\-:.]+$/.test(text); // path
+    /^\/[\w\/\-:.]+$/.test(text) // path
 
   lines.forEach((line) => {
-    const trimmedLine = line.trim();
-    if (trimmedLine === "") return;
+    const trimmedLine = line.trim()
+    if (trimmedLine === "") return
 
-    const parsed = parseKeyValueLine(trimmedLine);
+    const parsed = parseKeyValueLine(trimmedLine)
     if (parsed) {
-      const [key, value] = parsed;
+      const [key, value] = parsed
 
-      if (isSpecialCase(trimmedLine)) return;
+      if (isSpecialCase(trimmedLine)) return
 
-      keyValuePairs.push([key, value]);
+      keyValuePairs.push([key, value])
 
       if (options.removeNodes !== false) {
         textNodes.forEach((node) => {
@@ -2785,25 +2854,27 @@ function extractTextKeyValue(
             node.textContent?.includes(key) ||
             node.textContent?.includes(value)
           ) {
-            node.remove();
+            node.remove()
           }
-        });
+        })
       }
     } else if (options.allowSimpleLines) {
-      const simpleMatch = trimmedLine.match(/^([A-Za-z0-9][\w\s-]{0,80})\s+(.+)$/);
+      const simpleMatch = trimmedLine.match(
+        /^([A-Za-z0-9][\w\s-]{0,80})\s+(.+)$/
+      )
       if (simpleMatch) {
-        const keyCandidate = simpleMatch[1].trim();
-        const valueCandidate = simpleMatch[2].trim();
+        const keyCandidate = simpleMatch[1].trim()
+        const valueCandidate = simpleMatch[2].trim()
         if (keyCandidate && valueCandidate && !isSpecialCase(trimmedLine)) {
-          keyValuePairs.push([keyCandidate, valueCandidate]);
+          keyValuePairs.push([keyCandidate, valueCandidate])
         }
       }
     }
-  });
+  })
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 const GENERIC_KEY_VALUE_PATTERNS: RegExp[] = [
@@ -2811,44 +2882,47 @@ const GENERIC_KEY_VALUE_PATTERNS: RegExp[] = [
   /^-?\s*(.+?)\t+(.+)$/,
   /^-?\s*(.+?)\s+-{1,3}\s+(.+)$/,
   /^-?\s*(.+?)\s+\|\s+(.+)$/,
-  /^-?\s*(.+?)(?:\s*\.{2,}\s+)(.+)$/,
-];
+  /^-?\s*(.+?)(?:\s*\.{2,}\s+)(.+)$/
+]
 
 const sanitizeKeyCandidate = (key: string): string => {
-  return key.replace(/[\s.:=-]+$/, "").replace(/^\s*[-•]+/, "").trim();
-};
+  return key
+    .replace(/[\s.:=-]+$/, "")
+    .replace(/^\s*[-•]+/, "")
+    .trim()
+}
 
 const isValidKeyCandidate = (key: string): boolean => {
-  if (!key) return false;
-  if (key.length > 80) return false;
-  const firstChar = key.trim().charAt(0);
+  if (!key) return false
+  if (key.length > 80) return false
+  const firstChar = key.trim().charAt(0)
   // CONSENTI anche chiavi che iniziano con numeri (es. tabelle Defender/Azure)
-  if (!/[A-Za-z0-9]/.test(firstChar)) return false;
-  return true;
-};
+  if (!/[A-Za-z0-9]/.test(firstChar)) return false
+  return true
+}
 
 function parseKeyValueLine(line: string): [string, string] | null {
   for (const pattern of GENERIC_KEY_VALUE_PATTERNS) {
-    const match = line.match(pattern);
-    if (!match) continue;
+    const match = line.match(pattern)
+    if (!match) continue
 
-    const key = sanitizeKeyCandidate(match[1] ?? "");
-    const value = (match[2] ?? "").trim();
+    const key = sanitizeKeyCandidate(match[1] ?? "")
+    const value = (match[2] ?? "").trim()
 
-    if (!key || !value) continue;
-    if (!isValidKeyCandidate(key)) continue;
+    if (!key || !value) continue
+    if (!isValidKeyCandidate(key)) continue
 
-    return [key, value];
+    return [key, value]
   }
 
-  return null;
+  return null
 }
 
 // Legacy: versione vecchia più semplice, usata come fallback
 function legacyExtractTextKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const textNodes = Array.from(container.querySelectorAll("*"));
-  const lines = (container.textContent || "").split("\n");
+  const keyValuePairs: string[][] = []
+  const textNodes = Array.from(container.querySelectorAll("*"))
+  const lines = (container.textContent || "").split("\n")
 
   const isSpecialCase = (text: string) =>
     /^\d{1,2}:\d{2}(:\d{2})?$/.test(text) ||
@@ -2856,20 +2930,20 @@ function legacyExtractTextKeyValue(container: HTMLElement): string | null {
     /^\S+@\S+\.\S+$/.test(text) ||
     /^\d{4}-\d{2}-\d{2}$/.test(text) ||
     /^UTC[+-]?\d{1,2}:\d{2}$/.test(text) ||
-    /^\/[\w\/\-:.]+$/.test(text);
+    /^\/[\w\/\-:.]+$/.test(text)
 
   lines.forEach((line) => {
-    const trimmedLine = line.trim();
-    if (trimmedLine === "") return;
+    const trimmedLine = line.trim()
+    if (trimmedLine === "") return
 
-    const match = trimmedLine.match(/^([^\s:=][^:=]*)\s*[:=]\s*(.+)$/);
+    const match = trimmedLine.match(/^([^\s:=][^:=]*)\s*[:=]\s*(.+)$/)
     if (match) {
-      const key = match[1].trim();
-      const value = match[2].trim();
+      const key = match[1].trim()
+      const value = match[2].trim()
 
-      if (isSpecialCase(trimmedLine)) return;
+      if (isSpecialCase(trimmedLine)) return
 
-      keyValuePairs.push([key, value]);
+      keyValuePairs.push([key, value])
 
       textNodes.forEach((node) => {
         if (
@@ -2877,15 +2951,15 @@ function legacyExtractTextKeyValue(container: HTMLElement): string | null {
           node.textContent?.includes(key) ||
           node.textContent?.includes(value)
         ) {
-          node.remove();
+          node.remove()
         }
-      });
+      })
     }
-  });
+  })
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 // ============================================================================
@@ -2893,38 +2967,41 @@ function legacyExtractTextKeyValue(container: HTMLElement): string | null {
 // ============================================================================
 
 function extractSplunkKeyValue(container: HTMLElement): string | null {
-  const keyValuePairs: string[][] = [];
-  const keyLevelSpans = container.querySelectorAll("span.key[class*='level-']");
+  const keyValuePairs: string[][] = []
+  const keyLevelSpans = container.querySelectorAll("span.key[class*='level-']")
 
   keyLevelSpans.forEach((levelSpan) => {
     const keyNameEl = Array.from(levelSpan.children).find((child) =>
       (child as Element).matches("span.key-name")
-    );
+    )
     const valueEl = Array.from(levelSpan.children).find((child) =>
       (child as Element).matches("span.t")
-    );
+    )
 
     if (keyNameEl && valueEl) {
-      const key = (keyNameEl as Element).textContent?.trim() || "";
-      const value = (valueEl as Element).textContent?.trim() || "";
+      const key = (keyNameEl as Element).textContent?.trim() || ""
+      const value = (valueEl as Element).textContent?.trim() || ""
 
       if (key && value) {
-        keyValuePairs.push([key, value]);
+        keyValuePairs.push([key, value])
       }
     }
-  });
+  })
 
-  keyLevelSpans.forEach((levelSpan) => levelSpan.remove());
+  keyLevelSpans.forEach((levelSpan) => levelSpan.remove())
 
-  if (keyValuePairs.length === 0) return null;
+  if (keyValuePairs.length === 0) return null
 
-  return formatKeyValue(keyValuePairs);
+  return formatKeyValue(keyValuePairs)
 }
 
 // ============================================================================
 // Testo rimanente
 // ============================================================================
 
-function extractRemainingText(container: HTMLElement, separator: string = "\n"): string {
-  return collectStructuredLines(container).join(separator).trim();
+function extractRemainingText(
+  container: HTMLElement,
+  separator: string = "\n"
+): string {
+  return collectStructuredLines(container).join(separator).trim()
 }

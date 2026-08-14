@@ -14,6 +14,7 @@
     "dev:chrome": "plasmo dev --target=chrome-mv3",
     "dev:edge": "plasmo dev --target=edge-mv3",
     "dev:firefox": "plasmo dev --target=firefox",
+    "test": "vitest run --environment happy-dom",
     "typecheck": "tsc --noEmit --incremental false",
     "build": "plasmo build --target=chrome-mv3",
     "build:chrome": "plasmo build --target=chrome-mv3",
@@ -26,7 +27,7 @@
     "package:firefox": "plasmo build --target=firefox --zip",
     "package:stores": "plasmo build --target=chrome-mv3 --zip && plasmo build --target=edge-mv3 --zip && plasmo build --target=firefox --zip",
     "validate:builds": "node scripts/validate-builds.mjs",
-    "verify": "tsc --noEmit --incremental false && plasmo build --target=chrome-mv3 && plasmo build --target=edge-mv3 && plasmo build --target=firefox && node scripts/validate-builds.mjs"
+    "verify": "pnpm test && tsc --noEmit --incremental false && plasmo build --target=chrome-mv3 && plasmo build --target=edge-mv3 && plasmo build --target=firefox && node scripts/validate-builds.mjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -66,12 +67,14 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.22",
-    "postcss": "^8.5.6",
+    "happy-dom": "20.11.2",
     "plasmo": "0.90.5",
+    "postcss": "^8.5.6",
     "prettier": "3.9.6",
     "svgo": "3.3.4",
     "tailwindcss": "^3.4.18",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
   },
   "manifest": {
     "host_permissions": [

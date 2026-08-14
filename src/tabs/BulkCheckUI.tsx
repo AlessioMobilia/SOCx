@@ -1,4 +1,3 @@
-import React, { useMemo } from "react"
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
@@ -6,6 +5,16 @@ import {
   PlayCircleIcon,
   TrashIcon
 } from "@heroicons/react/24/outline"
+import React, { useMemo } from "react"
+
+import {
+  buildAbuseIntel,
+  buildVirusTotalIntel,
+  classifyIntelTextLine,
+  type IntelField,
+  type IntelSummary,
+  type IntelTone
+} from "../utility/intelFormatting"
 import { parseAndFormatResults } from "../utility/utils"
 import type { BulkCheckSummaryRow, BulkStatusKind } from "./bulk-check.types"
 
@@ -41,19 +50,27 @@ const SERVICE_STATUS_PILL: Record<HighlightStatus, string> = {
   clean: "bg-emerald-500/15 text-emerald-100",
   flagged: "bg-amber-500/15 text-amber-100",
   error: "bg-slate-500/20 text-slate-100",
-  skipped: "bg-socx-cloud-soft/70 text-socx-muted dark:bg-socx-panel/50 dark:text-socx-muted-dark",
+  skipped:
+    "bg-socx-cloud-soft/70 text-socx-muted dark:bg-socx-panel/50 dark:text-socx-muted-dark",
   "flagged-high": "bg-rose-500/30 text-rose-50",
   "flagged-medium": "bg-amber-500/30 text-amber-50"
 }
 
 const SERVICE_CARD_TONE: Record<HighlightStatus, string> = {
-  pending: "border-slate-500/30 bg-slate-500/5 dark:border-slate-400/40 dark:bg-socx-panel/40",
-  clean: "border-emerald-500/30 bg-emerald-500/5 dark:border-emerald-400/30 dark:bg-emerald-500/10",
-  flagged: "border-amber-500/30 bg-amber-500/5 dark:border-amber-400/40 dark:bg-amber-500/10",
-  error: "border-slate-500/40 bg-slate-500/10 dark:border-slate-400/40 dark:bg-slate-700/30",
-  skipped: "border-socx-border-light bg-socx-cloud-soft/50 dark:border-socx-border-dark dark:bg-socx-panel/40",
-  "flagged-high": "border-rose-500/40 bg-rose-500/10 dark:border-rose-400/40 dark:bg-rose-500/20",
-  "flagged-medium": "border-amber-500/40 bg-amber-500/10 dark:border-amber-400/40 dark:bg-amber-500/20"
+  pending:
+    "border-slate-500/30 bg-slate-500/5 dark:border-slate-400/40 dark:bg-socx-panel/40",
+  clean:
+    "border-emerald-500/30 bg-emerald-500/5 dark:border-emerald-400/30 dark:bg-emerald-500/10",
+  flagged:
+    "border-amber-500/30 bg-amber-500/5 dark:border-amber-400/40 dark:bg-amber-500/10",
+  error:
+    "border-slate-500/40 bg-slate-500/10 dark:border-slate-400/40 dark:bg-slate-700/30",
+  skipped:
+    "border-socx-border-light bg-socx-cloud-soft/50 dark:border-socx-border-dark dark:bg-socx-panel/40",
+  "flagged-high":
+    "border-rose-500/40 bg-rose-500/10 dark:border-rose-400/40 dark:bg-rose-500/20",
+  "flagged-medium":
+    "border-amber-500/40 bg-amber-500/10 dark:border-amber-400/40 dark:bg-amber-500/20"
 }
 
 const SERVICE_STATUS_LABEL: Record<HighlightStatus, string> = {
@@ -74,11 +91,16 @@ type ServiceHighlight = {
   headline: string
   subline: string
   meta?: string
+  details?: ServiceDetail[]
 }
+
+type ServiceDetail = IntelField & { section: string }
 
 type Severity = "low" | "medium" | "high"
 
-const formatDateLabel = (value: string | number | null | undefined): string | null => {
+const formatDateLabel = (
+  value: string | number | null | undefined
+): string | null => {
   if (value === null || value === undefined || value === "") {
     return null
   }
@@ -90,7 +112,7 @@ const formatDateLabel = (value: string | number | null | undefined): string | nu
         ? numeric
         : null
   const date = timestamp
-    ? new Date((timestamp > 10_000_000_000 ? timestamp : timestamp * 1000))
+    ? new Date(timestamp > 10_000_000_000 ? timestamp : timestamp * 1000)
     : new Date(value)
   if (Number.isNaN(date.getTime())) {
     return null
@@ -103,8 +125,45 @@ const getServiceStatus = (entry: BulkCheckSummaryRow, serviceName: string) =>
 
 const SEVERITY_ORDER: Severity[] = ["low", "medium", "high"]
 
+const INTEL_TEXT_TONE: Record<IntelTone, string> = {
+  danger: "text-rose-700 dark:text-rose-300",
+  warning: "text-amber-700 dark:text-amber-300",
+  success: "text-emerald-700 dark:text-emerald-300",
+  neutral: "text-socx-ink dark:text-white"
+}
+
+const INTEL_PILL_TONE: Record<IntelTone, string> = {
+  danger: "bg-rose-500/15 text-rose-800 dark:bg-rose-500/20 dark:text-rose-200",
+  warning:
+    "bg-amber-400/20 text-amber-900 dark:bg-amber-400/15 dark:text-amber-100",
+  success:
+    "bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
+  neutral:
+    "bg-socx-cloud-soft text-socx-ink dark:bg-socx-panel/70 dark:text-white"
+}
+
+const selectIntelDetails = (
+  summary: IntelSummary | null,
+  sectionLimits: Record<string, number>,
+  totalLimit = 8
+): ServiceDetail[] => {
+  if (!summary) return []
+  const details: ServiceDetail[] = []
+  summary.sections.forEach((section) => {
+    if (section.title === "Overview") return
+    const limit = sectionLimits[section.title] ?? 0
+    section.fields.slice(0, limit).forEach((field) => {
+      if (details.length < totalLimit)
+        details.push({ ...field, section: section.title })
+    })
+  })
+  return details
+}
+
 const escalateSeverity = (current: Severity, next: Severity): Severity =>
-  SEVERITY_ORDER[Math.max(SEVERITY_ORDER.indexOf(current), SEVERITY_ORDER.indexOf(next))]
+  SEVERITY_ORDER[
+    Math.max(SEVERITY_ORDER.indexOf(current), SEVERITY_ORDER.indexOf(next))
+  ]
 
 const deriveVirusTotalSeverity = (payload: any): Severity | null => {
   const stats = payload?.data?.attributes?.last_analysis_stats
@@ -144,7 +203,10 @@ const deriveAbuseSeverity = (payload: any): Severity | null => {
   return "low"
 }
 
-const applyServiceSeverity = (base: BulkStatusKind, severity: Severity | null): HighlightStatus => {
+const applyServiceSeverity = (
+  base: BulkStatusKind,
+  severity: Severity | null
+): HighlightStatus => {
   if (!severity || ["pending", "error", "skipped"].includes(base)) {
     return base
   }
@@ -186,7 +248,9 @@ const isAffirmativeFlag = (value: unknown): boolean => {
   return false
 }
 
-const buildVirusTotalHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
+const buildVirusTotalHighlight = (
+  entry: BulkCheckSummaryRow
+): ServiceHighlight => {
   const status = getServiceStatus(entry, "VirusTotal")
   if (!status) {
     return {
@@ -203,7 +267,10 @@ const buildVirusTotalHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight 
       label: "VirusTotal",
       status: "error",
       headline: "Fetch failed",
-      subline: typeof payload.error === "string" ? payload.error : "Unable to retrieve data"
+      subline:
+        typeof payload.error === "string"
+          ? payload.error
+          : "Unable to retrieve data"
     }
   }
 
@@ -214,7 +281,10 @@ const buildVirusTotalHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight 
       label: "VirusTotal",
       status: status.status,
       headline: status.text,
-      subline: status.status === "pending" ? "Awaiting last analysis..." : "No telemetry yet"
+      subline:
+        status.status === "pending"
+          ? "Awaiting last analysis..."
+          : "No telemetry yet"
     }
   }
 
@@ -225,14 +295,30 @@ const buildVirusTotalHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight 
   const total = malicious + suspicious + harmless + undetected
   const scanDate = formatDateLabel(attributes?.last_analysis_date)
 
-  const severityStatus = applyServiceSeverity(status.status, deriveVirusTotalSeverity(payload))
+  const severityStatus = applyServiceSeverity(
+    status.status,
+    deriveVirusTotalSeverity(payload)
+  )
+  const details = selectIntelDetails(
+    buildVirusTotalIntel(payload),
+    {
+      File: 3,
+      "Digital signature": 2,
+      WHOIS: 4,
+      Network: 2,
+      "HTTPS certificate": 2,
+      "Top detections": 2
+    },
+    8
+  )
 
   return {
     label: "VirusTotal",
     status: severityStatus,
     headline: `${malicious} malicious • ${suspicious} suspicious`,
     subline: `${total} engines (${harmless} harmless, ${undetected} undetected)`,
-    meta: scanDate ? `Last scan ${scanDate}` : undefined
+    meta: scanDate ? `Last scan ${scanDate}` : undefined,
+    details
   }
 }
 
@@ -253,7 +339,10 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
       label: "AbuseIPDB",
       status: "error",
       headline: "Fetch failed",
-      subline: typeof payload.error === "string" ? payload.error : "Unable to retrieve data"
+      subline:
+        typeof payload.error === "string"
+          ? payload.error
+          : "Unable to retrieve data"
     }
   }
 
@@ -263,35 +352,50 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
       label: "AbuseIPDB",
       status: status.status,
       headline: status.text,
-      subline: status.status === "pending" ? "Awaiting response..." : "No reports fetched"
+      subline:
+        status.status === "pending"
+          ? "Awaiting response..."
+          : "No reports fetched"
     }
   }
 
   const score = Number(data.abuseConfidenceScore) || 0
   const reports = Number(data.totalReports) || 0
   const lastReported = formatDateLabel(data.lastReportedAt)
-  const location = data.countryCode ? `Country ${data.countryCode}` : "Location unknown"
+  const location = data.countryCode
+    ? `Country ${data.countryCode}`
+    : "Location unknown"
 
-  const severityStatus = applyServiceSeverity(status.status, deriveAbuseSeverity(payload))
+  const severityStatus = applyServiceSeverity(
+    status.status,
+    deriveAbuseSeverity(payload)
+  )
+  const details = selectIntelDetails(
+    buildAbuseIntel(payload),
+    { Network: 5, Signals: 3 },
+    8
+  )
 
   return {
     label: "AbuseIPDB",
     status: severityStatus,
     headline: `${score}% confidence • ${reports} reports`,
     subline: `${location}${data.isp ? ` • ISP ${data.isp}` : ""}`,
-    meta: lastReported ? `Last report ${lastReported}` : undefined
+    meta: lastReported ? `Last report ${lastReported}` : undefined,
+    details
   }
 }
 
 type QuickFact = {
   label: string
   value?: string
-  highlight?: boolean
+  tone?: IntelTone
 }
 
 const CARD_TONE: Record<Severity, string> = {
   low: "border-socx-border-light bg-white/95 dark:border-socx-border-dark dark:bg-socx-panel/60",
-  medium: "border-amber-500/50 bg-white/95 dark:border-amber-400/50 dark:bg-socx-panel/60",
+  medium:
+    "border-amber-500/50 bg-white/95 dark:border-amber-400/50 dark:bg-socx-panel/60",
   high: "border-rose-500/50 bg-white/95 dark:border-rose-400/50 dark:bg-socx-panel/60"
 }
 
@@ -376,7 +480,9 @@ const getSeverityLevel = (entry: BulkCheckSummaryRow): Severity => {
     entry.statusText.toLowerCase().includes("no detection")
 
   if (severity === "low") {
-    const abuseStatus = entry.serviceStatuses.find((service) => service.name === "AbuseIPDB")
+    const abuseStatus = entry.serviceStatuses.find(
+      (service) => service.name === "AbuseIPDB"
+    )
     if (abuseStatus) {
       const scoreMatch = abuseStatus.text.match(/(\d+)%/)
       const reportsMatch = abuseStatus.text.match(/(\d+)\s+reports?/)
@@ -434,31 +540,48 @@ const buildQuickFacts = (entry: BulkCheckSummaryRow): QuickFact[] => {
   const ipapiData = entry.result?.Ipapi?.data ?? entry.result?.Ipapi
   const { proxyPayload, proxyDetections } = extractProxyCheckDetails(entry)
 
-  const addFact = (label: string, value: unknown, options?: { highlight?: boolean }) => {
-    if ((value === null || value === undefined || value === "" || value === "N/A") && !options?.highlight) {
+  const addFact = (
+    label: string,
+    value: unknown,
+    options?: { tone?: IntelTone }
+  ) => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === "" ||
+      value === "N/A"
+    ) {
       return
     }
     const payload: QuickFact = {
       label,
-      ...(value !== undefined && value !== null && value !== "" && value !== "N/A"
+      ...(value !== undefined &&
+      value !== null &&
+      value !== "" &&
+      value !== "N/A"
         ? { value: String(value) }
         : {})
     }
-    if (options?.highlight) {
-      payload.highlight = true
+    if (options?.tone && options.tone !== "neutral") {
+      payload.tone = options.tone
       highlights.push(payload)
     } else {
+      payload.tone = options?.tone ?? "neutral"
       regularFacts.push(payload)
     }
   }
 
-  addFact("Country", abuseData?.countryCode ?? ipapiData?.country_code ?? ipapiData?.country)
+  addFact(
+    "Country",
+    abuseData?.countryCode ?? ipapiData?.country_code ?? ipapiData?.country
+  )
   addFact("ISP", abuseData?.isp ?? ipapiData?.isp)
   addFact(
     "Domain",
     abuseData?.domain ??
       entry.result?.VirusTotal?.data?.attributes?.meaningful_name ??
-      entry.result?.VirusTotal?.data?.attributes?.last_https_certificate?.subject?.CN
+      entry.result?.VirusTotal?.data?.attributes?.last_https_certificate
+        ?.subject?.CN
   )
 
   const vpnService =
@@ -466,16 +589,29 @@ const buildQuickFacts = (entry: BulkCheckSummaryRow): QuickFact[] => {
     (ipapiData?.is_vpn === true ? "Detected" : null) ??
     (proxyDetections?.vpn === true ? "Detected" : null)
   if (vpnService) {
-    addFact("VPN", vpnService, { highlight: true })
+    addFact("VPN", vpnService, { tone: "warning" })
   }
 
   if (ipapiData?.is_tor === true || proxyDetections?.tor === true) {
-    addFact("TOR", "Detected", { highlight: true })
+    addFact("TOR", "Detected", { tone: "warning" })
   }
 
   const proxyValue = proxyPayload?.proxy ?? proxyDetections?.proxy
   if (proxyValue !== undefined) {
-    addFact("Proxy", typeof proxyValue === "boolean" ? (proxyValue ? "Detected" : "Clean") : proxyValue, { highlight: true })
+    const proxyDetected = isAffirmativeFlag(proxyValue)
+    addFact(
+      "Proxy",
+      typeof proxyValue === "boolean"
+        ? proxyValue
+          ? "Detected"
+          : "Not detected"
+        : proxyValue,
+      { tone: proxyDetected ? "warning" : "success" }
+    )
+  }
+
+  if (abuseData?.isWhitelisted === true) {
+    addFact("Whitelisted", "Yes", { tone: "success" })
   }
 
   if (typeof proxyDetections?.risk === "number" && proxyDetections.risk > 0) {
@@ -529,14 +665,19 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
       }
     }
 
-    const highSeverity = iocSummaries.filter((entry) => getSeverityLevel(entry) === "high").length
-    const mediumSeverity = iocSummaries.filter((entry) => getSeverityLevel(entry) === "medium").length
+    const highSeverity = iocSummaries.filter(
+      (entry) => getSeverityLevel(entry) === "high"
+    ).length
+    const mediumSeverity = iocSummaries.filter(
+      (entry) => getSeverityLevel(entry) === "medium"
+    ).length
 
     return { total, flagged, errors, pending, highSeverity, mediumSeverity }
   }, [iocSummaries])
 
   const flaggedNeutralState = useMemo(
-    () => iocStats.flagged === 0 && iocStats.errors === 0 && iocStats.pending === 0,
+    () =>
+      iocStats.flagged === 0 && iocStats.errors === 0 && iocStats.pending === 0,
     [iocStats.errors, iocStats.flagged, iocStats.pending]
   )
 
@@ -553,7 +694,12 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
       return "bg-amber-500/20 text-amber-900 dark:text-amber-100"
     }
     return "bg-amber-500/20 text-amber-900 dark:text-amber-100"
-  }, [flaggedNeutralState, iocStats.flagged, iocStats.highSeverity, iocStats.mediumSeverity])
+  }, [
+    flaggedNeutralState,
+    iocStats.flagged,
+    iocStats.highSeverity,
+    iocStats.mediumSeverity
+  ])
 
   return (
     <div className="min-h-screen bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
@@ -564,7 +710,8 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
           </p>
           <h1 className="mt-1 text-2xl font-semibold">Bulk IOC Check</h1>
           <p className="text-sm text-socx-muted dark:text-socx-muted-dark">
-            Paste any list of indicators, auto-categorize them and launch checks on your preferred services.
+            Paste any list of indicators, auto-categorize them and launch checks
+            on your preferred services.
           </p>
         </header>
 
@@ -602,8 +749,12 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                   { label: "AbuseIPDB", value: dailyCounters.abuse },
                   { label: "ProxyCheck", value: dailyCounters.proxy }
                 ].map((counter) => (
-                  <div key={counter.label} className="rounded-xl border border-dashed border-socx-border-light px-3 py-2 text-center text-sm dark:border-socx-border-dark">
-                    <p className="text-xs text-socx-muted dark:text-socx-muted-dark">{counter.label}</p>
+                  <div
+                    key={counter.label}
+                    className="rounded-xl border border-dashed border-socx-border-light px-3 py-2 text-center text-sm dark:border-socx-border-dark">
+                    <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                      {counter.label}
+                    </p>
                     <p className="text-lg font-semibold">{counter.value}</p>
                   </div>
                 ))}
@@ -700,7 +851,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                     if (formatted) {
                       navigator.clipboard
                         .writeText(formatted)
-                        .then(() => alert("Formatted IOCs copied to clipboard!"))
+                        .then(() =>
+                          alert("Formatted IOCs copied to clipboard!")
+                        )
                         .catch(() => alert("Error copying to clipboard."))
                     } else {
                       alert("No formatted results available to copy.")
@@ -740,7 +893,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                 <p className="text-sm font-semibold">Detected IOC types</p>
                 <div className="flex flex-wrap gap-2 text-xs">
                   {iocTypeSummary.map(({ type, count }) => (
-                    <span key={type} className="rounded-full bg-socx-cloud-soft px-3 py-1 text-socx-ink dark:bg-socx-panel/60 dark:text-white">
+                    <span
+                      key={type}
+                      className="rounded-full bg-socx-cloud-soft px-3 py-1 text-socx-ink dark:bg-socx-panel/60 dark:text-white">
                       {type}: {count}
                     </span>
                   ))}
@@ -749,7 +904,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                   {iocTypeSummary.map(({ type }) => {
                     const checked = ignoredTypes.includes(type)
                     return (
-                      <label key={type} className="flex cursor-pointer items-center justify-between rounded-xl border border-socx-border-light px-3 py-2 text-sm dark:border-socx-border-dark">
+                      <label
+                        key={type}
+                        className="flex cursor-pointer items-center justify-between rounded-xl border border-socx-border-light px-3 py-2 text-sm dark:border-socx-border-dark">
                         <span>{`Ignore ${type}`}</span>
                         <input
                           type="checkbox"
@@ -779,10 +936,13 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
                   IOC results
                 </p>
-                <h2 className="text-xl font-semibold">Realtime intelligence matrix</h2>
+                <h2 className="text-xl font-semibold">
+                  Realtime intelligence matrix
+                </h2>
               </div>
               <span className="text-xs text-socx-muted dark:text-socx-muted-dark">
-                {iocSummaries.length} tracked IOC{iocSummaries.length === 1 ? "" : "s"}
+                {iocSummaries.length} tracked IOC
+                {iocSummaries.length === 1 ? "" : "s"}
               </span>
             </div>
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
@@ -828,22 +988,30 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
 
           {iocSummaries.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-socx-border-light bg-white/60 px-4 py-3 text-sm text-socx-muted dark:border-socx-border-dark dark:bg-socx-panel/40 dark:text-socx-muted-dark">
-              Paste IOCs in the workspace to start tracking their status across services.
+              Paste IOCs in the workspace to start tracking their status across
+              services.
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {iocSummaries.map((entry) => {
                 const severity = getSeverityLevel(entry)
                 const badgeClass = getBadgeClass(entry)
-                const formatted = entry.result ? parseAndFormatResults(entry.result) : ""
+                const formatted = entry.result
+                  ? parseAndFormatResults(entry.result)
+                  : ""
                 const vtHighlight = buildVirusTotalHighlight(entry)
                 const abuseHighlight = buildAbuseHighlight(entry)
                 const quickFacts = buildQuickFacts(entry)
                 const cardTone = CARD_TONE[severity]
-                const flaggedServiceText = entry.serviceStatuses.find((service) => service.status === "flagged")?.text
+                const flaggedServiceText = entry.serviceStatuses.find(
+                  (service) => service.status === "flagged"
+                )?.text
                 const displayStatusText =
                   entry.statusKind === "flagged"
-                    ? flaggedServiceText ?? (severity === "high" ? "High risk indicator" : "Suspicious activity")
+                    ? (flaggedServiceText ??
+                      (severity === "high"
+                        ? "High risk indicator"
+                        : "Suspicious activity"))
                     : entry.statusText
 
                 return (
@@ -855,14 +1023,19 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                         <p className="text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
                           {entry.displayType}
                         </p>
-                        <h3 className="text-lg font-semibold break-words">{entry.ioc}</h3>
+                        <h3 className="text-lg font-semibold break-words">
+                          {entry.ioc}
+                        </h3>
                       </div>
-                      <span className={`rounded-full px-4 py-1 text-xs font-semibold ${badgeClass}`}>
+                      <span
+                        className={`rounded-full px-4 py-1 text-xs font-semibold ${badgeClass}`}>
                         {displayStatusText}
                       </span>
                     </div>
                     {entry.isPending && (
-                      <p className="mt-1 text-xs text-amber-500">Services still running for this IOC…</p>
+                      <p className="mt-1 text-xs text-amber-500">
+                        Services still running for this IOC…
+                      </p>
                     )}
 
                     <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
@@ -891,8 +1064,20 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                             Copy
                           </button>
                         </div>
-                        <pre className="socx-scroll mt-2 whitespace-pre-wrap break-words break-all rounded-xl bg-white/70 px-3 py-2 text-[11px] text-socx-ink dark:bg-socx-panel/70 dark:text-white">
-                          {formatted || "No structured intel yet."}
+                        <pre className="socx-scroll mt-2 whitespace-pre-wrap break-words break-all rounded-xl bg-white/70 px-3 py-2 text-[11px] dark:bg-socx-panel/70">
+                          {formatted ? (
+                            formatted.split("\n").map((line, index) => (
+                              <span
+                                key={`${entry.ioc}-intel-line-${index}`}
+                                className={`block ${INTEL_TEXT_TONE[classifyIntelTextLine(line)]}`}>
+                                {line || " "}
+                              </span>
+                            ))
+                          ) : (
+                            <span className={INTEL_TEXT_TONE.neutral}>
+                              No structured intel yet.
+                            </span>
+                          )}
                         </pre>
                       </div>
 
@@ -909,11 +1094,37 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                                   {SERVICE_STATUS_LABEL[highlight.status]}
                                 </span>
                               </div>
-                              <p className="mt-2 text-sm font-semibold">{highlight.headline}</p>
-                              <p className="text-xs text-socx-muted dark:text-socx-muted-dark">{highlight.subline}</p>
+                              <p className="mt-2 text-sm font-semibold">
+                                {highlight.headline}
+                              </p>
+                              <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                                {highlight.subline}
+                              </p>
                               {highlight.meta && (
-                                <p className="mt-1 text-[11px] text-socx-muted dark:text-socx-muted-dark">{highlight.meta}</p>
+                                <p className="mt-1 text-[11px] text-socx-muted dark:text-socx-muted-dark">
+                                  {highlight.meta}
+                                </p>
                               )}
+                              {highlight.details &&
+                                highlight.details.length > 0 && (
+                                  <dl className="mt-3 space-y-1.5 border-t border-current/10 pt-3 text-xs">
+                                    {highlight.details.map((detail, index) => (
+                                      <div
+                                        key={`${entry.ioc}-${highlight.label}-${detail.section}-${detail.label}-${index}`}
+                                        className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+                                        <dt
+                                          className="truncate text-socx-muted dark:text-socx-muted-dark"
+                                          title={`${detail.section} · ${detail.label}`}>
+                                          {detail.label}
+                                        </dt>
+                                        <dd
+                                          className={`break-words text-right font-medium ${INTEL_TEXT_TONE[detail.tone ?? "neutral"]}`}>
+                                          {detail.value}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                )}
                             </div>
                           ))}
                         </div>
@@ -925,23 +1136,15 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                           {quickFacts.length > 0 ? (
                             <div className="mt-2 flex flex-wrap gap-2 text-xs">
                               {quickFacts.map((fact, index) => {
-                                const highlight = fact.highlight === true
+                                const tone = fact.tone ?? "neutral"
                                 return (
                                   <span
                                     key={`${entry.ioc}-${fact.label}-${index}`}
-                                    title={highlight && fact.value ? fact.value : undefined}
-                                    className={`rounded-full px-3 py-1 ${
-                                      highlight
-                                        ? "bg-amber-400/30 text-amber-900 dark:bg-amber-400/20 dark:text-amber-100"
-                                        : "bg-socx-cloud-soft text-socx-ink dark:bg-socx-panel/70 dark:text-white"
-                                    }`}>
-                                    {highlight ? (
-                                      fact.label
-                                    ) : (
-                                      <>
-                                        <span className="font-semibold">{fact.label}:</span> {fact.value}
-                                      </>
-                                    )}
+                                    className={`rounded-full px-3 py-1 ${INTEL_PILL_TONE[tone]}`}>
+                                    <span className="font-semibold">
+                                      {fact.label}:
+                                    </span>{" "}
+                                    {fact.value}
                                   </span>
                                 )
                               })}
