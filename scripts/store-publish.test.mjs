@@ -138,6 +138,31 @@ describe("store publishers", () => {
     expect(calls.at(-1).url).toMatch(/\/publish$/)
   })
 
+  it("reports the actionable Chrome OAuth error returned by Google", async () => {
+    const archive = await temporaryArchive()
+
+    await expect(
+      publishChromeExtension({
+        credentials: {
+          extId: "extension",
+          clientId: "client",
+          clientSecret: "secret",
+          refreshToken: "expired-refresh-token"
+        },
+        filePath: archive,
+        fetchImpl: async () =>
+          jsonResponse(
+            {
+              error: "invalid_grant",
+              error_description: "Token has been expired or revoked"
+            },
+            400
+          ),
+        log: () => {}
+      })
+    ).rejects.toThrow("invalid_grant: Token has been expired or revoked")
+  })
+
   it("uses the current web-ext submission flow with reviewer source", () => {
     const args = buildFirefoxPublishArguments({
       sourceDirectory: "build/firefox-prod",

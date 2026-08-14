@@ -153,6 +153,10 @@ verified artifacts, and then publishes Chrome, Firefox, and Edge in independent
 jobs. A failure or a long-running Edge submission therefore does not prevent
 the other store jobs from reporting their own result.
 
+Manual runs expose one switch per store. Disable a store when retrying only a
+failed submission; this prevents resubmitting an unchanged version already
+accepted by another store. Tag-triggered releases always publish all stores.
+
 Firefox uses Mozilla's current `web-ext` listed-submission flow and uploads the
 reviewer source archive together with the generated extension. Chrome and Edge
 use the store REST APIs directly so their asynchronous states can be handled

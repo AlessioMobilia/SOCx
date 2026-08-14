@@ -21,7 +21,16 @@ const readResponse = async (response) => {
 const checkedJson = async (action, response) => {
   const body = await readResponse(response)
   if (!response.ok) {
-    const detail = body?.error?.message || body?.message || response.statusText
+    const detail =
+      body?.error?.message ||
+      [
+        typeof body?.error === "string" ? body.error : "",
+        body?.error_description
+      ]
+        .filter(Boolean)
+        .join(": ") ||
+      body?.message ||
+      response.statusText
     throw new Error(
       `${action} failed (${response.status})${detail ? `: ${detail}` : ""}`
     )
