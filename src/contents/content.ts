@@ -20,6 +20,11 @@ import {
 } from "../utility/clipboard"
 import "tippy.js/dist/tippy.css"
 import { Storage } from "@plasmohq/storage"
+import {
+  SELECTION_BUTTONS_KEY,
+  SELECTION_BUTTONS_MESSAGE,
+  resolveSelectionButtonsPreference
+} from "../utility/buttonPreferences"
 
 console.log("[Plasmo] Content script loaded");
 const storage = new Storage({ area: "local" })
@@ -98,8 +103,8 @@ const availableServices = servicesConfig.availableServices as Record<string, str
 
     const refreshFloatingButtonsPreference = async () => {
       try {
-        const storedValue = await storage.get<boolean>("floatingButtonsEnabled")
-        floatingButtonsEnabled = typeof storedValue === "boolean" ? storedValue : true
+        const storedValue = await storage.get<boolean>(SELECTION_BUTTONS_KEY)
+        floatingButtonsEnabled = resolveSelectionButtonsPreference(storedValue)
       } catch {
         floatingButtonsEnabled = true
       }
@@ -115,7 +120,7 @@ const availableServices = servicesConfig.availableServices as Record<string, str
         if (areaName !== "local") {
           return
         }
-        const change = changes["floatingButtonsEnabled"]
+        const change = changes[SELECTION_BUTTONS_KEY]
         if (typeof change?.newValue === "boolean") {
           floatingButtonsEnabled = change.newValue
           console.log("[SOCx] Updated floatingButtonsEnabled to:", floatingButtonsEnabled)
@@ -909,7 +914,7 @@ const availableServices = servicesConfig.availableServices as Record<string, str
         const formattedText = lastValidSelection ? formatSelectedText(lastValidSelection) : ""
         sendResponse({ success: true, formatted: formattedText })
         return false;
-      } else if (message?.type === "floating-buttons-preference-changed") {
+      } else if (message?.type === SELECTION_BUTTONS_MESSAGE) {
         floatingButtonsEnabled = Boolean(message.enabled)
         if (!floatingButtonsEnabled) {
           clearSelectionUI()

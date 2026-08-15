@@ -1,3 +1,7 @@
+import {
+  SELECTION_BUTTONS_MESSAGE,
+  SERVICE_PAGE_COPY_BUTTONS_MESSAGE
+} from "../utility/buttonPreferences"
 import { handleMenuClick } from "./menu-handler"
 import { getContextMenuApi, setupContextMenus } from "./menus"
 
@@ -14,6 +18,10 @@ const manifest = chrome.runtime.getManifest() as chrome.runtime.Manifest & {
 }
 const isFirefox = Boolean(manifest.browser_specific_settings?.gecko)
 let contextMenuSetup = Promise.resolve()
+const buttonPreferenceMessages = new Set([
+  SELECTION_BUTTONS_MESSAGE,
+  SERVICE_PAGE_COPY_BUTTONS_MESSAGE
+])
 
 console.log("Background script loaded")
 
@@ -61,9 +69,10 @@ contextMenuApi.onClicked.addListener((info, tab) => {
 })
 
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type !== "floating-buttons-preference-changed") {
+  if (!buttonPreferenceMessages.has(message?.type)) {
     return
   }
+  const type = message.type
   const enabled = Boolean(message.enabled)
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach((tab) => {
@@ -73,16 +82,13 @@ chrome.runtime.onMessage.addListener((message) => {
       chrome.tabs.sendMessage(
         tab.id,
         {
-          type: "floating-buttons-preference-changed",
+          type,
           enabled
         },
         () => {
           const err = chrome.runtime.lastError
           if (err && !/Receiving end/.test(err.message ?? "")) {
-            console.debug(
-              "Floating button preference broadcast failed:",
-              err.message
-            )
+            console.debug("Button preference broadcast failed:", err.message)
           }
         }
       )

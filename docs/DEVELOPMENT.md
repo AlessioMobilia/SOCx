@@ -211,9 +211,10 @@ Run this matrix on all three browsers before a release:
    SPA and raw-JSON IOC result pages. Confirm the SOCx copy pill adopts readable
    host-page contrast, stays clear of navigation, does not shift page layout,
    follows SPA URL changes, and copies a compact formatted report. Verify table,
-   key/value and fallback extraction, then toggle **Show floating SOCx buttons**
-   and confirm all page-copy controls are removed or restored. Pages without an
-   IOC in their URL must not receive a button.
+   key/value and fallback extraction, then toggle **Show IOC page copy
+   buttons** and confirm all page-copy controls are removed or restored without
+   affecting **Show selection buttons**. Verify the inverse combination as
+   well. Pages without an IOC in their URL must not receive a button.
 10. If file-URL support is part of the release, enable **Allow access to file
     URLs** in Chrome/Edge and test an explicit local HTML file. This user toggle
     cannot be enabled by the extension.

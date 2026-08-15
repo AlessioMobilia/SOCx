@@ -27,6 +27,7 @@ interface OptionsUIProps {
   ipapiEnabled: boolean
   proxyCheckEnabled: boolean
   floatingButtonsEnabled: boolean
+  servicePageCopyButtonsEnabled: boolean
   clipboardSanitizationEnabled: boolean
   selectedServices: { [key: string]: string[] }
   customServices: CustomService[]
@@ -38,6 +39,7 @@ interface OptionsUIProps {
   onIpapiToggle: (value: boolean) => void
   onProxyCheckToggle: (value: boolean) => void
   onFloatingButtonsToggle: (value: boolean) => void
+  onServicePageCopyButtonsToggle: (value: boolean) => void
   onClipboardSanitizationToggle: (value: boolean) => void
   onClearApiCache: () => void
   isClearingApiCache: boolean
@@ -70,6 +72,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   ipapiEnabled,
   proxyCheckEnabled,
   floatingButtonsEnabled,
+  servicePageCopyButtonsEnabled,
   clipboardSanitizationEnabled,
   selectedServices,
   customServices,
@@ -81,6 +84,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   onIpapiToggle,
   onProxyCheckToggle,
   onFloatingButtonsToggle,
+  onServicePageCopyButtonsToggle,
   onClipboardSanitizationToggle,
   onClearApiCache,
   isClearingApiCache,
@@ -173,11 +177,20 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   const interfacePreferences = [
     {
       id: "floatingButtons",
-      label: "Show floating SOCx buttons",
-      helper:
-        "Displays quick actions next to selections and copy buttons on supported IOC services.",
+      label: "Show selection buttons",
+      helper: "Displays quick actions next to selected IOC text.",
       enabled: floatingButtonsEnabled,
       onToggle: () => onFloatingButtonsToggle(!floatingButtonsEnabled),
+      disabled: false
+    },
+    {
+      id: "servicePageCopyButtons",
+      label: "Show IOC page copy buttons",
+      helper:
+        "Displays the SOCx formatted-copy control on supported IOC service pages.",
+      enabled: servicePageCopyButtonsEnabled,
+      onToggle: () =>
+        onServicePageCopyButtonsToggle(!servicePageCopyButtonsEnabled),
       disabled: false
     },
     {

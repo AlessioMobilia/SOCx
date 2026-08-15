@@ -47,7 +47,8 @@ You can install SOCx directly from your browser’s official store:
   Supported IOC result pages expose a compact SOCx copy button that extracts
   useful tables, key/value fields and visible report details without changing
   the host layout. The control follows the host page contrast and accent while
-  remaining identifiable as SOCx.
+  remaining identifiable as SOCx. Selection buttons and service-page copy
+  buttons can be enabled independently from Extension Settings.
 
 - ⚡ **Coordinated provider requests**
   Provider lookups share short queues, transient-error retries, request

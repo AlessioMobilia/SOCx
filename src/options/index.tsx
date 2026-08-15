@@ -13,6 +13,14 @@ import {
   CLIPBOARD_SANITIZATION_KEY,
   DEFAULT_CLIPBOARD_SANITIZATION_ENABLED
 } from "../utility/clipboardSanitization"
+import {
+  SELECTION_BUTTONS_KEY,
+  SELECTION_BUTTONS_MESSAGE,
+  SERVICE_PAGE_COPY_BUTTONS_KEY,
+  SERVICE_PAGE_COPY_BUTTONS_MESSAGE,
+  resolveSelectionButtonsPreference,
+  resolveServicePageCopyButtonsPreference
+} from "../utility/buttonPreferences"
 
 const storage = new Storage({ area: "local" })
 
@@ -29,22 +37,24 @@ const Options = () => {
   const [ipapiEnabled, setIpapiEnabled] = useState(false)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
   const [floatingButtonsEnabled, setFloatingButtonsEnabled] = useState(true)
+  const [servicePageCopyButtonsEnabled, setServicePageCopyButtonsEnabled] =
+    useState(true)
   const [clipboardSanitizationEnabled, setClipboardSanitizationEnabled] =
     useState(DEFAULT_CLIPBOARD_SANITIZATION_ENABLED)
   const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
   const [isClearingApiCache, setIsClearingApiCache] = useState(false)
   const [apiCacheStatus, setApiCacheStatus] = useState("")
-  const notifyFloatingButtonsListeners = useCallback((enabled: boolean) => {
+  const notifyButtonPreferenceListeners = useCallback((type: string, enabled: boolean) => {
     if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
       return
     }
     try {
       chrome.runtime.sendMessage({
-        type: "floating-buttons-preference-changed",
+        type,
         enabled
       })
     } catch (error) {
-      console.warn("Unable to broadcast floating button preference:", error)
+      console.warn("Unable to broadcast button preference:", error)
     }
   }, [])
 
@@ -89,7 +99,8 @@ const Options = () => {
     persistIsDarkMode(isDarkMode)
     storage.set("ipapiEnrichmentEnabled", ipapiEnabled)
     storage.set("proxyCheckEnabled", proxyCheckEnabled)
-    storage.set("floatingButtonsEnabled", floatingButtonsEnabled)
+    storage.set(SELECTION_BUTTONS_KEY, floatingButtonsEnabled)
+    storage.set(SERVICE_PAGE_COPY_BUTTONS_KEY, servicePageCopyButtonsEnabled)
     storage.set(CLIPBOARD_SANITIZATION_KEY, clipboardSanitizationEnabled)
   }, [
     virusTotalApiKey,
@@ -101,6 +112,7 @@ const Options = () => {
     ipapiEnabled,
     proxyCheckEnabled,
     floatingButtonsEnabled,
+    servicePageCopyButtonsEnabled,
     clipboardSanitizationEnabled
   ])
 
@@ -157,7 +169,10 @@ const Options = () => {
       const theme = await ensureIsDarkMode()
       const ipapiSetting = await storage.get("ipapiEnrichmentEnabled")
       const proxySetting = await storage.get("proxyCheckEnabled")
-      const floatingButtonsSetting = await storage.get("floatingButtonsEnabled")
+      const floatingButtonsSetting = await storage.get(SELECTION_BUTTONS_KEY)
+      const servicePageCopyButtonsSetting = await storage.get(
+        SERVICE_PAGE_COPY_BUTTONS_KEY
+      )
       const clipboardSanitizationSetting = await storage.get(
         CLIPBOARD_SANITIZATION_KEY
       )
@@ -189,9 +204,16 @@ const Options = () => {
       const nextIpapiEnabled = nextProxyEnabled ? false : persistedIpapi
       setProxyCheckEnabled(nextProxyEnabled)
       setIpapiEnabled(nextIpapiEnabled)
-      const shouldShowFloatingButtons =
-        typeof floatingButtonsSetting === "boolean" ? floatingButtonsSetting : true
+      const shouldShowFloatingButtons = resolveSelectionButtonsPreference(
+        floatingButtonsSetting
+      )
       setFloatingButtonsEnabled(shouldShowFloatingButtons)
+      setServicePageCopyButtonsEnabled(
+        resolveServicePageCopyButtonsPreference(
+          servicePageCopyButtonsSetting,
+          floatingButtonsSetting
+        )
+      )
       setClipboardSanitizationEnabled(
         typeof clipboardSanitizationSetting === "boolean"
           ? clipboardSanitizationSetting
@@ -322,7 +344,12 @@ const Options = () => {
 
   const handleFloatingButtonsToggle = (value: boolean) => {
     setFloatingButtonsEnabled(value)
-    notifyFloatingButtonsListeners(value)
+    notifyButtonPreferenceListeners(SELECTION_BUTTONS_MESSAGE, value)
+  }
+
+  const handleServicePageCopyButtonsToggle = (value: boolean) => {
+    setServicePageCopyButtonsEnabled(value)
+    notifyButtonPreferenceListeners(SERVICE_PAGE_COPY_BUTTONS_MESSAGE, value)
   }
 
   const handleClearApiCache = async () => {
@@ -360,6 +387,7 @@ const Options = () => {
       selectedServices={selectedServices}
       customServices={customServices}
       floatingButtonsEnabled={floatingButtonsEnabled}
+      servicePageCopyButtonsEnabled={servicePageCopyButtonsEnabled}
       clipboardSanitizationEnabled={clipboardSanitizationEnabled}
       onDarkModeToggle={() => setIsDarkMode((prev) => !prev)}
       onServiceChange={handleServiceChange}
@@ -369,6 +397,7 @@ const Options = () => {
       onIpapiToggle={handleIpapiToggle}
       onProxyCheckToggle={handleProxyCheckToggle}
       onFloatingButtonsToggle={handleFloatingButtonsToggle}
+      onServicePageCopyButtonsToggle={handleServicePageCopyButtonsToggle}
       onClipboardSanitizationToggle={setClipboardSanitizationEnabled}
       onClearApiCache={handleClearApiCache}
       isClearingApiCache={isClearingApiCache}

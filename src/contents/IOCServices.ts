@@ -2,6 +2,12 @@ import type { PlasmoCSConfig } from "plasmo"
 
 import { Storage } from "@plasmohq/storage"
 
+import {
+  resolveServicePageCopyButtonsPreference,
+  SELECTION_BUTTONS_KEY,
+  SERVICE_PAGE_COPY_BUTTONS_KEY,
+  SERVICE_PAGE_COPY_BUTTONS_MESSAGE
+} from "../utility/buttonPreferences"
 import { writeIntelClipboardText } from "../utility/clipboard"
 import {
   mountServiceCopyButton,
@@ -107,7 +113,14 @@ const syncButton = (): void => {
 
 const start = async (): Promise<void> => {
   try {
-    enabled = (await storage.get<boolean>("floatingButtonsEnabled")) !== false
+    const preferences = await storage.getMany([
+      SERVICE_PAGE_COPY_BUTTONS_KEY,
+      SELECTION_BUTTONS_KEY
+    ])
+    enabled = resolveServicePageCopyButtonsPreference(
+      preferences[SERVICE_PAGE_COPY_BUTTONS_KEY],
+      preferences[SELECTION_BUTTONS_KEY]
+    )
   } catch {
     enabled = true
   }
@@ -117,8 +130,18 @@ const start = async (): Promise<void> => {
 
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type !== "floating-buttons-preference-changed") return
+    if (message?.type !== SERVICE_PAGE_COPY_BUTTONS_MESSAGE) return
     enabled = message.enabled !== false
+    syncButton()
+  })
+}
+
+if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") return
+    const change = changes[SERVICE_PAGE_COPY_BUTTONS_KEY]
+    if (typeof change?.newValue !== "boolean") return
+    enabled = change.newValue
     syncButton()
   })
 }
