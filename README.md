@@ -50,7 +50,8 @@ You can install SOCx directly from your browser’s official store:
   pages that do not expose enough recognized data. The control follows the host
   page contrast and accent while remaining identifiable as SOCx. Selection
   buttons and service-page copy buttons can be enabled independently from
-  Extension Settings.
+  Extension Settings. The audited provider/source matrix is documented in
+  [`docs/SERVICE_PAGE_EXTRACTION.md`](docs/SERVICE_PAGE_EXTRACTION.md).
 
 - ⚡ **Coordinated provider requests**
   Provider lookups share short queues, transient-error retries, request

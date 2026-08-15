@@ -22,6 +22,7 @@ import {
   formatServicePageReport,
   isServicePageReady
 } from "../utility/servicePageIntel"
+import { servicePageParserSupport } from "../utility/servicePageParsers"
 import { showToast } from "../utility/toast"
 
 export const config: PlasmoCSConfig = {
@@ -74,6 +75,7 @@ let mountedPageKey = ""
 const copyCurrentPage = async (page: ResolvedServicePage): Promise<boolean> => {
   const currentPage = resolveServicePage(window.location.href)
   if (!currentPage || currentPage.adapter.id !== page.adapter.id) return false
+  if (!servicePageParserSupport[currentPage.adapter.id]?.supported) return false
 
   const fields = extractServicePageFields(currentPage)
   if (fields.length === 0) {
@@ -95,9 +97,13 @@ const copyCurrentPage = async (page: ResolvedServicePage): Promise<boolean> => {
 }
 
 const syncButton = (): void => {
-  const page =
+  const resolvedPage =
     enabled && isServicePageReady()
       ? resolveServicePage(window.location.href)
+      : null
+  const page =
+    resolvedPage && servicePageParserSupport[resolvedPage.adapter.id]?.supported
+      ? resolvedPage
       : null
   const pageKey = page ? `${page.adapter.id}:${page.ioc}` : ""
   const existingHost = document.querySelector("[data-socx-service-copy]")

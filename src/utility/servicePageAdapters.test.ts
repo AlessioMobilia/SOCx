@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import { resolveServicePage, servicePageAdapters } from "./servicePageAdapters"
-import { parserProviderIds } from "./servicePageParsers"
+import {
+  parserProviderIds,
+  servicePageParserSupport
+} from "./servicePageParsers"
 
 describe("IOC service page adapters", () => {
   it.each([
@@ -54,5 +57,32 @@ describe("IOC service page adapters", () => {
     expect([...parserProviderIds].sort()).toEqual(
       servicePageAdapters.map(({ id }) => id).sort()
     )
+    expect(Object.keys(servicePageParserSupport).sort()).toEqual(
+      servicePageAdapters.map(({ id }) => id).sort()
+    )
+  })
+
+  it("disables extraction on aggregate or unverifiable result pages", () => {
+    expect(
+      [
+        "Censys",
+        "PassiveDNS",
+        "Hunter",
+        "SecurityTrails",
+        "UrlScan",
+        "HaveIBeenPwned",
+        "WiresharkOUI",
+        "GreyNoise",
+        "MalwareBazaar",
+        "Robtex",
+        "Tria_ge",
+        "ThreatFox",
+        "CiscoTalos",
+        "URLhaus",
+        "Spamhaus",
+        "ThreatMiner",
+        "CTSearch"
+      ].every((id) => servicePageParserSupport[id]?.supported === false)
+    ).toBe(true)
   })
 })

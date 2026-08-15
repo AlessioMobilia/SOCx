@@ -64,6 +64,8 @@ isolated host-aware control in `serviceCopyButton`. Every page adapter must have
 an explicit parser contract with recognized labels and a minimum useful result;
 never fall back to headings, summaries or arbitrary visible text. Keep the
 button fixed and inside Shadow DOM so host layouts and styles remain unaffected.
+The current provider-by-provider audit and exact extraction sources are tracked
+in [`SERVICE_PAGE_EXTRACTION.md`](SERVICE_PAGE_EXTRACTION.md).
 
 Only add a page adapter when the destination URL identifies the investigated
 IOC. Generic search pages and landing pages, currently Google and PhishTank,
