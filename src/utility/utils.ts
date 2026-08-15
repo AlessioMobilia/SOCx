@@ -245,8 +245,11 @@ export const copyToClipboard = async (text: string): Promise<void> => {
       body: { text: text }
     })
     console.log("Response from content script:", response)
-
-    showNotification("Done", "IOC copied to clipboard")
+    if (response?.success) {
+      showNotification("Done", "IOC copied to clipboard")
+    } else {
+      showNotification("Error", "IOC not copied to clipboard")
+    }
   } catch (err) {
     showNotification("Error", "IOC not copied to clipboard")
     //console.error("Error copying to clipboard:", err)

@@ -12,7 +12,7 @@ import {
   type IntelTone
 } from "../utility/intelFormatting"
 import { parseAndFormatResults } from "../utility/utils"
-import { prepareIntelClipboardText } from "../utility/clipboardSanitization"
+import { writeIntelClipboardText } from "../utility/clipboard"
 import type { BulkCheckSummaryRow, BulkStatusKind } from "./bulk-check.types"
 
 interface BulkCheckUIProps {
@@ -756,12 +756,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                       .join("\n")
 
                     if (formatted) {
-                      navigator.clipboard
-                        .writeText(await prepareIntelClipboardText(formatted))
-                        .then(() =>
-                          alert("Formatted IOCs copied to clipboard!")
-                        )
-                        .catch(() => alert("Error copying to clipboard."))
+                      await writeIntelClipboardText(formatted, {
+                        successMessage: "✔️ Formatted IOCs copied to clipboard"
+                      })
                     } else {
                       alert("No formatted results available to copy.")
                     }
@@ -957,15 +954,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                               if (!formatted) {
                                 return
                               }
-                              if (!navigator?.clipboard?.writeText) {
-                                alert("Clipboard access is not available.")
-                                return
-                              }
-                              navigator.clipboard
-                                .writeText(
-                                  await prepareIntelClipboardText(formatted)
-                                )
-                                .catch(() => alert("Unable to copy raw intel."))
+                              await writeIntelClipboardText(formatted, {
+                                successMessage: "✔️ Raw intelligence copied"
+                              })
                             }}
                             disabled={!formatted}
                             className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-2.5 py-1 text-[11px] font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-socx-border-dark">

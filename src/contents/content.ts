@@ -14,7 +14,10 @@ import { servicesConfig } from "../utility/servicesConfig"
 import { createButton, createMagicButton } from "../utility/buttonFactory"
 import { createTooltip } from "../utility/tooltipFactory"
 import { estimateCaretRect } from "../utility/caret"
-import { prepareIntelClipboardText } from "../utility/clipboardSanitization"
+import {
+  writeClipboardText,
+  writeIntelClipboardText
+} from "../utility/clipboard"
 import "tippy.js/dist/tippy.css"
 import { Storage } from "@plasmohq/storage"
 
@@ -732,9 +735,7 @@ const availableServices = servicesConfig.availableServices as Record<string, str
               : baseInfo
 
           await createTooltip(baseInfo, button, ipSignals, type)
-          await navigator.clipboard.writeText(
-            await prepareIntelClipboardText(baseInfo)
-          )
+          await writeIntelClipboardText(baseInfo)
           if (!(await saveIOC(type, ioc))) {
             showNotification("Error", "Failed to save the IOC")
           }
@@ -889,39 +890,16 @@ const availableServices = servicesConfig.availableServices as Record<string, str
         console.log("Received copy-to-clipboard message:", message)
         const text = message.body?.text
         if (typeof text === "string") {
-          navigator.clipboard.writeText(text)
-            .then(() => {
-              sendResponse({ success: true })
+          writeClipboardText(text, { silent: true }).then((result) => {
+            sendResponse({
+              success: result.success,
+              fallback: result.method === "exec-command",
+              error:
+                result.error instanceof Error
+                  ? result.error.message
+                  : result.error
             })
-            .catch((err) => {
-              console.warn("Primary clipboard API failed, trying fallback:", err)
-
-              // Fallback method using execCommand
-              try {
-                const textarea = document.createElement("textarea")
-                textarea.value = text
-                textarea.style.position = "fixed"
-                textarea.style.top = "-1000px"
-                textarea.style.opacity = "0"
-                document.body.appendChild(textarea)
-                textarea.focus()
-                textarea.select()
-
-                const success = document.execCommand("copy")
-                document.body.removeChild(textarea)
-
-                sendResponse({
-                  success,
-                  fallback: true
-                })
-              } catch (fallbackErr) {
-                console.error("Clipboard fallback also failed:", fallbackErr)
-                sendResponse({
-                  success: false,
-                  error: fallbackErr.message
-                })
-              }
-            })
+          })
 
           return true // Keep channel open for async response
         } else {

@@ -1,5 +1,5 @@
 import type { PlasmoCSConfig } from "plasmo"
-import { prepareIntelClipboardText } from "../utility/clipboardSanitization"
+import { writeIntelClipboardText } from "../utility/clipboard"
 import { showToast } from "../utility/utils"
 
 export const config: PlasmoCSConfig = {
@@ -84,13 +84,7 @@ function createCopyButton() {
   button.addEventListener("click", async () => {
     const info = extractAndFormatInfo()
     if (info) {
-      navigator.clipboard
-        .writeText(await prepareIntelClipboardText(info))
-        .then(() => showToast("✔️ Copied to clipboard"))
-        .catch((err) => {
-          console.error("Clipboard error:", err)
-          showToast("❌ Failed to copy", "danger")
-        })
+      await writeIntelClipboardText(info)
     } else {
       showToast("❌ No information found", "warning")
     }

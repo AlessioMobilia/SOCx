@@ -19,7 +19,7 @@ import {
   isPrivateIP
 } from "../utility/utils"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
-import { prepareIntelClipboardText } from "../utility/clipboardSanitization"
+import { writeIntelClipboardText } from "../utility/clipboard"
 
 type SubnetCheckResult = {
   reportedCount?: number
@@ -45,9 +45,6 @@ const clampConfidenceInput = (value: number): number => {
 
 const getTodayDateString = (): string => new Date().toISOString().split("T")[0]
 const getAbuseDailyKey = (): string => `Abuse_${getTodayDateString()}`
-
-const hasClipboardAccess = (): boolean =>
-  typeof navigator !== "undefined" && Boolean(navigator.clipboard?.writeText)
 
 const applyDocumentTheme = (isDarkMode: boolean): void => {
   if (typeof document === "undefined") {
@@ -402,21 +399,16 @@ const SubnetCheck = () => {
       return
     }
 
-    if (!hasClipboardAccess()) {
-      setMessage("Clipboard access is not available in this context.")
-      return
-    }
-
     try {
       const payload = formatSubnetCheckClipboard(summarizedResults)
       if (!payload) {
         setMessage("There are no results to copy yet.")
         return
       }
-      await navigator.clipboard.writeText(
-        await prepareIntelClipboardText(payload)
-      )
-      setMessage("Subnet report copied to clipboard.")
+      await writeIntelClipboardText(payload, {
+        onSuccess: () => setMessage("Subnet report copied to clipboard."),
+        onError: () => setMessage("Unable to copy the subnet report.")
+      })
     } catch (error) {
       console.error("Copy failed:", error)
       setMessage("Unable to copy the subnet report.")

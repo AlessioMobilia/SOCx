@@ -17,6 +17,7 @@ import {
 } from "../utility/utils"
 import type { ExtractedIPMap } from "../utility/utils"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
+import { writeClipboardText } from "../utility/clipboard"
 
 type SubnetSummary = {
   subnet: string
@@ -355,10 +356,15 @@ const SubnetExtractor = () => {
     }
 
     try {
-      await navigator.clipboard.writeText(subnetExportPayload)
-      setStatus({
-        variant: "success",
-        message: "Subnet list copied to clipboard."
+      await writeClipboardText(subnetExportPayload, {
+        onSuccess: () => setStatus({
+          variant: "success",
+          message: "Subnet list copied to clipboard."
+        }),
+        onError: () => setStatus({
+          variant: "danger",
+          message: "Unable to copy the subnet list."
+        })
       })
     } catch (error) {
       console.error("Copy failed:", error)
@@ -430,10 +436,15 @@ const SubnetExtractor = () => {
   const handleCopySingle = async (entry: SubnetSummary) => {
     try {
       const payload = `${entry.subnet} (IPv${entry.version})\n${entry.ips.join("\n")}`
-      await navigator.clipboard.writeText(payload)
-      setStatus({
-        variant: "success",
-        message: `${entry.subnet} copied to clipboard.`
+      await writeClipboardText(payload, {
+        onSuccess: () => setStatus({
+          variant: "success",
+          message: `${entry.subnet} copied to clipboard.`
+        }),
+        onError: () => setStatus({
+          variant: "danger",
+          message: "Unable to copy the selected subnet."
+        })
       })
     } catch (error) {
       console.error("Copy failed:", error)
@@ -455,10 +466,15 @@ const SubnetExtractor = () => {
     }
 
     try {
-      await navigator.clipboard.writeText(list.join("\n"))
-      setStatus({
-        variant: "success",
-        message: `IPv${family === "ipv4" ? 4 : 6} subnet list copied.`
+      await writeClipboardText(list.join("\n"), {
+        onSuccess: () => setStatus({
+          variant: "success",
+          message: `IPv${family === "ipv4" ? 4 : 6} subnet list copied.`
+        }),
+        onError: () => setStatus({
+          variant: "danger",
+          message: "Unable to copy the subnet list."
+        })
       })
     } catch (error) {
       console.error("Copy failed:", error)
