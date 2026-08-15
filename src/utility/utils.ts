@@ -12,6 +12,9 @@ import {
   getVirusTotalSignatureFields
 } from "./intelFormatting"
 import { formatSmartSelection } from "./smartFormatting"
+import { showToast } from "./toast"
+
+export { showToast } from "./toast"
 
 // Defang e Refang
 export const defang = (text: string): string => {
@@ -167,47 +170,6 @@ export const showNotification = (title: string, message: string): void => {
     // ✅ Fallback finale: console
     console.log(`[NOTIFY] ${title}: ${message}`)
   }
-}
-
-export const showToast = (message: string, variant: string = "primary") => {
-  let container = document.getElementById("socx-toast-container")
-  if (!container) {
-    container = document.createElement("div")
-    container.id = "socx-toast-container"
-    container.style.position = "fixed"
-    container.style.bottom = "20px"
-    container.style.right = "20px"
-    container.style.zIndex = "9999"
-    container.style.display = "flex"
-    container.style.flexDirection = "column"
-    container.style.gap = "8px"
-    document.body.appendChild(container)
-  }
-
-  const toast = document.createElement("div")
-  toast.className = `socx-toast socx-toast--${variant}`
-  toast.setAttribute("role", "alert")
-  toast.setAttribute("aria-live", "assertive")
-  toast.setAttribute("aria-atomic", "true")
-
-  const messageElement = document.createElement("div")
-  messageElement.className = "socx-toast__message"
-  messageElement.textContent = message
-
-  const closeButton = document.createElement("button")
-  closeButton.className = "socx-toast__close"
-  closeButton.type = "button"
-  closeButton.setAttribute("aria-label", "Close")
-  closeButton.textContent = "×"
-  closeButton.addEventListener("click", () => toast.remove())
-
-  toast.append(messageElement, closeButton)
-
-  container.appendChild(toast)
-
-  setTimeout(() => {
-    toast.remove()
-  }, 3000)
 }
 
 const storage = new Storage({ area: "local" })

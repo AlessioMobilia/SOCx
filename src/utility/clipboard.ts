@@ -1,5 +1,5 @@
 import { prepareIntelClipboardText } from "./clipboardSanitization"
-import { showToast } from "./utils"
+import { showToast } from "./toast"
 
 export type ClipboardWriteMethod = "clipboard-api" | "exec-command"
 

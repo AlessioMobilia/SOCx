@@ -1,6 +1,6 @@
 import type { PlasmoCSConfig } from "plasmo"
 import { writeIntelClipboardText } from "../utility/clipboard"
-import { showToast } from "../utility/utils"
+import { showToast } from "../utility/toast"
 
 export const config: PlasmoCSConfig = {
   matches: ["https://www.abuseipdb.com/check/*"],

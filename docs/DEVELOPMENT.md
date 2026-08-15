@@ -176,7 +176,9 @@ Run this matrix on all three browsers before a release:
    grid selected with and without its header, a two-column property table, CEF
    or logfmt text, URLs, timestamps, and IPv6. Confirm clipboard fallbacks work
    when the page Clipboard API is unavailable. Confirm the shared fallback and
-   success/error feedback work from Bulk Check and both subnet tools.
+   success/error feedback work from Bulk Check and both subnet tools. Toasts
+   must remain readable on light/dark host pages, stay above SOCx overlays, and
+   fit narrow popup viewports without inheriting host-page button styles.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
    list. Confirm errors remain per IOC and do not abort the queue. For VT files,
    verify capped aliases and valid/invalid/unsigned signature states; for
