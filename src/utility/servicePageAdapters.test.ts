@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { resolveServicePage } from "./servicePageAdapters"
+import { resolveServicePage, servicePageAdapters } from "./servicePageAdapters"
+import { parserProviderIds } from "./servicePageParsers"
 
 describe("IOC service page adapters", () => {
   it.each([
@@ -47,5 +48,11 @@ describe("IOC service page adapters", () => {
   it("ignores unsupported pages and service landing pages without an IOC", () => {
     expect(resolveServicePage("https://example.com/check/8.8.8.8")).toBeNull()
     expect(resolveServicePage("https://www.virustotal.com/gui/home")).toBeNull()
+  })
+
+  it("has an explicit parser contract for every page adapter", () => {
+    expect([...parserProviderIds].sort()).toEqual(
+      servicePageAdapters.map(({ id }) => id).sort()
+    )
   })
 })

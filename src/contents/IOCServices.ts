@@ -22,6 +22,7 @@ import {
   formatServicePageReport,
   isServicePageReady
 } from "../utility/servicePageIntel"
+import { showToast } from "../utility/toast"
 
 export const config: PlasmoCSConfig = {
   matches: [
@@ -75,10 +76,16 @@ const copyCurrentPage = async (page: ResolvedServicePage): Promise<boolean> => {
   if (!currentPage || currentPage.adapter.id !== page.adapter.id) return false
 
   const fields = extractServicePageFields(currentPage)
+  if (fields.length === 0) {
+    showToast(
+      `Nessun dato strutturato disponibile su ${currentPage.adapter.label}`,
+      "warning"
+    )
+    return false
+  }
   const report = formatServicePageReport({
     page: currentPage,
-    fields,
-    sourceUrl: window.location.href
+    fields
   })
   const result = await writeIntelClipboardText(report, {
     successMessage: `✔️ ${currentPage.adapter.label} data copied`,
@@ -103,6 +110,12 @@ const syncButton = (): void => {
   }
 
   if (pageKey === mountedPageKey && existingHost) return
+  if (extractServicePageFields(page).length === 0) {
+    mountedButton?.remove()
+    mountedButton = null
+    mountedPageKey = ""
+    return
+  }
   mountedButton?.remove()
   mountedButton = mountServiceCopyButton({
     page,
