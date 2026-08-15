@@ -4,6 +4,7 @@ declare module "@plasmohq/messaging" {
   interface MessagesMetadata {
     "check-bulk-iocs": {}
     "check-subnet-abuse": {}
+    "clear-api-cache": {}
     "magic-ioc-request": {}
   }
 }

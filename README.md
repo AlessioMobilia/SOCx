@@ -41,6 +41,11 @@ You can install SOCx directly from your browser’s official store:
   investigation context. Clipboard copies defang active indicators by default;
   this behavior can be disabled from Extension Settings.
 
+- ⚡ **Coordinated provider requests**
+  Provider lookups share short queues, transient-error retries, request
+  deduplication, and a two-minute response cache. The cache can be cleared at
+  any time from Extension Settings.
+
 - ✨ **Smart selection formatting**
   Selected EDR, SIEM, OSINT, JSON, CEF, logfmt, key/value, CSV, HTML table, and
   ARIA grid data can be normalized for copying. Partial table selections reuse

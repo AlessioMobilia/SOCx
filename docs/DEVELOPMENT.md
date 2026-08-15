@@ -166,14 +166,17 @@ Run this matrix on all three browsers before a release:
    manifest or background-console errors.
 2. Open the popup, toggle the theme, clear history, and open Options.
 3. Save VirusTotal and AbuseIPDB keys, reopen Options, and confirm that storage
-   persists.
+   persists. Run the same lookup twice within two minutes and confirm the daily
+   counter only increases for the first network request. Use **Clear cache** in
+   Options and confirm the next lookup reaches the provider again.
 4. Select an IP, domain, URL, hash, email, and CVE on an HTTPS page. Confirm
    the SOCx context menus and floating buttons appear and open the expected
    service URLs.
 5. Test refang, defang, CVE copy, and key/value formatting. Include an EDR/SIEM
    grid selected with and without its header, a two-column property table, CEF
    or logfmt text, URLs, timestamps, and IPv6. Confirm clipboard fallbacks work
-   when the page Clipboard API is unavailable.
+   when the page Clipboard API is unavailable. Confirm the shared fallback and
+   success/error feedback work from Bulk Check and both subnet tools.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
    list. Confirm errors remain per IOC and do not abort the queue. For VT files,
    verify capped aliases and valid/invalid/unsigned signature states; for

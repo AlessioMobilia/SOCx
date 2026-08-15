@@ -8,32 +8,6 @@ console.log("[Plasmo] check-bulk-iocs handler loaded")
 
 
 const storage = new Storage({ area: "local" })
-const VT_LIMIT_PER_MINUTE = 4
-const VT_WINDOW_MS = 60_000
-let vtWindowStart = 0
-let vtRequestsInWindow = 0
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const respectVirusTotalRateLimit = async () => {
-  const now = Date.now()
-  if (vtWindowStart === 0 || now - vtWindowStart >= VT_WINDOW_MS) {
-    vtWindowStart = now
-    vtRequestsInWindow = 0
-  }
-
-  if (vtRequestsInWindow >= VT_LIMIT_PER_MINUTE) {
-    const waitTime = VT_WINDOW_MS - (now - vtWindowStart)
-    if (waitTime > 0) {
-      await sleep(waitTime)
-    }
-    vtWindowStart = Date.now()
-    vtRequestsInWindow = 0
-  }
-
-  vtRequestsInWindow += 1
-}
-
 const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
   try {
     console.log("[Plasmo] check-bulk-iocs handler triggered")
@@ -116,7 +90,6 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       if (services.includes("VirusTotal") && type !== "MAC") {
         const vtTask = (async () => {
           try {
-            await respectVirusTotalRateLimit()
             const vtData = await checkVirusTotal(ioc, type)
             result.VirusTotal = vtData ?? { error: "Not found on VirusTotal", ioc }
           } catch (err) {

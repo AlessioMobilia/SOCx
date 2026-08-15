@@ -12,6 +12,7 @@ import {
 import { servicesConfig } from "../utility/servicesConfig"
 import { supportedIOCTypes, type IOCType, type CustomService } from "../utility/iocTypes"
 import { CheckCircleIcon } from "@heroicons/react/24/solid"
+import { API_CACHE_TTL_MINUTES } from "../utility/apiCacheConfig"
 
 interface OptionsUIProps {
   isDarkMode: boolean
@@ -33,6 +34,9 @@ interface OptionsUIProps {
   onProxyCheckToggle: (value: boolean) => void
   onFloatingButtonsToggle: (value: boolean) => void
   onClipboardSanitizationToggle: (value: boolean) => void
+  onClearApiCache: () => void
+  isClearingApiCache: boolean
+  apiCacheStatus: string
   onTestKeys: () => void
   onAddCustomService: (s: CustomService) => void
   onRemoveCustomService: (index: number) => void
@@ -73,6 +77,9 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   onProxyCheckToggle,
   onFloatingButtonsToggle,
   onClipboardSanitizationToggle,
+  onClearApiCache,
+  isClearingApiCache,
+  apiCacheStatus,
   onTestKeys,
   onAddCustomService,
   onRemoveCustomService,
@@ -320,6 +327,30 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+          <div className="md:col-span-2 space-y-3">
+            <p className={labelClass}>API response cache</p>
+            <div className="flex flex-col gap-3 rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold">Short-lived lookup cache</p>
+                <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                  Successful provider responses expire after {API_CACHE_TTL_MINUTES} minutes.
+                </p>
+                {apiCacheStatus && (
+                  <p className="mt-1 text-xs text-socx-muted dark:text-socx-muted-dark" aria-live="polite">
+                    {apiCacheStatus}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClearApiCache}
+                disabled={isClearingApiCache}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-danger hover:text-socx-danger disabled:cursor-not-allowed disabled:opacity-50 dark:border-socx-border-dark dark:text-white">
+                <MdDelete />
+                {isClearingApiCache ? "Clearing..." : "Clear cache"}
+              </button>
             </div>
           </div>
         </section>

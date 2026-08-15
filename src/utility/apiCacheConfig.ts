@@ -1,0 +1,2 @@
+export const API_CACHE_TTL_MS = 2 * 60 * 1000
+export const API_CACHE_TTL_MINUTES = API_CACHE_TTL_MS / 60_000

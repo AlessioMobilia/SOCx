@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
+import { sendToBackground } from "@plasmohq/messaging"
 import OptionsUI from "./OptionsUI"
 import "../styles/tailwind.css"
 import { defaultServices } from "../utility/defaultServices"
@@ -31,6 +32,8 @@ const Options = () => {
   const [clipboardSanitizationEnabled, setClipboardSanitizationEnabled] =
     useState(DEFAULT_CLIPBOARD_SANITIZATION_ENABLED)
   const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
+  const [isClearingApiCache, setIsClearingApiCache] = useState(false)
+  const [apiCacheStatus, setApiCacheStatus] = useState("")
   const notifyFloatingButtonsListeners = useCallback((enabled: boolean) => {
     if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
       return
@@ -322,6 +325,30 @@ const Options = () => {
     notifyFloatingButtonsListeners(value)
   }
 
+  const handleClearApiCache = async () => {
+    setIsClearingApiCache(true)
+    setApiCacheStatus("Clearing cached responses...")
+    try {
+      const response = await sendToBackground<
+        Record<string, never>,
+        { success?: boolean }
+      >({
+        name: "clear-api-cache",
+        body: {}
+      })
+      setApiCacheStatus(
+        response?.success
+          ? "API response cache cleared."
+          : "Unable to clear the API response cache."
+      )
+    } catch (error) {
+      console.error("Unable to clear the API response cache:", error)
+      setApiCacheStatus("Unable to clear the API response cache.")
+    } finally {
+      setIsClearingApiCache(false)
+    }
+  }
+
   return (
     <OptionsUI
       isDarkMode={isDarkMode}
@@ -343,6 +370,9 @@ const Options = () => {
       onProxyCheckToggle={handleProxyCheckToggle}
       onFloatingButtonsToggle={handleFloatingButtonsToggle}
       onClipboardSanitizationToggle={setClipboardSanitizationEnabled}
+      onClearApiCache={handleClearApiCache}
+      isClearingApiCache={isClearingApiCache}
+      apiCacheStatus={apiCacheStatus}
       onTestKeys={handleTestKeys}
       onAddCustomService={handleAddCustomService}
       onRemoveCustomService={handleRemoveCustomService}

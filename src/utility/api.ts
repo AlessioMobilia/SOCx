@@ -1,6 +1,66 @@
 import { Storage } from "@plasmohq/storage"
+import {
+  apiRequestCoordinator,
+  ApiRequestError,
+  type ApiProvider
+} from "./requestCoordinator"
 
 const storage = new Storage({ area: "local" })
+
+const parseRetryAfterMs = (response: Response): number | undefined => {
+  const value = response.headers.get("Retry-After")
+  if (!value) return undefined
+  const seconds = Number(value)
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000)
+  const retryDate = new Date(value).getTime()
+  return Number.isNaN(retryDate)
+    ? undefined
+    : Math.max(0, retryDate - Date.now())
+}
+
+const readErrorDetails = async (response: Response): Promise<string> => {
+  try {
+    const text = await response.text()
+    return text || response.statusText
+  } catch {
+    return response.statusText
+  }
+}
+
+const fetchProviderJson = <T>({
+  provider,
+  cacheKey,
+  url,
+  init,
+  counterName,
+  notFoundAsNull = false
+}: {
+  provider: ApiProvider
+  cacheKey: string
+  url: string
+  init: RequestInit
+  counterName: string
+  notFoundAsNull?: boolean
+}): Promise<T | null> =>
+  apiRequestCoordinator.run({
+    provider,
+    cacheKey,
+    request: async () => {
+      const response = await fetch(url, init)
+      if (notFoundAsNull && response.status === 404) return null
+      if (!response.ok) {
+        const details = await readErrorDetails(response)
+        throw new ApiRequestError(
+          `${provider} API error (${response.status}): ${details}`,
+          response.status,
+          parseRetryAfterMs(response)
+        )
+      }
+      const payload = (await response.json()) as T
+      await incrementDailyCounter(counterName)
+      return payload
+    }
+  })
 
 const base64UrlId = (value: string): string => {
   const encodeWithBrowser = (): string | null => {
@@ -64,38 +124,28 @@ export const checkVirusTotal = async (ioc: string, type: string): Promise<any> =
       throw new Error(`Unsupported IOC type for VirusTotal: ${type}`)
   }
 
-  return fetchAPIVT(url, apiKey)
+  return fetchAPIVT(url, apiKey, `${type.toLowerCase()}:${ioc}`)
 }
 
-export const fetchAPIVT = async (url: string, apiKey: string): Promise<any | null> => {
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      accept: "application/json",
-      "x-apikey": apiKey
-    }
+export const fetchAPIVT = (
+  url: string,
+  apiKey: string,
+  cacheKey = url
+): Promise<any | null> =>
+  fetchProviderJson({
+    provider: "VirusTotal",
+    cacheKey,
+    url,
+    init: {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "x-apikey": apiKey
+      }
+    },
+    counterName: "VT",
+    notFoundAsNull: true
   })
-
-  if (!response.ok) {
-    if (response.status === 404) {
-      console.warn("Hash not found on VirusTotal.")
-      return null
-    }
-
-    let errorDetails = ""
-    try {
-      const errorJson = await response.json()
-      errorDetails = JSON.stringify(errorJson, null, 2)
-    } catch (e) {
-      errorDetails = await response.text()
-    }
-
-    throw new Error(`API Error (${response.status}): ${response.statusText}\nDetails:\n${errorDetails}`)
-  }
-
-  await incrementDailyCounter("VT")
-  return response.json()
-}
 
 // ---------------- ABUSEIPDB ----------------
 
@@ -106,7 +156,7 @@ export const checkAbuseIPDB = async (ioc: string): Promise<any> => {
   }
 
   const url = `https://api.abuseipdb.com/api/v2/check?ipAddress=${encodeURIComponent(ioc)}`
-  return fetchAPIAbuse(url, apiKey)
+  return fetchAPIAbuse(url, apiKey, `ip:${ioc}`)
 }
 
 type AbuseSubnetOptions = {
@@ -132,68 +182,50 @@ export const checkAbuseIPDBSubnet = async (
     url.searchParams.set("confidenceMinimum", String(options.confidenceMinimum))
   }
 
-  return fetchAPIAbuse(url.toString(), apiKey)
+  return fetchAPIAbuse(
+    url.toString(),
+    apiKey,
+    `subnet:${subnet}:${options.maxAgeInDays ?? "default"}:${options.confidenceMinimum ?? "default"}`
+  )
 }
 
-export const fetchAPIAbuse = async (url: string, apiKey: string): Promise<any> => {
-  try {
-    const response = await fetch(url, {
+export const fetchAPIAbuse = (
+  url: string,
+  apiKey: string,
+  cacheKey = url
+): Promise<any> =>
+  fetchProviderJson({
+    provider: "AbuseIPDB",
+    cacheKey,
+    url,
+    init: {
       method: "GET",
       headers: {
         Accept: "application/json",
         Key: apiKey
       }
-    })
-
-    await incrementDailyCounter("Abuse")
-
-    if (!response.ok) {
-      let errorDetails = response.statusText
-      try {
-        const text = await response.text()
-        if (text) {
-          errorDetails = text
-        }
-      } catch (err) {
-        console.warn("Unable to read AbuseIPDB error body:", err)
-      }
-      throw new Error(`API Request Error (${response.status}): ${errorDetails}`)
-    }
-
-    return response.json()
-  } catch (error) {
-    console.error("Error during API request:", error)
-    throw error
-  }
-}
+    },
+    counterName: "Abuse"
+  })
 
 // ---------------- IPAPI ----------------
 
 export const checkIpapi = async (ioc: string): Promise<any> => {
   const url = `https://api.ipapi.is/?q=${encodeURIComponent(ioc)}`
-  return fetchIpapi(url)
+  return fetchIpapi(url, `ip:${ioc}`)
 }
 
-const fetchIpapi = async (url: string): Promise<any> => {
-  try {
-    const response = await fetch(url, {
+const fetchIpapi = (url: string, cacheKey: string): Promise<any> =>
+  fetchProviderJson({
+    provider: "IPAPI",
+    cacheKey,
+    url,
+    init: {
       method: "GET",
-      headers: {
-        Accept: "application/json"
-      }
-    })
-
-    if (!response.ok) {
-      throw new Error(`IPAPI Request Error: ${response.statusText}`)
-    }
-
-    await incrementDailyCounter("IPAPI")
-    return response.json()
-  } catch (error) {
-    console.error("Error during IPAPI request:", error)
-    throw error
-  }
-}
+      headers: { Accept: "application/json" }
+    },
+    counterName: "IPAPI"
+  })
 
 // ---------------- PROXYCHECK ----------------
 
@@ -213,29 +245,20 @@ export const checkProxyCheck = async (ioc: string): Promise<any> => {
   })
 
   const url = `https://proxycheck.io/v3/${encodeURIComponent(ioc)}?${params.toString()}`
-  return fetchProxyCheck(url)
+  return fetchProxyCheck(url, `ip:${ioc}`)
 }
 
-const fetchProxyCheck = async (url: string): Promise<any> => {
-  try {
-    const response = await fetch(url, {
+const fetchProxyCheck = (url: string, cacheKey: string): Promise<any> =>
+  fetchProviderJson({
+    provider: "ProxyCheck",
+    cacheKey,
+    url,
+    init: {
       method: "GET",
-      headers: {
-        Accept: "application/json"
-      }
-    })
-
-    if (!response.ok) {
-      throw new Error(`ProxyCheck Request Error: ${response.statusText}`)
-    }
-
-    await incrementDailyCounter("PROXYCHECK")
-    return response.json()
-  } catch (error) {
-    console.error("Error during ProxyCheck request:", error)
-    throw error
-  }
-}
+      headers: { Accept: "application/json" }
+    },
+    counterName: "PROXYCHECK"
+  })
 
 // ---------------- COUNTERS ----------------
 
