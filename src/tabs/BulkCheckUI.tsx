@@ -7,12 +7,14 @@ import {
 } from "@heroicons/react/24/outline"
 import React, { useMemo } from "react"
 
+import { writeIntelClipboardText } from "../utility/clipboard"
 import {
   classifyIntelTextLine,
+  getNvdCve,
+  getNvdCvss,
   type IntelTone
 } from "../utility/intelFormatting"
 import { parseAndFormatResults } from "../utility/utils"
-import { writeIntelClipboardText } from "../utility/clipboard"
 import type { BulkCheckSummaryRow, BulkStatusKind } from "./bulk-check.types"
 
 interface BulkCheckUIProps {
@@ -37,6 +39,7 @@ interface BulkCheckUIProps {
   dailyCounters: {
     vt: number
     abuse: number
+    nvd: number
     proxy: number
   }
   iocSummaries: BulkCheckSummaryRow[]
@@ -152,6 +155,16 @@ const deriveAbuseSeverity = (payload: any): Severity | null => {
   if (abuseScore >= 20 || totalReports > 0) {
     return "medium"
   }
+  return "low"
+}
+
+const deriveNvdSeverity = (payload: any): Severity | null => {
+  const cve = getNvdCve(payload)
+  if (!cve) return null
+  if (cve.cisaExploitAdd) return "high"
+  const score = getNvdCvss(payload)?.score ?? 0
+  if (score >= 7) return "high"
+  if (score >= 4) return "medium"
   return "low"
 }
 
@@ -293,6 +306,40 @@ const buildAbuseHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
   }
 }
 
+const buildNvdHighlight = (entry: BulkCheckSummaryRow): ServiceHighlight => {
+  const status = getServiceStatus(entry, "NVD")
+  if (!status) {
+    return { label: "NVD", status: "skipped", headline: "Not selected" }
+  }
+  const payload = entry.result?.NVD
+  if (payload?.error) {
+    return {
+      label: "NVD",
+      status: "error",
+      headline:
+        typeof payload.error === "string" ? payload.error : "Fetch failed"
+    }
+  }
+  const cve = getNvdCve(payload)
+  const cvss = getNvdCvss(payload)
+  if (!cve) {
+    return {
+      label: "NVD",
+      status: status.status,
+      headline:
+        status.status === "pending" ? "Awaiting CVE data..." : status.text
+    }
+  }
+  const headline = cvss
+    ? `CVSS ${cvss.score.toFixed(1)} ${cvss.severity || "unrated"}${cve.cisaExploitAdd ? " • CISA KEV" : ""}`
+    : `${cve.vulnStatus || "Record found"}${cve.cisaExploitAdd ? " • CISA KEV" : ""}`
+  return {
+    label: "NVD",
+    status: applyServiceSeverity(status.status, deriveNvdSeverity(payload)),
+    headline
+  }
+}
+
 type QuickFact = {
   label: string
   value?: string
@@ -309,11 +356,13 @@ const CARD_TONE: Record<Severity, string> = {
 const getSeverityLevel = (entry: BulkCheckSummaryRow): Severity => {
   const vt = entry.result?.VirusTotal
   const abuse = entry.result?.AbuseIPDB
+  const nvd = entry.result?.NVD
   const ipapiData = entry.result?.Ipapi?.data ?? entry.result?.Ipapi
   const { proxyPayload, proxyDetections } = extractProxyCheckDetails(entry)
 
   let vtLevel: Severity = deriveVirusTotalSeverity(vt) ?? "low"
   let abuseLevel: Severity = deriveAbuseSeverity(abuse) ?? "low"
+  const nvdLevel: Severity = deriveNvdSeverity(nvd) ?? "low"
   let proxyLevel: Severity = "low"
   let ipapiLevel: Severity = "low"
 
@@ -378,6 +427,7 @@ const getSeverityLevel = (entry: BulkCheckSummaryRow): Severity => {
   }
 
   let severity: Severity = escalateSeverity(vtLevel, abuseLevel)
+  severity = escalateSeverity(severity, nvdLevel)
   severity = escalateSeverity(severity, proxyLevel)
   severity = escalateSeverity(severity, ipapiLevel)
 
@@ -407,7 +457,8 @@ const getSeverityLevel = (entry: BulkCheckSummaryRow): Severity => {
     severity = "medium"
   }
 
-  const hasPrimaryHigh = vtLevel === "high" || abuseLevel === "high"
+  const hasPrimaryHigh =
+    vtLevel === "high" || abuseLevel === "high" || nvdLevel === "high"
   if (!hasPrimaryHigh && severity === "high") {
     severity = "medium"
   }
@@ -444,6 +495,9 @@ const buildQuickFacts = (entry: BulkCheckSummaryRow): QuickFact[] => {
   const highlights: QuickFact[] = []
   const regularFacts: QuickFact[] = []
   const abuseData = entry.result?.AbuseIPDB?.data
+  const nvdData = entry.result?.NVD
+  const nvdCve = getNvdCve(nvdData)
+  const nvdCvss = getNvdCvss(nvdData)
   const ipapiData = entry.result?.Ipapi?.data ?? entry.result?.Ipapi
   const { proxyPayload, proxyDetections } = extractProxyCheckDetails(entry)
 
@@ -475,6 +529,27 @@ const buildQuickFacts = (entry: BulkCheckSummaryRow): QuickFact[] => {
     } else {
       payload.tone = options?.tone ?? "neutral"
       regularFacts.push(payload)
+    }
+  }
+
+  if (nvdCve) {
+    addFact(
+      "CVSS",
+      nvdCvss
+        ? `${nvdCvss.score.toFixed(1)} ${nvdCvss.severity || "unrated"}`
+        : null,
+      {
+        tone:
+          (nvdCvss?.score ?? 0) >= 7
+            ? "danger"
+            : (nvdCvss?.score ?? 0) >= 4
+              ? "warning"
+              : "neutral"
+      }
+    )
+    addFact("Status", nvdCve.vulnStatus)
+    if (nvdCve.cisaExploitAdd) {
+      addFact("CISA KEV", `Since ${nvdCve.cisaExploitAdd}`, { tone: "danger" })
     }
   }
 
@@ -642,7 +717,7 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
             </div>
             <textarea
               className="socx-scroll h-72 w-full rounded-2xl border border-socx-border-light bg-white/95 px-4 py-3 text-sm text-socx-ink outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white"
-              placeholder="Paste IPs, domains, hashes, emails, URLs..."
+              placeholder="Paste IPs, domains, hashes, emails, URLs, CVEs..."
               value={textareaValue}
               onChange={onTextAreaChange}
             />
@@ -650,10 +725,11 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
                 Daily counters
               </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="mt-3 grid gap-3 sm:grid-cols-4">
                 {[
                   { label: "VirusTotal", value: dailyCounters.vt },
                   { label: "AbuseIPDB", value: dailyCounters.abuse },
+                  { label: "NVD", value: dailyCounters.nvd },
                   { label: "ProxyCheck", value: dailyCounters.proxy }
                 ].map((counter) => (
                   <div
@@ -776,7 +852,7 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                 Services
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {["VirusTotal", "AbuseIPDB"].map((service) => {
+                {["VirusTotal", "AbuseIPDB", "NVD"].map((service) => {
                   const checked = selectedServices.includes(service)
                   return (
                     <button
@@ -905,6 +981,7 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                   : ""
                 const vtHighlight = buildVirusTotalHighlight(entry)
                 const abuseHighlight = buildAbuseHighlight(entry)
+                const nvdHighlight = buildNvdHighlight(entry)
                 const quickFacts = buildQuickFacts(entry)
                 const cardTone = CARD_TONE[severity]
                 const flaggedServiceText = entry.serviceStatuses.find(
@@ -983,22 +1060,24 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
 
                       <div className="space-y-3">
                         <div className="space-y-3">
-                          {[vtHighlight, abuseHighlight].map((highlight) => (
-                            <div
-                              key={`${entry.ioc}-${highlight.label}`}
-                              className={`rounded-2xl border ${SERVICE_CARD_TONE[highlight.status]} p-4`}>
-                              <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
-                                <span>{highlight.label}</span>
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SERVICE_STATUS_PILL[highlight.status]}`}>
-                                  {SERVICE_STATUS_LABEL[highlight.status]}
-                                </span>
+                          {[vtHighlight, abuseHighlight, nvdHighlight].map(
+                            (highlight) => (
+                              <div
+                                key={`${entry.ioc}-${highlight.label}`}
+                                className={`rounded-2xl border ${SERVICE_CARD_TONE[highlight.status]} p-4`}>
+                                <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
+                                  <span>{highlight.label}</span>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SERVICE_STATUS_PILL[highlight.status]}`}>
+                                    {SERVICE_STATUS_LABEL[highlight.status]}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-sm font-semibold">
+                                  {highlight.headline}
+                                </p>
                               </div>
-                              <p className="mt-2 text-sm font-semibold">
-                                {highlight.headline}
-                              </p>
-                            </div>
-                          ))}
+                            )
+                          )}
                         </div>
 
                         <div className="rounded-2xl border border-dashed border-socx-border-light px-4 py-3 dark:border-socx-border-dark">

@@ -13,7 +13,7 @@ const IPV6_PATTERN =
   /(?<![0-9a-f:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:\/(?:12[0-8]|1[01]\d|\d?\d))?(?![0-9a-f:])/gi
 
 const INTEL_FIELD_PATTERN =
-  /^(\s*(?:-\s*)?(?:IOC(?:\s*\(defanged\))?|IP|Domain|Hostnames?|Network|Certificate Subject|Range|Source|Detail):\s*)(.*)$/i
+  /^(\s*(?:-\s*)?(?:IOC(?:\s*\(defanged\))?|IP|Domain|Hostnames?|Network|Certificate Subject|Range|Source|Detail|Links?|References?|Description|Required action|Affected products):\s*)(.*)$/i
 const REPORT_HEADING_PATTERN = /^(\s*##\s+)(.*)$/
 
 const isValidIpv4 = (value: string): boolean =>

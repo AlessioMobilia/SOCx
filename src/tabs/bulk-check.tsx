@@ -1,18 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+
 import { sendToBackground } from "@plasmohq/messaging"
 import { Storage } from "@plasmohq/storage"
 
 import BulkCheckUI from "./BulkCheckUI"
+
 import "../styles/tailwind.css"
+
+import { getNvdCve, getNvdCvss } from "../utility/intelFormatting"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 import {
-  extractIOCs,
   exportResultsByEngine,
   exportResultsToExcel,
+  extractIOCs,
   identifyIOC,
   uniqueStrings
 } from "../utility/utils"
-import type { BulkCheckSummaryRow, BulkServiceStatus, BulkStatusKind } from "./bulk-check.types"
+import type {
+  BulkCheckSummaryRow,
+  BulkServiceStatus,
+  BulkStatusKind
+} from "./bulk-check.types"
 
 type IOCSummary = Record<string, string[]>
 type BulkCheckResults = Record<string, any>
@@ -66,7 +74,10 @@ const applyDocumentTheme = (isDark: boolean) => {
   document.body.className = isDark ? "dark-mode" : "light-mode"
 }
 
-const canServiceHandleType = (service: string, rawType: string | null): boolean => {
+const canServiceHandleType = (
+  service: string,
+  rawType: string | null
+): boolean => {
   if (!rawType) {
     return false
   }
@@ -74,7 +85,10 @@ const canServiceHandleType = (service: string, rawType: string | null): boolean 
     return rawType === "IP"
   }
   if (service === "VirusTotal") {
-    return rawType !== "MAC"
+    return ["IP", "Domain", "URL", "Hash"].includes(rawType)
+  }
+  if (service === "NVD") {
+    return rawType === "CVE"
   }
   return true
 }
@@ -99,7 +113,10 @@ const describeVirusTotalPayload = (payload: any): BulkServiceStatus => {
   return {
     name: "VirusTotal",
     status: "clean",
-    text: benignSignals > 0 ? `${benignSignals} engines no detections` : "No detections"
+    text:
+      benignSignals > 0
+        ? `${benignSignals} engines no detections`
+        : "No detections"
   }
 }
 
@@ -121,6 +138,23 @@ const describeAbusePayload = (payload: any): BulkServiceStatus => {
   }
 }
 
+const describeNvdPayload = (payload: any): BulkServiceStatus => {
+  const cve = getNvdCve(payload)
+  if (!cve) {
+    return { name: "NVD", status: "error", text: "CVE not found in the NVD" }
+  }
+  const cvss = getNvdCvss(payload)
+  const kev = Boolean(cve.cisaExploitAdd)
+  const detail = cvss
+    ? `CVSS ${cvss.score.toFixed(1)} ${cvss.severity || "unrated"}`
+    : cve.vulnStatus || "Record found"
+  return {
+    name: "NVD",
+    status: kev || (cvss?.score ?? 0) > 0 ? "flagged" : "clean",
+    text: kev ? `${detail} • CISA KEV` : detail
+  }
+}
+
 const buildServiceStatus = (
   service: string,
   payload: Record<string, any> | undefined,
@@ -131,7 +165,9 @@ const buildServiceStatus = (
     const text =
       service === "AbuseIPDB"
         ? "Works with public IP addresses only"
-        : "Type not supported for this service"
+        : service === "NVD"
+          ? "Works with CVE identifiers only"
+          : "Type not supported for this service"
     return {
       name: service,
       status: "skipped",
@@ -159,7 +195,10 @@ const buildServiceStatus = (
     return {
       name: service,
       status: "error",
-      text: typeof servicePayload.error === "string" ? servicePayload.error : "Unable to fetch data"
+      text:
+        typeof servicePayload.error === "string"
+          ? servicePayload.error
+          : "Unable to fetch data"
     }
   }
 
@@ -169,6 +208,10 @@ const buildServiceStatus = (
 
   if (service === "AbuseIPDB") {
     return describeAbusePayload(servicePayload)
+  }
+
+  if (service === "NVD") {
+    return describeNvdPayload(servicePayload)
   }
 
   return {
@@ -214,7 +257,9 @@ const deriveRowStatus = (
     }
   }
 
-  const flaggedStatus = serviceStatuses.find((entry) => entry.status === "flagged")
+  const flaggedStatus = serviceStatuses.find(
+    (entry) => entry.status === "flagged"
+  )
   if (flaggedStatus) {
     return {
       statusKind: "flagged",
@@ -222,7 +267,10 @@ const deriveRowStatus = (
     }
   }
 
-  if (serviceStatuses.length > 0 && serviceStatuses.every((entry) => entry.status === "skipped")) {
+  if (
+    serviceStatuses.length > 0 &&
+    serviceStatuses.every((entry) => entry.status === "skipped")
+  ) {
     return {
       statusKind: "skipped",
       statusText: "Services not applicable"
@@ -255,7 +303,12 @@ const BulkCheck = () => {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [proxyCheckEnabled, setProxyCheckEnabled] = useState(false)
   const [themeLoaded, setThemeLoaded] = useState(false)
-  const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
+  const [dailyCounters, setDailyCounters] = useState({
+    vt: 0,
+    abuse: 0,
+    nvd: 0,
+    proxy: 0
+  })
   const [servicesInUse, setServicesInUse] = useState<string[]>([])
   const [pendingIocs, setPendingIocs] = useState<string[]>([])
   const iocSummaryRef = useRef<IOCSummary>({})
@@ -265,6 +318,7 @@ const BulkCheck = () => {
     return {
       vt: `VT_${today}`,
       abuse: `Abuse_${today}`,
+      nvd: `NVD_${today}`,
       proxy: `PROXYCHECK_${today}`
     }
   }, [])
@@ -275,11 +329,15 @@ const BulkCheck = () => {
     }
     const keys = getCounterKeys()
     const values = await new Promise<Record<string, unknown>>((resolve) => {
-      chrome.storage.local.get([keys.vt, keys.abuse, keys.proxy], (items) => resolve(items))
+      chrome.storage.local.get(
+        [keys.vt, keys.abuse, keys.nvd, keys.proxy],
+        (items) => resolve(items)
+      )
     })
     setDailyCounters({
       vt: Number(values[keys.vt]) || 0,
       abuse: Number(values[keys.abuse]) || 0,
+      nvd: Number(values[keys.nvd]) || 0,
       proxy: Number(values[keys.proxy]) || 0
     })
   }, [getCounterKeys])
@@ -288,16 +346,20 @@ const BulkCheck = () => {
     (summary: IOCSummary, ignores: string[]) => {
       const ignoreSet = new Set(ignores)
       const hasIp = Boolean(summary["IP"]?.length) && !ignoreSet.has("IP")
-      const hasOther = Object.entries(summary).some(
-        ([type, values]) => type !== "IP" && values.length > 0 && !ignoreSet.has(type)
+      const hasVtType = ["IP", "Domain", "URL", "Hash"].some(
+        (type) => Boolean(summary[type]?.length) && !ignoreSet.has(type)
       )
+      const hasCve = Boolean(summary["CVE"]?.length) && !ignoreSet.has("CVE")
 
       const nextServices: string[] = []
-      if (hasOther) {
+      if (hasVtType) {
         nextServices.push("VirusTotal")
       }
       if (hasIp) {
         nextServices.push("AbuseIPDB")
+      }
+      if (hasCve) {
+        nextServices.push("NVD")
       }
 
       setSelectedServices(nextServices)
@@ -317,12 +379,19 @@ const BulkCheck = () => {
     if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
       return
     }
-    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+    const listener: Parameters<
+      typeof chrome.storage.onChanged.addListener
+    >[0] = (changes, area) => {
       if (area !== "local") {
         return
       }
       const keys = getCounterKeys()
-      if (changes[keys.vt] || changes[keys.abuse] || changes[keys.proxy]) {
+      if (
+        changes[keys.vt] ||
+        changes[keys.abuse] ||
+        changes[keys.nvd] ||
+        changes[keys.proxy]
+      ) {
         refreshDailyCounters()
       }
     }
@@ -372,7 +441,10 @@ const BulkCheck = () => {
 
       const reader = new FileReader()
       reader.onload = (loadEvent) => {
-        const text = typeof loadEvent.target?.result === "string" ? loadEvent.target.result : ""
+        const text =
+          typeof loadEvent.target?.result === "string"
+            ? loadEvent.target.result
+            : ""
         setTextareaValue(text)
         updateIOCsFromText(text)
       }
@@ -406,24 +478,31 @@ const BulkCheck = () => {
     if (unique.length === 0) {
       setMessage("No valid IOCs detected in the provided text.")
     } else {
-      setMessage(`Detected ${unique.length} unique IOC${unique.length === 1 ? "" : "s"}.`)
+      setMessage(
+        `Detected ${unique.length} unique IOC${unique.length === 1 ? "" : "s"}.`
+      )
     }
     refreshDailyCounters()
   }, [applyExtractionResult, refreshDailyCounters, textareaValue])
 
-  const handleServiceToggle = useCallback((service: string, checked: boolean) => {
-    setSelectedServices((prev) => {
-      if (checked) {
-        return prev.includes(service) ? prev : [...prev, service]
-      }
-      return prev.filter((entry) => entry !== service)
-    })
-  }, [])
+  const handleServiceToggle = useCallback(
+    (service: string, checked: boolean) => {
+      setSelectedServices((prev) => {
+        if (checked) {
+          return prev.includes(service) ? prev : [...prev, service]
+        }
+        return prev.filter((entry) => entry !== service)
+      })
+    },
+    []
+  )
 
   const handleTypeToggle = useCallback(
     (type: string) => {
       setIgnoredTypes((prev) => {
-        const next = prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type]
+        const next = prev.includes(type)
+          ? prev.filter((item) => item !== type)
+          : [...prev, type]
         applyIgnoreFilter(next)
         return next
       })
@@ -478,14 +557,16 @@ const BulkCheck = () => {
     setIsLoading(true)
 
     const hasVirusTotal = selectedCopy.includes("VirusTotal")
-    const otherServices = selectedCopy.filter((service) => service !== "VirusTotal")
+    const otherServices = selectedCopy.filter(
+      (service) => service !== "VirusTotal"
+    )
     const generalQueue = otherServices.length > 0 ? requestList : []
     const generalServices = otherServices
 
     const vtEligibleList = hasVirusTotal
       ? requestList.filter((entry) => {
           const type = identifyIOC(entry)
-          return Boolean(type) && type !== "MAC"
+          return Boolean(type) && ["IP", "Domain", "URL", "Hash"].includes(type)
         })
       : []
     const vtQueue = hasVirusTotal ? requestList : []
@@ -500,7 +581,8 @@ const BulkCheck = () => {
 
     for (const ioc of requestList) {
       const type = identifyIOC(ioc)
-      const isVtEligible = Boolean(type) && type !== "MAC"
+      const isVtEligible =
+        Boolean(type) && ["IP", "Domain", "URL", "Hash"].includes(type!)
       const vtCount = hasVirusTotal && isVtEligible ? 1 : 0
       const generalCount = generalServices.length > 0 ? 1 : 0
       const totalGroups = vtCount + generalCount
@@ -521,7 +603,9 @@ const BulkCheck = () => {
     let completedCount = totalIocs - pendingTracker.size
     let hadFailures = false
 
-    setMessage(`Bulk check in progress${vtNote} – ${completedCount}/${totalIocs}`)
+    setMessage(
+      `Bulk check in progress${vtNote} – ${completedCount}/${totalIocs}`
+    )
 
     const updateResultsForIoc = (ioc: string, payload: Record<string, any>) => {
       setResults((prev) => {
@@ -545,7 +629,9 @@ const BulkCheck = () => {
         pendingTracker.delete(ioc)
         setPendingIocs(Array.from(pendingTracker.keys()))
         completedCount += 1
-        setMessage(`Bulk check in progress${vtNote} – ${completedCount}/${totalIocs}`)
+        setMessage(
+          `Bulk check in progress${vtNote} – ${completedCount}/${totalIocs}`
+        )
       } else {
         pendingTracker.set(ioc, remaining)
       }
@@ -606,7 +692,9 @@ const BulkCheck = () => {
         runQueue(generalQueue, generalServices, 8),
         runQueue(vtQueue, hasVirusTotal ? ["VirusTotal"] : [], 4)
       ])
-      setMessage(hadFailures ? "Check completed with some errors." : "Check completed!")
+      setMessage(
+        hadFailures ? "Check completed with some errors." : "Check completed!"
+      )
     } catch (error) {
       console.error("Bulk check failed:", error)
       setMessage("Error during bulk check.")
@@ -641,7 +729,8 @@ const BulkCheck = () => {
         if (typeof bulkProxySetting === "boolean") {
           setProxyCheckEnabled(bulkProxySetting)
         } else {
-          const hasProxyKey = typeof proxyKey === "string" && proxyKey.trim().length > 0
+          const hasProxyKey =
+            typeof proxyKey === "string" && proxyKey.trim().length > 0
           const shouldEnableProxyCheck = proxySetting === true && hasProxyKey
           setProxyCheckEnabled(shouldEnableProxyCheck)
         }
@@ -671,8 +760,13 @@ const BulkCheck = () => {
     if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
       return
     }
-    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
-      if (area === "local" && Object.prototype.hasOwnProperty.call(changes, "isDarkMode")) {
+    const listener: Parameters<
+      typeof chrome.storage.onChanged.addListener
+    >[0] = (changes, area) => {
+      if (
+        area === "local" &&
+        Object.prototype.hasOwnProperty.call(changes, "isDarkMode")
+      ) {
         const next = changes.isDarkMode?.newValue
         if (typeof next === "boolean") {
           setIsDarkMode(next)
@@ -719,7 +813,10 @@ const BulkCheck = () => {
     })
   }, [activeServices, iocList, pendingIocs, results])
 
-  const iocTypeSummary = useMemo(() => buildTypeSummary(iocSummary), [iocSummary])
+  const iocTypeSummary = useMemo(
+    () => buildTypeSummary(iocSummary),
+    [iocSummary]
+  )
 
   return (
     <BulkCheckUI

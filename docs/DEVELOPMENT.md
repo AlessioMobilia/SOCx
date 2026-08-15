@@ -181,13 +181,15 @@ Run this matrix on all three browsers before a release:
 1. Install the unpacked or temporary production build and confirm there are no
    manifest or background-console errors.
 2. Open the popup, toggle the theme, clear history, and open Options.
-3. Save VirusTotal and AbuseIPDB keys, reopen Options, and confirm that storage
-   persists. Run the same lookup twice within two minutes and confirm the daily
+3. Save VirusTotal and AbuseIPDB keys plus an optional NVD key, reopen Options,
+   and confirm that storage persists. Also confirm that an NVD lookup works with
+   the key left empty. Run the same lookup twice within two minutes and confirm the daily
    counter only increases for the first network request. Use **Clear cache** in
    Options and confirm the next lookup reaches the provider again.
 4. Select an IP, domain, URL, hash, email, and CVE on an HTTPS page. Confirm
    the SOCx context menus and floating buttons appear and open the expected
-   service URLs.
+   service URLs. A CVE must show the dedicated NVD API button and copy a report
+   containing only fields returned by the API.
 5. Test refang, defang, CVE copy, and key/value formatting. Include an EDR/SIEM
    grid selected with and without its header, a two-column property table, CEF
    or logfmt text, URLs, timestamps, and IPv6. Confirm clipboard fallbacks work
@@ -205,7 +207,9 @@ Run this matrix on all three browsers before a release:
    **Sanitize copied intelligence** in Options and confirm they are copied in
    active form. In the right-hand summary, provider cards must show only their
    risk verdict/counts; contextual fields belong in the result text and the
-   capped **Quick facts** list.
+   capped **Quick facts** list. Include lowercase and uppercase duplicate CVEs;
+   confirm they normalize to one identifier, auto-select NVD, and expose CVSS,
+   CWE, affected products, references, and CISA KEV fields only when present.
 7. Test IPv4 and IPv6 subnet extraction, private subnets, invalid prefixes, the
    AbuseIPDB subnet flow, clipboard export, and spreadsheet export.
 8. Open Field Notes from the popup. Chrome and Edge must open `sidePanel`;

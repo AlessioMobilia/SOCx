@@ -2,7 +2,7 @@
 
 **SOCx** is the essential extension for security analysts, digital investigators, and **OSINT (Open-Source Intelligence)** enthusiasts. Designed to accelerate and centralize the verification of **IOC (Indicators of Compromise)**, SOCx allows you to perform in-depth checks directly from your browser in just a few clicks.
 
-With integration of leading services like **VirusTotal**, **AbuseIPDB**, **Censys**, **Shodan**, **AlienVault**, **MxToolbox**, and many others, SOCx offers a powerful, convenient, and entirely **privacy-first** solution.
+With integration of leading services like **VirusTotal**, **AbuseIPDB**, **NVD**, **Censys**, **Shodan**, **AlienVault**, **MxToolbox**, and many others, SOCx offers a powerful, convenient, and entirely **privacy-first** solution.
 
 🔗 **Official Website**: [socx.alessiomobilia.com](http://socx.alessiomobilia.com/)
 
@@ -21,7 +21,8 @@ You can install SOCx directly from your browser’s official store:
 ## ✨ Key Features
 
 - 🔍 **Instant IOC Check**
-  Quickly analyze IPs, domains, URLs, hashes, emails, ASN, MAC addresses, and more.
+  Quickly analyze IPs, domains, URLs, hashes, emails, ASN, MAC addresses, CVE
+  identifiers, and more.
 
 - 📘 **Guided user workflow**
   A dedicated wiki with step‑by‑step examples, tips, and best practices for non‑technical users is available in the [SOCx wiki](https://github.com/AlessioMobilia/SOCx/wiki).
@@ -37,10 +38,11 @@ You can install SOCx directly from your browser’s official store:
   directly to the OSINT providers configured by the user.
 
 - 🧾 **Compact threat-intelligence summaries**
-  VirusTotal and AbuseIPDB results highlight high-confidence risk and positive
+  VirusTotal, AbuseIPDB and NVD results highlight high-confidence risk and positive
   signals without dumping raw responses. File aliases, digital signatures,
   WHOIS, certificate, network, and reporting details are capped to useful
-  investigation context. Clipboard copies defang active indicators by default;
+  investigation context. CVE reports include CVSS, CWE, affected products,
+  references, and CISA KEV remediation details when available. Clipboard copies defang active indicators by default;
   this behavior can be disabled from Extension Settings.
 
 - 📋 **Formatted service-page capture**
@@ -56,7 +58,8 @@ You can install SOCx directly from your browser’s official store:
 - ⚡ **Coordinated provider requests**
   Provider lookups share short queues, transient-error retries, request
   deduplication, and a two-minute response cache. The cache can be cleared at
-  any time from Extension Settings.
+  any time from Extension Settings. NVD lookups work without credentials; an
+  optional NVD API key can be saved to use the higher authenticated rate limit.
 
 - ✨ **Smart selection formatting**
   Selected EDR, SIEM, OSINT, JSON, CEF, logfmt, key/value, CSV, HTML table, and
@@ -70,7 +73,10 @@ You can install SOCx directly from your browser’s official store:
 
 ## 🧪 How to Use
 
-Use SOCx mainly while you browse: select an IOC (IP, domain, URL, hash, email, ASN, MAC) on any page and use the **right‑click menu** or **floating SOCx buttons** to open your favorite OSINT tools in one click. For long texts or lists, open the **popup** and use **Bulk IOC Check**, **Subnet tools**, or the **Field notes** side panel to organize and investigate indicators more efficiently.
+Use SOCx mainly while you browse: select an IOC (IP, domain, URL, hash, email, ASN, MAC, CVE) on any page and use the **right‑click menu** or **floating SOCx buttons** to open your favorite OSINT tools in one click. CVEs receive a dedicated NVD intelligence button. For long texts or lists, open the **popup** and use **Bulk IOC Check**, **Subnet tools**, or the **Field notes** side panel to organize and investigate indicators more efficiently.
+
+This product uses data from the NVD API but is not endorsed or certified by the
+NVD.
 
 For a more complete, always up‑to‑date guide with examples, screenshots, and best practices, see the [SOCx wiki](https://github.com/AlessioMobilia/SOCx/wiki).
 

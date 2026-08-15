@@ -23,6 +23,7 @@ interface OptionsUIProps {
   isDarkMode: boolean
   virusTotalApiKey: string
   abuseIPDBApiKey: string
+  nvdApiKey: string
   proxyCheckApiKey: string
   ipapiEnabled: boolean
   proxyCheckEnabled: boolean
@@ -35,6 +36,7 @@ interface OptionsUIProps {
   onServiceChange: (type: string, service: string) => void
   onVirusTotalApiKeyChange: (val: string) => void
   onAbuseIPDBApiKeyChange: (val: string) => void
+  onNvdApiKeyChange: (val: string) => void
   onProxyCheckApiKeyChange: (val: string) => void
   onIpapiToggle: (value: boolean) => void
   onProxyCheckToggle: (value: boolean) => void
@@ -50,6 +52,7 @@ interface OptionsUIProps {
   dailyCounters: {
     vt: number
     abuse: number
+    nvd: number
     proxy: number
   }
 }
@@ -68,6 +71,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   isDarkMode,
   virusTotalApiKey,
   abuseIPDBApiKey,
+  nvdApiKey,
   proxyCheckApiKey,
   ipapiEnabled,
   proxyCheckEnabled,
@@ -80,6 +84,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   onServiceChange,
   onVirusTotalApiKeyChange,
   onAbuseIPDBApiKeyChange,
+  onNvdApiKeyChange,
   onProxyCheckApiKeyChange,
   onIpapiToggle,
   onProxyCheckToggle,
@@ -145,6 +150,15 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
       tone: "danger"
     },
     {
+      id: "nvd",
+      label: "NVD (optional key)",
+      value: nvdApiKey,
+      placeholder: "Optional NVD API key",
+      onChange: onNvdApiKeyChange,
+      counter: dailyCounters.nvd,
+      tone: "success"
+    },
+    {
       id: "proxy",
       label: "ProxyCheck.io",
       value: proxyCheckApiKey,
@@ -197,7 +211,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
       id: "clipboardSanitization",
       label: "Sanitize copied intelligence",
       helper:
-        "Defangs indicators copied from VirusTotal, AbuseIPDB and supported IOC service pages (recommended).",
+        "Defangs indicators copied from VirusTotal, AbuseIPDB, NVD and supported IOC service pages (recommended).",
       enabled: clipboardSanitizationEnabled,
       onToggle: () =>
         onClipboardSanitizationToggle(!clipboardSanitizationEnabled),
@@ -286,6 +300,16 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
               <MdOutlineKey />
               Test API keys
             </button>
+          </div>
+          <div className="md:col-span-2 rounded-xl border border-teal-500/30 bg-teal-500/5 px-4 py-3 text-xs text-socx-muted dark:text-socx-muted-dark">
+            <p className="font-semibold text-socx-ink dark:text-white">
+              NVD data notice
+            </p>
+            <p className="mt-1">
+              This product uses data from the NVD API but is not endorsed or
+              certified by the NVD. The NVD key is optional and only increases
+              the available request rate.
+            </p>
           </div>
           <div className="md:col-span-2 space-y-3">
             <p className={labelClass}>Enrichments</p>

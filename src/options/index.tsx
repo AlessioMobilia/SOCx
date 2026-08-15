@@ -2,36 +2,42 @@
 
 import React, { useCallback, useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
+
 import { sendToBackground } from "@plasmohq/messaging"
+
 import OptionsUI from "./OptionsUI"
+
 import "../styles/tailwind.css"
-import { defaultServices } from "../utility/defaultServices"
-import type { CustomService } from "../utility/iocTypes"
+
 import { Storage } from "@plasmohq/storage"
-import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
+
+import {
+  resolveSelectionButtonsPreference,
+  resolveServicePageCopyButtonsPreference,
+  SELECTION_BUTTONS_KEY,
+  SELECTION_BUTTONS_MESSAGE,
+  SERVICE_PAGE_COPY_BUTTONS_KEY,
+  SERVICE_PAGE_COPY_BUTTONS_MESSAGE
+} from "../utility/buttonPreferences"
 import {
   CLIPBOARD_SANITIZATION_KEY,
   DEFAULT_CLIPBOARD_SANITIZATION_ENABLED
 } from "../utility/clipboardSanitization"
-import {
-  SELECTION_BUTTONS_KEY,
-  SELECTION_BUTTONS_MESSAGE,
-  SERVICE_PAGE_COPY_BUTTONS_KEY,
-  SERVICE_PAGE_COPY_BUTTONS_MESSAGE,
-  resolveSelectionButtonsPreference,
-  resolveServicePageCopyButtonsPreference
-} from "../utility/buttonPreferences"
+import { defaultServices } from "../utility/defaultServices"
+import type { CustomService } from "../utility/iocTypes"
+import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 const storage = new Storage({ area: "local" })
-
-
 
 const Options = () => {
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [virusTotalApiKey, setVirusTotalApiKey] = useState("")
   const [abuseIPDBApiKey, setAbuseIPDBApiKey] = useState("")
+  const [nvdApiKey, setNvdApiKey] = useState("")
   const [proxyCheckApiKey, setProxyCheckApiKey] = useState("")
-  const [selectedServices, setSelectedServices] = useState<{ [key: string]: string[] }>(defaultServices)
+  const [selectedServices, setSelectedServices] = useState<{
+    [key: string]: string[]
+  }>(defaultServices)
   const [customServices, setCustomServices] = useState<CustomService[]>([])
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [ipapiEnabled, setIpapiEnabled] = useState(false)
@@ -41,28 +47,37 @@ const Options = () => {
     useState(true)
   const [clipboardSanitizationEnabled, setClipboardSanitizationEnabled] =
     useState(DEFAULT_CLIPBOARD_SANITIZATION_ENABLED)
-  const [dailyCounters, setDailyCounters] = useState({ vt: 0, abuse: 0, proxy: 0 })
+  const [dailyCounters, setDailyCounters] = useState({
+    vt: 0,
+    abuse: 0,
+    nvd: 0,
+    proxy: 0
+  })
   const [isClearingApiCache, setIsClearingApiCache] = useState(false)
   const [apiCacheStatus, setApiCacheStatus] = useState("")
-  const notifyButtonPreferenceListeners = useCallback((type: string, enabled: boolean) => {
-    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-      return
-    }
-    try {
-      chrome.runtime.sendMessage({
-        type,
-        enabled
-      })
-    } catch (error) {
-      console.warn("Unable to broadcast button preference:", error)
-    }
-  }, [])
+  const notifyButtonPreferenceListeners = useCallback(
+    (type: string, enabled: boolean) => {
+      if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+        return
+      }
+      try {
+        chrome.runtime.sendMessage({
+          type,
+          enabled
+        })
+      } catch (error) {
+        console.warn("Unable to broadcast button preference:", error)
+      }
+    },
+    []
+  )
 
   const getCounterKeys = useCallback(() => {
     const today = new Date().toISOString().split("T")[0]
     return {
       vt: `VT_${today}`,
       abuse: `Abuse_${today}`,
+      nvd: `NVD_${today}`,
       proxy: `PROXYCHECK_${today}`
     }
   }, [])
@@ -70,28 +85,31 @@ const Options = () => {
   const refreshDailyCounters = useCallback(async () => {
     try {
       const keys = getCounterKeys()
-      const [vt, abuse, proxy] = await Promise.all([
+      const [vt, abuse, nvd, proxy] = await Promise.all([
         storage.get<number>(keys.vt),
         storage.get<number>(keys.abuse),
+        storage.get<number>(keys.nvd),
         storage.get<number>(keys.proxy)
       ])
       setDailyCounters({
         vt: vt ?? 0,
         abuse: abuse ?? 0,
+        nvd: nvd ?? 0,
         proxy: proxy ?? 0
       })
     } catch (error) {
       console.warn("Unable to load daily counters:", error)
-      setDailyCounters({ vt: 0, abuse: 0, proxy: 0 })
+      setDailyCounters({ vt: 0, abuse: 0, nvd: 0, proxy: 0 })
     }
   }, [getCounterKeys])
 
   // Auto-save
   useEffect(() => {
     if (!settingsLoaded) return
-    
+
     storage.set("virusTotalApiKey", virusTotalApiKey)
     storage.set("abuseIPDBApiKey", abuseIPDBApiKey)
+    storage.set("nvdApiKey", nvdApiKey)
     storage.set("proxyCheckApiKey", proxyCheckApiKey)
     console.log("Saving selectedServices:", selectedServices)
     storage.set("selectedServices", selectedServices)
@@ -105,6 +123,7 @@ const Options = () => {
   }, [
     virusTotalApiKey,
     abuseIPDBApiKey,
+    nvdApiKey,
     proxyCheckApiKey,
     selectedServices,
     customServices,
@@ -128,12 +147,19 @@ const Options = () => {
     if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
       return
     }
-    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+    const listener: Parameters<
+      typeof chrome.storage.onChanged.addListener
+    >[0] = (changes, area) => {
       if (area !== "local") {
         return
       }
       const keys = getCounterKeys()
-      if (changes[keys.vt] || changes[keys.abuse] || changes[keys.proxy]) {
+      if (
+        changes[keys.vt] ||
+        changes[keys.abuse] ||
+        changes[keys.nvd] ||
+        changes[keys.proxy]
+      ) {
         refreshDailyCounters()
       }
     }
@@ -163,6 +189,7 @@ const Options = () => {
     try {
       const vtKey = await storage.get("virusTotalApiKey")
       const abKey = await storage.get("abuseIPDBApiKey")
+      const nvdKey = await storage.get("nvdApiKey")
       const proxyKey = await storage.get("proxyCheckApiKey")
       const selectedRaw = await storage.get("selectedServices")
       const custom = await storage.get("customServices")
@@ -179,6 +206,7 @@ const Options = () => {
 
       if (vtKey) setVirusTotalApiKey(vtKey)
       if (abKey) setAbuseIPDBApiKey(abKey)
+      if (nvdKey) setNvdApiKey(nvdKey)
       if (proxyKey) setProxyCheckApiKey(proxyKey)
 
       if (
@@ -186,7 +214,10 @@ const Options = () => {
         typeof selectedRaw === "object" &&
         !Array.isArray(selectedRaw)
       ) {
-        setSelectedServices(selectedRaw)
+        setSelectedServices({
+          ...defaultServices,
+          ...(selectedRaw as Record<string, string[]>)
+        })
       } else {
         console.warn("Invalid selectedServices in storage, resetting.")
         await storage.remove("selectedServices")
@@ -286,21 +317,38 @@ const Options = () => {
     }
 
     if (virusTotalApiKey) {
-      await testFetch("VirusTotal", "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8", {
-        "x-apikey": virusTotalApiKey
-      }, results)
+      await testFetch(
+        "VirusTotal",
+        "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8",
+        {
+          "x-apikey": virusTotalApiKey
+        },
+        results
+      )
     } else {
       results.push("⚠️ VirusTotal: Key not entered")
     }
 
     if (abuseIPDBApiKey) {
-      await testFetch("AbuseIPDB", "https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8", {
-        Accept: "application/json",
-        Key: abuseIPDBApiKey
-      }, results)
+      await testFetch(
+        "AbuseIPDB",
+        "https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8",
+        {
+          Accept: "application/json",
+          Key: abuseIPDBApiKey
+        },
+        results
+      )
     } else {
       results.push("⚠️ AbuseIPDB: Key not entered")
     }
+
+    await testFetch(
+      "NVD",
+      "https://services.nvd.nist.gov/rest/json/cves/2.0?cveIds=CVE-2021-44228",
+      nvdApiKey ? { apiKey: nvdApiKey } : { Accept: "application/json" },
+      results
+    )
 
     if (proxyCheckApiKey) {
       await testFetch(
@@ -381,6 +429,7 @@ const Options = () => {
       isDarkMode={isDarkMode}
       virusTotalApiKey={virusTotalApiKey}
       abuseIPDBApiKey={abuseIPDBApiKey}
+      nvdApiKey={nvdApiKey}
       proxyCheckApiKey={proxyCheckApiKey}
       ipapiEnabled={ipapiEnabled}
       proxyCheckEnabled={proxyCheckEnabled}
@@ -393,6 +442,7 @@ const Options = () => {
       onServiceChange={handleServiceChange}
       onVirusTotalApiKeyChange={setVirusTotalApiKey}
       onAbuseIPDBApiKeyChange={setAbuseIPDBApiKey}
+      onNvdApiKeyChange={setNvdApiKey}
       onProxyCheckApiKeyChange={handleProxyCheckKeyChange}
       onIpapiToggle={handleIpapiToggle}
       onProxyCheckToggle={handleProxyCheckToggle}

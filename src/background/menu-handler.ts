@@ -1,19 +1,20 @@
+import { Storage } from "@plasmohq/storage"
+
+import { defaultServices } from "../utility/defaultServices"
+import { servicesConfig } from "../utility/servicesConfig"
 import {
   copyToClipboard,
-  extractIOCs,
-  refang,
   defang,
+  extractIOCs,
+  formatAndCopySelection,
   formatCVEs,
   identifyIOC,
   isPrivateIP,
-  showNotification,
+  refang,
   saveIOC,
-  formatAndCopySelection,
+  showNotification,
   uniqueStrings
 } from "../utility/utils"
-import { servicesConfig } from "../utility/servicesConfig"
-import { defaultServices } from "../utility/defaultServices"
-import { Storage } from "@plasmohq/storage"
 
 const storage = new Storage({ area: "local" })
 
@@ -37,12 +38,12 @@ export async function handleMenuClick(info: any, tab: any) {
     defangIOC: () => copyToClipboard(iocList.map(defang).join("\n")),
     copyCVE: () => copyToClipboard(formatCVEs(selection, false)),
     copyCVECSV: () => copyToClipboard(formatCVEs(selection, true)),
-    extractText: () => formatAndCopySelection(tab.id, info.frameId) 
+    extractText: () => formatAndCopySelection(tab.id, info.frameId)
   }
 
   console.log("Menu clicked:", info.menuItemId, selection, tab.id)
   if (info.menuItemId in copyOps) {
-    console.log("Copying:", info.menuItemId);
+    console.log("Copying:", info.menuItemId)
     copyOps[info.menuItemId]()
     return
   }
@@ -58,8 +59,13 @@ export async function handleMenuClick(info: any, tab: any) {
   }
 
   if (info.menuItemId === "CyberChef") {
-    const base64 = btoa(unescape(encodeURIComponent(selection))).replaceAll("=", "")
-    chrome.tabs.create({ url: `https://gchq.github.io/CyberChef/#input=${base64}` })
+    const base64 = btoa(unescape(encodeURIComponent(selection))).replaceAll(
+      "=",
+      ""
+    )
+    chrome.tabs.create({
+      url: `https://gchq.github.io/CyberChef/#input=${base64}`
+    })
     return
   }
 
@@ -73,7 +79,9 @@ export async function handleMenuClick(info: any, tab: any) {
   await saveIOC(type, ioc)
 
   if (info.menuItemId === "MagicIOC") {
-    const selected = await storage.get<SelectedServices>("selectedServices") || defaultServices
+    const storedSelected =
+      await storage.get<SelectedServices>("selectedServices")
+    const selected = { ...defaultServices, ...(storedSelected ?? {}) }
 
     if (!selected[type]) {
       showNotification("Error", "No service selected.")

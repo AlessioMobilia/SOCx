@@ -77,4 +77,20 @@ describe("clipboard intelligence sanitization", () => {
       "Resolved host — malware[.]example at 203[.]0[.]113[.]9"
     )
   })
+
+  it("sanitizes URLs and indicators in NVD report fields", () => {
+    const text = [
+      "NVD",
+      "- CVE:             CVE-2021-44228",
+      "- Description:     Connects to malicious.example at 203.0.113.8",
+      "- Required action: Apply https://vendor.example/security.patch",
+      "- Links:           https://nvd.nist.gov/vuln/detail/CVE-2021-44228"
+    ].join("\n")
+
+    const sanitized = sanitizeIntelClipboardText(text)
+    expect(sanitized).toContain("CVE-2021-44228")
+    expect(sanitized).toContain("malicious[.]example at 203[.]0[.]113[.]8")
+    expect(sanitized).toContain("hxxps://vendor[.]example/security[.]patch")
+    expect(sanitized).toContain("hxxps://nvd[.]nist[.]gov/vuln/detail/CVE-2021-44228")
+  })
 })

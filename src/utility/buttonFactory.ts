@@ -13,6 +13,12 @@ const ICONS = {
         d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   `,
+  nvd: `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="1.5" y="5" width="21" height="14" rx="4" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <text x="12" y="14.6" fill="currentColor" text-anchor="middle" font-size="6.5" font-family="system-ui, sans-serif" font-weight="800">NVD</text>
+    </svg>
+  `,
   magic: `
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
       <path stroke-linecap="round" stroke-linejoin="round"
@@ -33,11 +39,14 @@ type ButtonTheme = {
   icon: keyof typeof ICONS
 }
 
-const THEMES: Record<"virustotal" | "abuse" | "magic", ButtonTheme> = {
+const THEMES: Record<"virustotal" | "abuse" | "nvd" | "magic", ButtonTheme> = {
   virustotal: {
-    surface: "linear-gradient(135deg, rgba(10,16,30,0.94), rgba(33,51,92,0.82))",
-    surfaceHover: "linear-gradient(135deg, rgba(15,24,44,0.96), rgba(45,70,120,0.88))",
-    surfaceActive: "linear-gradient(135deg, rgba(8,13,24,0.92), rgba(29,47,86,0.78))",
+    surface:
+      "linear-gradient(135deg, rgba(10,16,30,0.94), rgba(33,51,92,0.82))",
+    surfaceHover:
+      "linear-gradient(135deg, rgba(15,24,44,0.96), rgba(45,70,120,0.88))",
+    surfaceActive:
+      "linear-gradient(135deg, rgba(8,13,24,0.92), rgba(29,47,86,0.78))",
     border: "rgba(120, 156, 236, 0.45)",
     borderHover: "rgba(120, 156, 236, 0.85)",
     accent: "#9cc7ff",
@@ -47,8 +56,10 @@ const THEMES: Record<"virustotal" | "abuse" | "magic", ButtonTheme> = {
   },
   abuse: {
     surface: "linear-gradient(135deg, rgba(22,8,12,0.94), rgba(56,20,30,0.82))",
-    surfaceHover: "linear-gradient(135deg, rgba(30,10,14,0.95), rgba(68,24,36,0.9))",
-    surfaceActive: "linear-gradient(135deg, rgba(18,6,10,0.92), rgba(46,16,26,0.78))",
+    surfaceHover:
+      "linear-gradient(135deg, rgba(30,10,14,0.95), rgba(68,24,36,0.9))",
+    surfaceActive:
+      "linear-gradient(135deg, rgba(18,6,10,0.92), rgba(46,16,26,0.78))",
     border: "rgba(248, 113, 113, 0.4)",
     borderHover: "rgba(248, 113, 113, 0.72)",
     accent: "#f87171",
@@ -56,10 +67,25 @@ const THEMES: Record<"virustotal" | "abuse" | "magic", ButtonTheme> = {
     glow: "rgba(22, 8, 12, 0.7)",
     icon: "abuse"
   },
+  nvd: {
+    surface: "linear-gradient(135deg, rgba(5,25,32,0.95), rgba(10,70,82,0.86))",
+    surfaceHover:
+      "linear-gradient(135deg, rgba(7,34,43,0.97), rgba(13,87,101,0.92))",
+    surfaceActive:
+      "linear-gradient(135deg, rgba(4,20,26,0.93), rgba(8,58,69,0.82))",
+    border: "rgba(45, 212, 191, 0.45)",
+    borderHover: "rgba(45, 212, 191, 0.82)",
+    accent: "#5eead4",
+    focusRing: "rgba(45, 212, 191, 0.55)",
+    glow: "rgba(5, 25, 32, 0.68)",
+    icon: "nvd"
+  },
   magic: {
     surface: "linear-gradient(135deg, rgba(26,18,6,0.94), rgba(56,41,12,0.85))",
-    surfaceHover: "linear-gradient(135deg, rgba(30,22,8,0.96), rgba(68,52,16,0.9))",
-    surfaceActive: "linear-gradient(135deg, rgba(18,12,4,0.92), rgba(48,34,10,0.78))",
+    surfaceHover:
+      "linear-gradient(135deg, rgba(30,22,8,0.96), rgba(68,52,16,0.9))",
+    surfaceActive:
+      "linear-gradient(135deg, rgba(18,12,4,0.92), rgba(48,34,10,0.78))",
     border: "rgba(245, 194, 66, 0.45)",
     borderHover: "rgba(245, 194, 66, 0.8)",
     accent: "#f5c242",
@@ -69,13 +95,19 @@ const THEMES: Record<"virustotal" | "abuse" | "magic", ButtonTheme> = {
   }
 }
 
-const applyBaseStyling = (button: HTMLButtonElement, theme: ButtonTheme, label: string) => {
+const applyBaseStyling = (
+  button: HTMLButtonElement,
+  theme: ButtonTheme,
+  label: string
+) => {
   button.type = "button"
   const iconDocument = new DOMParser().parseFromString(
     ICONS[theme.icon],
     "image/svg+xml"
   )
-  button.replaceChildren(document.importNode(iconDocument.documentElement, true))
+  button.replaceChildren(
+    document.importNode(iconDocument.documentElement, true)
+  )
 
   // dimensioni / layout
   button.style.width = "36px"
@@ -88,7 +120,8 @@ const applyBaseStyling = (button: HTMLButtonElement, theme: ButtonTheme, label: 
   button.style.justifyContent = "center"
   button.style.padding = "0"
   button.style.cursor = "pointer"
-  button.style.fontFamily = "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+  button.style.fontFamily =
+    "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
   button.style.boxSizing = "border-box"
   button.style.backdropFilter = "blur(18px)"
   button.style.setProperty("-webkit-backdrop-filter", "blur(18px)")
@@ -138,9 +171,11 @@ const applyBaseStyling = (button: HTMLButtonElement, theme: ButtonTheme, label: 
       state === "active"
         ? `0 8px 24px ${theme.glow}`
         : state === "hover"
-        ? `0 18px 42px ${theme.glow}`
-        : `0 15px 35px ${theme.glow}`
-    button.style.boxShadow = isFocused ? `${shadow}, 0 0 0 2px ${theme.focusRing}` : shadow
+          ? `0 18px 42px ${theme.glow}`
+          : `0 15px 35px ${theme.glow}`
+    button.style.boxShadow = isFocused
+      ? `${shadow}, 0 0 0 2px ${theme.focusRing}`
+      : shadow
   }
 
   const setState = (next: VisualState) => {
@@ -186,7 +221,10 @@ const applyBaseStyling = (button: HTMLButtonElement, theme: ButtonTheme, label: 
   })
 }
 
-export function createButton(ioc: string, onClick: () => void): HTMLButtonElement | null {
+export function createButton(
+  ioc: string,
+  onClick: () => void
+): HTMLButtonElement | null {
   const button = document.createElement("button")
   const type = identifyIOC(ioc)
 
@@ -194,8 +232,14 @@ export function createButton(ioc: string, onClick: () => void): HTMLButtonElemen
     return null
   }
 
-  const theme = type === "IP" ? THEMES.abuse : THEMES.virustotal
-  const label = type === "IP" ? "AbuseIPDB" : "VirusTotal"
+  const theme =
+    type === "IP"
+      ? THEMES.abuse
+      : type === "CVE"
+        ? THEMES.nvd
+        : THEMES.virustotal
+  const label =
+    type === "IP" ? "AbuseIPDB" : type === "CVE" ? "NVD CVE" : "VirusTotal"
 
   applyBaseStyling(button, theme, label)
   button.id = "IOCButton_SOCx"
@@ -210,7 +254,10 @@ export function createButton(ioc: string, onClick: () => void): HTMLButtonElemen
   return button
 }
 
-export function createMagicButton(ioc: string, onClick: () => void): HTMLButtonElement {
+export function createMagicButton(
+  ioc: string,
+  onClick: () => void
+): HTMLButtonElement {
   const button = document.createElement("button")
   applyBaseStyling(button, THEMES.magic, "Magic IOC launch")
   button.id = "MagicButton_SOCx"
