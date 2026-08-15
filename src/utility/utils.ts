@@ -1702,18 +1702,10 @@ export const formatAndCopySelection = async (
       { frameId }
     )
 
-    const formattedText = response?.formatted
     console.log("Response:", response)
 
-    if (
-      typeof formattedText === "string" &&
-      formattedText.trim() !== "" &&
-      response?.success
-    ) {
-      console.log("Formatted text to copy:", formattedText)
-      await copyToClipboard(formattedText)
-    } else {
-      showNotification("Nothing to copy", "No formatted text received.")
+    if (!response?.success) {
+      console.warn("Smart formatting did not copy the selection:", response)
     }
   } catch (error) {
     showNotification("Error", "Could not format or copy selection.")

@@ -9,6 +9,7 @@ import {
   writeIntelClipboardText
 } from "../utility/clipboard"
 import { servicesConfig } from "../utility/servicesConfig"
+import { copySmartFormattedText } from "../utility/smartFormattingClipboard"
 import { createTooltip } from "../utility/tooltipFactory"
 import {
   collectIpIntelSignals,
@@ -982,8 +983,8 @@ if (!(window as any)._formatScriptInitialized) {
       const formattedText = lastValidSelection
         ? formatSelectedText(lastValidSelection)
         : ""
-      sendResponse({ success: true, formatted: formattedText })
-      return false
+      copySmartFormattedText(formattedText).then(sendResponse)
+      return true
     } else if (message?.type === SELECTION_BUTTONS_MESSAGE) {
       floatingButtonsEnabled = Boolean(message.enabled)
       if (!floatingButtonsEnabled) {
