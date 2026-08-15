@@ -1,4 +1,5 @@
 import { Storage } from "@plasmohq/storage"
+
 import {
   apiRequestCoordinator,
   ApiRequestError,
@@ -19,6 +20,8 @@ const parseRetryAfterMs = (response: Response): number | undefined => {
 }
 
 const readErrorDetails = async (response: Response): Promise<string> => {
+  const headerMessage = response.headers.get("message")
+  if (headerMessage) return headerMessage
   try {
     const text = await response.text()
     return text || response.statusText
@@ -33,7 +36,8 @@ const fetchProviderJson = <T>({
   url,
   init,
   counterName,
-  notFoundAsNull = false
+  notFoundAsNull = false,
+  minimumIntervalMs
 }: {
   provider: ApiProvider
   cacheKey: string
@@ -41,10 +45,12 @@ const fetchProviderJson = <T>({
   init: RequestInit
   counterName: string
   notFoundAsNull?: boolean
+  minimumIntervalMs?: number
 }): Promise<T | null> =>
   apiRequestCoordinator.run({
     provider,
     cacheKey,
+    minimumIntervalMs,
     request: async () => {
       const response = await fetch(url, init)
       if (notFoundAsNull && response.status === 404) return null
@@ -76,7 +82,16 @@ const base64UrlId = (value: string): string => {
   }
 
   const encodeWithBuffer = (): string | null => {
-    const bufferCtor = (globalThis as { Buffer?: { from: (value: string, encoding: string) => { toString: (enc: string) => string } } }).Buffer
+    const bufferCtor = (
+      globalThis as {
+        Buffer?: {
+          from: (
+            value: string,
+            encoding: string
+          ) => { toString: (enc: string) => string }
+        }
+      }
+    ).Buffer
     if (bufferCtor?.from) {
       return bufferCtor.from(value, "utf-8").toString("base64")
     }
@@ -93,7 +108,10 @@ const base64UrlId = (value: string): string => {
 
 // ---------------- VIRUSTOTAL ----------------
 
-export const checkVirusTotal = async (ioc: string, type: string): Promise<any> => {
+export const checkVirusTotal = async (
+  ioc: string,
+  type: string
+): Promise<any> => {
   const supportedTypes = ["ip", "domain", "url", "hash"]
   if (!supportedTypes.includes(type.toLowerCase())) {
     throw new Error(`Unsupported IOC type for VirusTotal: ${type}`)
@@ -208,6 +226,33 @@ export const fetchAPIAbuse = (
     counterName: "Abuse"
   })
 
+// ---------------- NVD ----------------
+
+export const checkNvdCve = async (ioc: string): Promise<any | null> => {
+  const cveId = ioc.trim().toUpperCase()
+  if (!/^CVE-\d{4}-\d{4,}$/.test(cveId)) {
+    throw new Error(`Invalid CVE identifier: ${ioc}`)
+  }
+
+  const apiKey = (await storage.get<string>("nvdApiKey"))?.trim()
+  const url = new URL("https://services.nvd.nist.gov/rest/json/cves/2.0")
+  url.searchParams.set("cveIds", cveId)
+
+  const headers: Record<string, string> = { Accept: "application/json" }
+  if (apiKey) headers.apiKey = apiKey
+
+  const payload = await fetchProviderJson<any>({
+    provider: "NVD",
+    cacheKey: `cve:${cveId}`,
+    url: url.toString(),
+    init: { method: "GET", headers },
+    counterName: "NVD",
+    minimumIntervalMs: apiKey ? 1_000 : 6_500
+  })
+
+  return payload?.vulnerabilities?.length ? payload : null
+}
+
 // ---------------- IPAPI ----------------
 
 export const checkIpapi = async (ioc: string): Promise<any> => {
@@ -277,7 +322,10 @@ const incrementDailyCounter = async (apiName: string) => {
   await storage.set(key, current + 1)
 }
 
-const cleanOldCounters = async (apiName: string, daysToKeep = 2): Promise<void> => {
+const cleanOldCounters = async (
+  apiName: string,
+  daysToKeep = 2
+): Promise<void> => {
   const all = await storage.getAll()
   const now = Date.now()
   const threshold = daysToKeep * 86400000
@@ -299,15 +347,24 @@ const cleanOldCounters = async (apiName: string, daysToKeep = 2): Promise<void> 
   }
 }
 
-export const getDailyCounters = async (): Promise<{ [key: string]: number }> => {
+export const getDailyCounters = async (): Promise<{
+  [key: string]: number
+}> => {
   const today = getTodayDate()
-  const keys = [`VT_${today}`, `Abuse_${today}`, `IPAPI_${today}`, `PROXYCHECK_${today}`]
+  const keys = [
+    `VT_${today}`,
+    `Abuse_${today}`,
+    `NVD_${today}`,
+    `IPAPI_${today}`,
+    `PROXYCHECK_${today}`
+  ]
 
   const counters = await Promise.all(keys.map((k) => storage.get<number>(k)))
   return {
     [keys[0]]: counters[0] || 0,
     [keys[1]]: counters[1] || 0,
     [keys[2]]: counters[2] || 0,
-    [keys[3]]: counters[3] || 0
+    [keys[3]]: counters[3] || 0,
+    [keys[4]]: counters[4] || 0
   }
 }

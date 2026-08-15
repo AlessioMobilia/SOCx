@@ -2,7 +2,8 @@ import { Storage } from "@plasmohq/storage"
 
 import { API_CACHE_TTL_MS } from "./apiCacheConfig"
 
-export type ApiProvider = "VirusTotal" | "AbuseIPDB" | "IPAPI" | "ProxyCheck"
+export type ApiProvider =
+  "VirusTotal" | "AbuseIPDB" | "IPAPI" | "ProxyCheck" | "NVD"
 
 type CacheRecord<T> = {
   expiresAt: number
@@ -29,6 +30,7 @@ type CoordinatedRequest<T> = {
   cacheKey: string
   request: () => Promise<T>
   maxRetries?: number
+  minimumIntervalMs?: number
 }
 
 const CACHE_PREFIX = "api-response-cache:"
@@ -37,7 +39,8 @@ const DEFAULT_PROVIDER_INTERVALS: Record<ApiProvider, number> = {
   VirusTotal: 15_000,
   AbuseIPDB: 250,
   IPAPI: 250,
-  ProxyCheck: 250
+  ProxyCheck: 250,
+  NVD: 6_500
 }
 
 const storage = new Storage({ area: "local" })
@@ -110,7 +113,8 @@ export class ApiRequestCoordinator {
     provider,
     cacheKey,
     request,
-    maxRetries = 2
+    maxRetries = 2,
+    minimumIntervalMs
   }: CoordinatedRequest<T>): Promise<T> {
     const requestKey = `${provider}:${cacheKey}`
     const existing = this.inFlight.get(requestKey) as Promise<T> | undefined
@@ -122,7 +126,8 @@ export class ApiRequestCoordinator {
       requestKey,
       request,
       maxRetries,
-      generation
+      generation,
+      minimumIntervalMs
     ).finally(() => this.inFlight.delete(requestKey))
     this.inFlight.set(requestKey, coordinated)
     return coordinated
@@ -138,7 +143,8 @@ export class ApiRequestCoordinator {
     requestKey: string,
     request: () => Promise<T>,
     maxRetries: number,
-    generation: number
+    generation: number,
+    minimumIntervalMs?: number
   ): Promise<T> {
     const storageKey = `${CACHE_PREFIX}${provider}:${hashCacheKey(requestKey)}`
     let cached: CacheRecord<T> | undefined
@@ -157,7 +163,7 @@ export class ApiRequestCoordinator {
     }
 
     const value = await this.enqueue(provider, () =>
-      this.executeWithRetry(provider, request, maxRetries)
+      this.executeWithRetry(provider, request, maxRetries, minimumIntervalMs)
     )
     if (generation === this.cacheGeneration && this.isCacheable(value)) {
       try {
@@ -191,12 +197,13 @@ export class ApiRequestCoordinator {
   private async executeWithRetry<T>(
     provider: ApiProvider,
     request: () => Promise<T>,
-    maxRetries: number
+    maxRetries: number,
+    minimumIntervalMs?: number
   ): Promise<T> {
     let attempt = 0
     while (true) {
       try {
-        await this.waitForProvider(provider)
+        await this.waitForProvider(provider, minimumIntervalMs)
         return await request()
       } catch (error) {
         if (attempt >= maxRetries || !isTransientError(error)) throw error
@@ -209,8 +216,11 @@ export class ApiRequestCoordinator {
     }
   }
 
-  private async waitForProvider(provider: ApiProvider): Promise<void> {
-    const interval = this.providerIntervals[provider]
+  private async waitForProvider(
+    provider: ApiProvider,
+    minimumIntervalMs?: number
+  ): Promise<void> {
+    const interval = minimumIntervalMs ?? this.providerIntervals[provider]
     const lastStartedAt = this.providerLastStartedAt.get(provider)
     if (lastStartedAt !== undefined) {
       const waitMs = Math.max(0, interval - (this.now() - lastStartedAt))

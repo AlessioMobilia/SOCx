@@ -6,9 +6,11 @@ import { Storage } from "@plasmohq/storage"
 
 import {
   buildAbuseIntel,
+  buildNvdIntel,
   buildVirusTotalIntel,
   formatCappedValues,
   formatIntelSummary,
+  getNvdCve,
   getVirusTotalSignatureFields
 } from "./intelFormatting"
 import { formatSmartSelection } from "./smartFormatting"
@@ -79,6 +81,11 @@ export const identifyIOC = (text: string): string | null => {
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
   const macAddressRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/
   const asnRegex = /^AS\d{1,5}(?:\.\d{1,5})?$/i
+  const cveRegex = /^CVE-\d{4}-\d{4,}$/i
+
+  if (cveRegex.test(text.trim())) {
+    return "CVE"
+  }
 
   // Check if the input is a MAC address
   if (macAddressRegex.test(text)) {
@@ -231,9 +238,10 @@ const IOC_DEFANGED_DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\[\.\])+[a-zA-Z]{2,}\b/g
 const IOC_DEFANGED_IP_REGEX = /\b(?:\d{1,3}\[\.\]){3}\d{1,3}\b/g
 const IOC_MAC_REGEX = /\b([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})\b/g
 const IOC_ASN_REGEX = /\bAS\d{1,5}(?:\.\d{1,5})?\b/gi
+const IOC_CVE_REGEX = /\bCVE-\d{4}-\d{4,}\b/gi
 
 const COMBINED_IOC_REGEX = new RegExp(
-  `(${IOC_IPV6_REGEX.source}|${IOC_IPV4_REGEX.source}|${IOC_DOMAIN_REGEX.source}|${IOC_URL_REGEX.source}|${IOC_MD5_REGEX.source}|${IOC_SHA1_REGEX.source}|${IOC_SHA256_REGEX.source}|${IOC_EMAIL_REGEX.source}|${IOC_DEFANGED_URL_REGEX.source}|${IOC_DEFANGED_DOMAIN_REGEX.source}|${IOC_DEFANGED_IP_REGEX.source}|${IOC_MAC_REGEX.source}|${IOC_ASN_REGEX.source})`,
+  `(${IOC_CVE_REGEX.source}|${IOC_IPV6_REGEX.source}|${IOC_IPV4_REGEX.source}|${IOC_DOMAIN_REGEX.source}|${IOC_URL_REGEX.source}|${IOC_MD5_REGEX.source}|${IOC_SHA1_REGEX.source}|${IOC_SHA256_REGEX.source}|${IOC_EMAIL_REGEX.source}|${IOC_DEFANGED_URL_REGEX.source}|${IOC_DEFANGED_DOMAIN_REGEX.source}|${IOC_DEFANGED_IP_REGEX.source}|${IOC_MAC_REGEX.source}|${IOC_ASN_REGEX.source})`,
   "gi"
 )
 
@@ -253,7 +261,14 @@ export const extractIOCs = (
   }
 
   const normalizedMatches = refanged
-    ? matches.map((ioc) => refang(ioc).trim()).filter(Boolean)
+    ? matches
+        .map((ioc) => {
+          const normalized = refang(ioc).trim()
+          return /^cve-/i.test(normalized)
+            ? normalized.toUpperCase()
+            : normalized
+        })
+        .filter(Boolean)
     : matches.filter(Boolean)
 
   return normalizedMatches.length > 0 ? normalizedMatches : null
@@ -778,6 +793,11 @@ export const parseAndFormatResults = (data: any): string => {
     lines.push(formatVirusTotalData(data.VirusTotal))
   }
 
+  if (data?.NVD?.vulnerabilities?.length) {
+    if (lines.length > 0) lines.push("")
+    lines.push(formatNvdData(data.NVD))
+  }
+
   return lines.join("\n").trim()
 }
 
@@ -879,6 +899,11 @@ export const formatVirusTotalData = (vtData: any): string => {
   return summary
     ? formatIntelSummary(summary)
     : formatVirusTotalDataLegacy(vtData)
+}
+
+export const formatNvdData = (nvdData: any): string => {
+  const summary = buildNvdIntel(nvdData)
+  return summary ? formatIntelSummary(summary) : ""
 }
 
 const formatVirusTotalDataLegacy = (vtData: any): string => {
@@ -1069,13 +1094,13 @@ const formatVirusTotalDataLegacy = (vtData: any): string => {
  */
 export const extractCVEs = (text: string): string[] => {
   // Regex per trovare le CVE
-  const cveRegex = /CVE-\d{4}-\d{4,}/g
+  const cveRegex = /\bCVE-\d{4}-\d{4,}\b/gi
 
   // Esegui la regex sul testo e restituisci i risultati
   const matches = text.match(cveRegex)
 
   // Se non ci sono corrispondenze, restituisci un array vuoto
-  return matches || []
+  return matches?.map((cve) => cve.toUpperCase()) || []
 }
 
 /**
@@ -1132,6 +1157,7 @@ export const convertResultsToCSV = (results: {
   for (const [ioc, result] of Object.entries(results)) {
     const vt = result?.VirusTotal?.data?.attributes
     const ab = result?.AbuseIPDB?.data
+    const nvd = result?.NVD
 
     if (vt) {
       const stats = vt.last_analysis_stats || {}
@@ -1220,6 +1246,12 @@ export const convertResultsToCSV = (results: {
         formatValue(formatCappedValues(ab.hostnames, 3))
       ])
     }
+
+    if (getNvdCve(nvd)) {
+      NVD_FIELDS.forEach((field, index) => {
+        rows.push([ioc, "NVD", field, getNvdExportFields(nvd)[index]])
+      })
+    }
   }
 
   return rows.map((row) => row.map((c) => `"${c}"`).join(",")).join("\n")
@@ -1285,6 +1317,49 @@ export const VT_FIELDS = [
   "WHOIS Registrar",
   "WHOIS Organization"
 ]
+
+export const NVD_FIELDS = [
+  "CVE",
+  "Status",
+  "Published",
+  "Last Modified",
+  "CVSS",
+  "Vector",
+  "Exploitability / Impact",
+  "Description",
+  "Weaknesses",
+  "Affected Products",
+  "CISA KEV",
+  "KEV Vulnerability",
+  "Action Due",
+  "Required Action",
+  "References"
+]
+
+export const getNvdExportFields = (payload: any): string[] => {
+  const summary = buildNvdIntel(payload)
+  if (!summary) return NVD_FIELDS.map(() => "N/A")
+  const fields = summary.sections.flatMap((section) => section.fields)
+  const valueFor = (label: string) =>
+    fields.find((field) => field.label === label)?.value ?? "N/A"
+  return [
+    valueFor("CVE"),
+    valueFor("Status"),
+    valueFor("Published"),
+    valueFor("Last modified"),
+    valueFor("CVSS"),
+    valueFor("Vector"),
+    valueFor("Exploitability / impact"),
+    valueFor("Description"),
+    valueFor("Weaknesses"),
+    valueFor("Affected products"),
+    valueFor("CISA KEV"),
+    valueFor("Vulnerability"),
+    valueFor("Action due"),
+    valueFor("Required action"),
+    valueFor("Links")
+  ]
+}
 
 export const getAbuseExportFields = (abuse: any): string[] => {
   const d = abuse?.data ?? abuse
@@ -1390,6 +1465,7 @@ export const getVirusTotalExportFields = (attr: any, d?: any): string[] => {
 export const exportResultsByEngine = (results: { [key: string]: any }) => {
   const vtRows = [["IOC", ...VT_FIELDS.slice(1)]]
   const abuseRows = [["IOC", ...ABUSE_FIELDS]]
+  const nvdRows = [["IOC", ...NVD_FIELDS]]
 
   for (const [ioc, result] of Object.entries(results)) {
     const vtData = result?.VirusTotal?.data
@@ -1402,10 +1478,14 @@ export const exportResultsByEngine = (results: { [key: string]: any }) => {
     if (abuse) {
       abuseRows.push([ioc, ...getAbuseExportFields(abuse)])
     }
+    if (getNvdCve(result?.NVD)) {
+      nvdRows.push([ioc, ...getNvdExportFields(result.NVD)])
+    }
   }
 
   if (vtRows.length > 1) downloadCSV(vtRows, "VirusTotal_IOC_Results")
   if (abuseRows.length > 1) downloadCSV(abuseRows, "AbuseIPDB_IOC_Results")
+  if (nvdRows.length > 1) downloadCSV(nvdRows, "NVD_CVE_Results")
 }
 
 // Funzione per eseguire l'escape dei valori CSV
@@ -1459,6 +1539,7 @@ const downloadCSV = (
 export const exportResultsToExcel = (results: { [key: string]: any }) => {
   const vtSheetData: (string | number)[][] = [["IOC", ...VT_FIELDS]]
   const abuseSheetData: (string | number)[][] = [["IOC", ...ABUSE_FIELDS]]
+  const nvdSheetData: (string | number)[][] = [["IOC", ...NVD_FIELDS]]
 
   for (const [ioc, result] of Object.entries(results)) {
     const vt = result?.VirusTotal?.data?.attributes
@@ -1468,6 +1549,9 @@ export const exportResultsToExcel = (results: { [key: string]: any }) => {
     const abuse = result?.AbuseIPDB?.data
     if (abuse) {
       abuseSheetData.push([ioc, ...getAbuseExportFields(abuse)])
+    }
+    if (getNvdCve(result?.NVD)) {
+      nvdSheetData.push([ioc, ...getNvdExportFields(result.NVD)])
     }
   }
 
@@ -1491,6 +1575,7 @@ export const exportResultsToExcel = (results: { [key: string]: any }) => {
 
   const cleanedVt = cleanSheet(vtSheetData)
   const cleanedAbuse = cleanSheet(abuseSheetData)
+  const cleanedNvd = cleanSheet(nvdSheetData)
 
   if (cleanedVt?.length > 1) {
     const vtSheet = XLSX.utils.aoa_to_sheet(cleanedVt)
@@ -1500,6 +1585,11 @@ export const exportResultsToExcel = (results: { [key: string]: any }) => {
   if (cleanedAbuse?.length > 1) {
     const abuseSheet = XLSX.utils.aoa_to_sheet(cleanedAbuse)
     XLSX.utils.book_append_sheet(workbook, abuseSheet, "AbuseIPDB")
+  }
+
+  if (cleanedNvd?.length > 1) {
+    const nvdSheet = XLSX.utils.aoa_to_sheet(cleanedNvd)
+    XLSX.utils.book_append_sheet(workbook, nvdSheet, "NVD")
   }
 
   XLSX.writeFile(

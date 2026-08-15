@@ -87,9 +87,9 @@ export const getContextMenuDefinitions =
       { id: "getIOC", title: "Extract IOC" },
       { id: "refangIOC", title: "Refang IOC", parentId: "getIOC" },
       { id: "defangIOC", title: "Defang IOC", parentId: "getIOC" },
-      { id: "CVE", title: "Extract CVE" },
-      { id: "copyCVE", title: "Copy CVEs", parentId: "CVE" },
-      { id: "copyCVECSV", title: "Copy CVEs as CSV", parentId: "CVE" }
+      { id: "extractCVE", title: "Extract CVE" },
+      { id: "copyCVE", title: "Copy CVEs", parentId: "extractCVE" },
+      { id: "copyCVECSV", title: "Copy CVEs as CSV", parentId: "extractCVE" }
     ]
 
     baseMenus.forEach((item) => {

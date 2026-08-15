@@ -5,5 +5,6 @@ export const defaultServices = {
   Hash: ["VirusTotal"],
   Email: ["HaveIBeenPwned"],
   ASN: ["BGPToolkit"],
-  MAC: ["MACVendors"]
-};
+  MAC: ["MACVendors"],
+  CVE: ["NVD"]
+}

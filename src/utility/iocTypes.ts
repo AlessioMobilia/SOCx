@@ -8,7 +8,8 @@ export const supportedIOCTypes = [
   "Hash",
   "Email",
   "ASN",
-  "MAC"
+  "MAC",
+  "CVE"
 ] as const
 
 // Literal type for a single IOC

@@ -17,6 +17,7 @@ describe("IOC service catalog", () => {
       expect.arrayContaining(["CloudflareRadar", "CTSearch"])
     )
     expect(servicesConfig.availableServices.Hash).toContain("CIRCLHashlookup")
+    expect(servicesConfig.availableServices.CVE).toEqual(["NVD", "Google"])
   })
 
   it("builds encoded direct lookup URLs", () => {
@@ -32,5 +33,8 @@ describe("IOC service catalog", () => {
     expect(
       servicesConfig.services.CIRCLHashlookup.url("Hash", "a".repeat(40))
     ).toContain("/lookup/sha1/")
+    expect(servicesConfig.services.NVD.url("CVE", "cve-2021-44228")).toBe(
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-44228"
+    )
   })
 })

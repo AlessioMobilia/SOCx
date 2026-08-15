@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildAbuseIntel,
+  buildNvdIntel,
   buildVirusTotalIntel,
   classifyIntelTextLine,
   formatIntelSummary
@@ -9,7 +10,9 @@ import {
 import {
   ABUSE_FIELDS,
   getAbuseExportFields,
+  getNvdExportFields,
   getVirusTotalExportFields,
+  NVD_FIELDS,
   VT_FIELDS
 } from "./utils"
 
@@ -178,5 +181,76 @@ describe("compact intelligence formatting", () => {
   it("keeps spreadsheet export schemas aligned with enriched values", () => {
     expect(getAbuseExportFields({})).toHaveLength(ABUSE_FIELDS.length)
     expect(getVirusTotalExportFields({}, {})).toHaveLength(VT_FIELDS.length)
+    expect(getNvdExportFields({})).toHaveLength(NVD_FIELDS.length)
+  })
+
+  it("formats NVD CVE details using CVSS, CWE, affected products and KEV data", () => {
+    const summary = buildNvdIntel({
+      vulnerabilities: [
+        {
+          cve: {
+            id: "CVE-2021-44228",
+            vulnStatus: "Analyzed",
+            published: "2021-12-10T10:15:09.143",
+            lastModified: "2026-08-11T19:33:44.513",
+            descriptions: [
+              { lang: "en", value: "Remote code execution in Apache Log4j." }
+            ],
+            metrics: {
+              cvssMetricV31: [
+                {
+                  type: "Primary",
+                  cvssData: {
+                    version: "3.1",
+                    baseScore: 10,
+                    baseSeverity: "CRITICAL",
+                    vectorString: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+                  },
+                  exploitabilityScore: 3.9,
+                  impactScore: 6
+                }
+              ]
+            },
+            weaknesses: [
+              {
+                description: [
+                  { lang: "en", value: "CWE-20" },
+                  { lang: "en", value: "CWE-502" }
+                ]
+              }
+            ],
+            configurations: [
+              {
+                nodes: [
+                  {
+                    cpeMatch: [
+                      {
+                        vulnerable: true,
+                        criteria: "cpe:2.3:a:apache:log4j:*:*:*:*:*:*:*:*",
+                        versionStartIncluding: "2.0-beta9",
+                        versionEndExcluding: "2.16.0"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            cisaExploitAdd: "2021-12-10",
+            cisaActionDue: "2021-12-24",
+            cisaVulnerabilityName: "Apache Log4j2 Remote Code Execution",
+            cisaRequiredAction: "Apply updates.",
+            references: [{ url: "https://logging.apache.org/security.html" }]
+          }
+        }
+      ]
+    })
+
+    const text = formatIntelSummary(summary!)
+    expect(text).toMatch(/CVE:\s+CVE-2021-44228/)
+    expect(text).toMatch(/CVSS:\s+v3\.1 · 10\.0 · CRITICAL/)
+    expect(text).toContain("CWE-20, CWE-502")
+    expect(text).toContain("apache log4j (>= 2.0-beta9; < 2.16.0)")
+    expect(text).toContain("CISA KEV:")
+    expect(text).toContain("Remote code execution in Apache Log4j")
   })
 })

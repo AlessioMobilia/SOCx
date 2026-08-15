@@ -27,6 +27,12 @@ export const servicesConfig = {
       url: (type: string, text: string) =>
         `https://www.abuseipdb.com/check/${text}`
     },
+    NVD: {
+      title: "Check on NVD",
+      supportedTypes: ["CVE"],
+      url: (type: string, text: string) =>
+        `https://nvd.nist.gov/vuln/detail/${text.toUpperCase()}`
+    },
     Censys: {
       title: "Check on Censys",
       supportedTypes: ["IP", "Domain"],
@@ -195,7 +201,16 @@ export const servicesConfig = {
     },
     Google: {
       title: "Search on Google",
-      supportedTypes: ["IP", "Hash", "URL", "Domain", "Email", "ASN", "MAC"],
+      supportedTypes: [
+        "IP",
+        "Hash",
+        "URL",
+        "Domain",
+        "Email",
+        "ASN",
+        "MAC",
+        "CVE"
+      ],
       url: (type: string, text: string) =>
         `https://www.google.com/search?q="${encodeURIComponent(text)}"`
     },
@@ -348,6 +363,7 @@ export const servicesConfig = {
     ],
     Email: ["Hunter", "HaveIBeenPwned", "Google"],
     ASN: ["BGPToolkit", "ViewDNS", "RIPEstat", "Google"],
-    MAC: ["MACVendors", "WiresharkOUI", "Google"]
+    MAC: ["MACVendors", "WiresharkOUI", "Google"],
+    CVE: ["NVD", "Google"]
   }
 }

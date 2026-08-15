@@ -419,6 +419,215 @@ export const buildAbuseIntel = (
   }
 }
 
+export type NvdCvssSummary = {
+  version: string
+  score: number
+  severity: string
+  vector: string
+  exploitabilityScore?: number
+  impactScore?: number
+}
+
+export const getNvdCve = (payload: any): any | null =>
+  payload?.vulnerabilities?.[0]?.cve ?? null
+
+export const getNvdCvss = (payload: any): NvdCvssSummary | null => {
+  const metrics = getNvdCve(payload)?.metrics
+  if (!metrics || typeof metrics !== "object") return null
+
+  const metricGroups = [
+    metrics.cvssMetricV40,
+    metrics.cvssMetricV31,
+    metrics.cvssMetricV30,
+    metrics.cvssMetricV2
+  ]
+
+  for (const group of metricGroups) {
+    if (!Array.isArray(group) || group.length === 0) continue
+    const metric =
+      group.find((entry: any) => entry?.type === "Primary") ?? group[0]
+    const cvssData = metric?.cvssData
+    const score = Number(cvssData?.baseScore)
+    if (!cvssData || !Number.isFinite(score)) continue
+    return {
+      version: clean(cvssData.version),
+      score,
+      severity: clean(
+        cvssData.baseSeverity ?? metric.baseSeverity
+      ).toUpperCase(),
+      vector: clean(cvssData.vectorString),
+      ...(Number.isFinite(Number(metric.exploitabilityScore))
+        ? { exploitabilityScore: Number(metric.exploitabilityScore) }
+        : {}),
+      ...(Number.isFinite(Number(metric.impactScore))
+        ? { impactScore: Number(metric.impactScore) }
+        : {})
+    }
+  }
+
+  return null
+}
+
+const truncate = (value: unknown, limit: number): string => {
+  const normalized = clean(value)
+  if (normalized.length <= limit) return normalized
+  return `${normalized.slice(0, limit - 1).trimEnd()}…`
+}
+
+const getNvdWeaknesses = (cve: any): string => {
+  const values = (Array.isArray(cve?.weaknesses) ? cve.weaknesses : [])
+    .flatMap((weakness: any) =>
+      Array.isArray(weakness?.description) ? weakness.description : []
+    )
+    .filter((entry: any) => entry?.lang === "en")
+    .map((entry: any) => clean(entry?.value))
+    .filter((value: string) => /^CWE-\d+$/i.test(value))
+  return formatCappedValues(values, 5)
+}
+
+const decodeCpeComponent = (value: string): string => {
+  if (!value || value === "*" || value === "-") return ""
+  try {
+    return decodeURIComponent(value.replace(/\\([\\:!?*])/g, "$1"))
+      .replace(/_/g, " ")
+      .trim()
+  } catch {
+    return value.replace(/_/g, " ").trim()
+  }
+}
+
+const getNvdAffectedProducts = (cve: any): string => {
+  const matches: any[] = []
+  const visit = (value: any) => {
+    if (!value || typeof value !== "object") return
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    if (Array.isArray(value.cpeMatch)) matches.push(...value.cpeMatch)
+    Object.values(value).forEach(visit)
+  }
+  visit(cve?.configurations)
+
+  const products = matches
+    .filter((match) => match?.vulnerable === true && match?.criteria)
+    .map((match) => {
+      const parts = String(match.criteria).split(":")
+      const vendor = decodeCpeComponent(parts[3])
+      const product = decodeCpeComponent(parts[4])
+      const version = decodeCpeComponent(parts[5])
+      const start = clean(
+        match.versionStartIncluding ?? match.versionStartExcluding
+      )
+      const end = clean(match.versionEndIncluding ?? match.versionEndExcluding)
+      const range =
+        start || end
+          ? [
+              start
+                ? `${match.versionStartExcluding ? ">" : ">="} ${start}`
+                : "",
+              end ? `${match.versionEndExcluding ? "<" : "<="} ${end}` : ""
+            ]
+              .filter(Boolean)
+              .join("; ")
+          : version
+      return (
+        [vendor, product].filter(Boolean).join(" ") +
+        (range ? ` (${range})` : "")
+      )
+    })
+    .filter(Boolean)
+
+  return formatCappedValues(products, 5)
+}
+
+export const buildNvdIntel = (payload: any): IntelSummary | null => {
+  const cve = getNvdCve(payload)
+  if (!cve?.id) return null
+
+  const cvss = getNvdCvss(payload)
+  const severity = cvss?.severity ?? ""
+  const cvssTone: IntelTone =
+    severity === "CRITICAL" || severity === "HIGH"
+      ? "danger"
+      : severity === "MEDIUM"
+        ? "warning"
+        : severity === "LOW"
+          ? "success"
+          : "neutral"
+  const description =
+    (Array.isArray(cve.descriptions)
+      ? cve.descriptions.find((entry: any) => entry?.lang === "en")?.value
+      : "") ?? ""
+  const references = (Array.isArray(cve.references) ? cve.references : [])
+    .map((entry: any) => clean(entry?.url))
+    .filter(Boolean)
+
+  const overview: IntelField[] = [
+    { label: "CVE", value: clean(cve.id).toUpperCase() },
+    { label: "Status", value: clean(cve.vulnStatus) },
+    { label: "Published", value: formatDate(cve.published) },
+    { label: "Last modified", value: formatDate(cve.lastModified) },
+    {
+      label: "CVSS",
+      value: cvss
+        ? `v${cvss.version} · ${cvss.score.toFixed(1)} · ${cvss.severity || "UNRATED"}`
+        : "Not available",
+      tone: cvssTone
+    },
+    { label: "Vector", value: cvss?.vector ?? "" },
+    {
+      label: "Exploitability / impact",
+      value:
+        cvss?.exploitabilityScore !== undefined ||
+        cvss?.impactScore !== undefined
+          ? `${cvss.exploitabilityScore ?? "N/A"} / ${cvss.impactScore ?? "N/A"}`
+          : ""
+    }
+  ].filter((field) => field.value)
+
+  const kev: IntelField[] = cve.cisaExploitAdd
+    ? (
+        [
+          {
+            label: "CISA KEV",
+            value: `Listed since ${formatDate(cve.cisaExploitAdd)}`,
+            tone: "danger"
+          },
+          { label: "Vulnerability", value: clean(cve.cisaVulnerabilityName) },
+          { label: "Action due", value: formatDate(cve.cisaActionDue) },
+          {
+            label: "Required action",
+            value: truncate(cve.cisaRequiredAction, 450),
+            tone: "warning"
+          }
+        ] as IntelField[]
+      ).filter((field) => field.value)
+    : []
+
+  return {
+    title: "NVD",
+    sections: [
+      { title: "Overview", fields: overview },
+      {
+        title: "Vulnerability",
+        fields: [
+          { label: "Description", value: truncate(description, 900) },
+          { label: "Weaknesses", value: getNvdWeaknesses(cve) },
+          { label: "Affected products", value: getNvdAffectedProducts(cve) }
+        ].filter((field) => field.value)
+      },
+      { title: "Known exploitation", fields: kev },
+      {
+        title: "References",
+        fields: [
+          { label: "Links", value: formatCappedValues(references, 3) }
+        ].filter((field) => field.value)
+      }
+    ].filter((section) => section.fields.length > 0)
+  }
+}
+
 export const formatIntelSummary = (summary: IntelSummary): string => {
   const contextualizeLabel = (section: string, label: string): string => {
     if (section === "HTTPS certificate") return `Certificate ${label}`
@@ -488,5 +697,12 @@ export const classifyIntelTextLine = (line: string): IntelTone => {
     return "warning"
   if (/verdict:.*\b0 malicious\b.*\b0 suspicious\b/i.test(line))
     return "success"
+  const cvss = normalized.match(/cvss:\s*v[\d.]+\s+·\s+([\d.]+)\s+·\s+(\w+)/)
+  if (cvss) {
+    if (cvss[2] === "critical" || cvss[2] === "high") return "danger"
+    if (cvss[2] === "medium") return "warning"
+    if (cvss[2] === "low") return "success"
+  }
+  if (/cisa kev:\s+listed/i.test(normalized)) return "danger"
   return "neutral"
 }

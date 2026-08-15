@@ -26,7 +26,8 @@ const zeroIntervals = {
   VirusTotal: 0,
   AbuseIPDB: 0,
   IPAPI: 0,
-  ProxyCheck: 0
+  ProxyCheck: 0,
+  NVD: 0
 } as const
 
 describe("API request coordinator", () => {
@@ -153,5 +154,33 @@ describe("API request coordinator", () => {
     await coordinator.clearCache()
     await coordinator.run(options)
     expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  it("allows a request-specific provider interval", async () => {
+    let now = 1_000
+    const sleep = vi.fn(async (ms: number) => {
+      now += ms
+    })
+    const coordinator = new ApiRequestCoordinator({
+      cacheStore: createMemoryStore(),
+      now: () => now,
+      sleep,
+      providerIntervals: { ...zeroIntervals, NVD: 6_500 }
+    })
+
+    await coordinator.run({
+      provider: "NVD",
+      cacheKey: "CVE-2024-0001",
+      minimumIntervalMs: 1_000,
+      request: async () => "first"
+    })
+    await coordinator.run({
+      provider: "NVD",
+      cacheKey: "CVE-2024-0002",
+      minimumIntervalMs: 1_000,
+      request: async () => "second"
+    })
+
+    expect(sleep).toHaveBeenCalledWith(1_000)
   })
 })
