@@ -26,8 +26,10 @@ You can install SOCx directly from your browser’s official store:
 - 📘 **Guided user workflow**
   A dedicated wiki with step‑by‑step examples, tips, and best practices for non‑technical users is available in the [SOCx wiki](https://github.com/AlessioMobilia/SOCx/wiki).
 
-- 🌐 **Integration with over 20 OSINT services**
-  Support for the most widely used services in the threat intelligence industry.
+- 🌐 **Integration with over 30 OSINT services**
+  Support for the most widely used services in the threat intelligence industry,
+  including public lookups from Cisco Talos, URLhaus, Spamhaus, RIPEstat,
+  Cloudflare Radar, ThreatMiner, Certificate Transparency, and CIRCL Hashlookup.
 
 - 🛡️ **Privacy-first processing**
   SOCx does not run analytics or send investigation data to SOCx servers.
@@ -40,6 +42,12 @@ You can install SOCx directly from your browser’s official store:
   WHOIS, certificate, network, and reporting details are capped to useful
   investigation context. Clipboard copies defang active indicators by default;
   this behavior can be disabled from Extension Settings.
+
+- 📋 **Formatted service-page capture**
+  Supported IOC result pages expose a compact SOCx copy button that extracts
+  useful tables, key/value fields and visible report details without changing
+  the host layout. The control follows the host page contrast and accent while
+  remaining identifiable as SOCx.
 
 - ⚡ **Coordinated provider requests**
   Provider lookups share short queues, transient-error retries, request

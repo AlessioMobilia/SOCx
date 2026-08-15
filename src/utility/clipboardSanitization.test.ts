@@ -20,9 +20,7 @@ describe("clipboard intelligence sanitization", () => {
 
     const sanitized = sanitizeIntelClipboardText(text)
 
-    expect(sanitized).toContain(
-      "hxxps://malicious[.]example/path/file[.]exe"
-    )
+    expect(sanitized).toContain("hxxps://malicious[.]example/path/file[.]exe")
     expect(sanitized).toContain("203[.]0[.]113[.]0/24")
     expect(sanitized).toContain("*.malicious[.]example")
     expect(sanitized).toContain("2001[:]db8[:][:]10")
@@ -60,6 +58,23 @@ describe("clipboard intelligence sanitization", () => {
         "- IP:             203.0.113.4",
         "- IP:             2001:db8::10"
       ].join("\n")
+    )
+  })
+
+  it("sanitizes source URLs and arbitrary details in service-page reports", () => {
+    const text = [
+      "SOCx IOC report",
+      "- Source: https://example.com/report/203.0.113.8",
+      "- Detail: Resolved host — malware.example at 203.0.113.9"
+    ].join("\n")
+
+    const sanitized = sanitizeIntelClipboardText(text)
+
+    expect(sanitized).toContain(
+      "hxxps://example[.]com/report/203[.]0[.]113[.]8"
+    )
+    expect(sanitized).toContain(
+      "Resolved host — malware[.]example at 203[.]0[.]113[.]9"
     )
   })
 })

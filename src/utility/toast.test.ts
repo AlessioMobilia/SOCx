@@ -5,6 +5,7 @@ import { showToast } from "./toast"
 describe("toast rendering", () => {
   afterEach(() => {
     document.querySelector('[data-socx-toast-container="true"]')?.remove()
+    document.querySelector("[data-socx-service-copy]")?.remove()
     document.documentElement.classList.remove("dark", "dark-mode")
     document.body.classList.remove("dark", "dark-mode")
     vi.useRealTimers()
@@ -49,5 +50,18 @@ describe("toast rendering", () => {
 
     expect(document.querySelector("[data-socx-toast]")).toBeNull()
     expect(document.querySelector(`[data-socx-toast-container]`)).toBeNull()
+  })
+
+  it("stacks above the IOC service copy control", () => {
+    const serviceButton = document.createElement("div")
+    serviceButton.setAttribute("data-socx-service-copy", "RIPEstat")
+    document.body.appendChild(serviceButton)
+
+    showToast("Copied")
+
+    expect(
+      document.querySelector<HTMLElement>("[data-socx-toast-container]")?.style
+        .bottom
+    ).toBe("64px")
   })
 })

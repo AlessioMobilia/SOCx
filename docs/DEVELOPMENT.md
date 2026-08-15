@@ -57,6 +57,19 @@ When adding a new Plasmo message handler, also add its name to
 during a build, while the tracked declaration keeps standalone TypeScript
 checks deterministic on a fresh checkout.
 
+IOC provider pages use the shared `IOCServices` content script. URL parsing is
+kept in `servicePageAdapters`, report extraction/formatting in
+`servicePageIntel`, and the isolated host-aware control in `serviceCopyButton`.
+Add or update an adapter instead of creating another provider-specific content
+script; keep the button fixed and inside Shadow DOM so host layouts and styles
+remain unaffected.
+
+Only add a page adapter when the destination URL identifies the investigated
+IOC. Generic search pages and landing pages, currently Google and PhishTank,
+remain context-menu-only because page-wide extraction would include unrelated
+results. Custom lookup templates likewise cannot receive an automatic adapter
+without an explicit hostname and extraction contract.
+
 ## Development commands
 
 Run a browser-specific watcher:
@@ -194,8 +207,13 @@ Run this matrix on all three browsers before a release:
    AbuseIPDB subnet flow, clipboard export, and spreadsheet export.
 8. Open Field Notes from the popup. Chrome and Edge must open `sidePanel`;
    Firefox must open `sidebarAction`. Confirm notes persist after closing it.
-9. Open an AbuseIPDB check page and confirm the site-specific content script
-   loads without altering unrelated pages.
+9. Open VirusTotal, AbuseIPDB and a representative mix of supported static,
+   SPA and raw-JSON IOC result pages. Confirm the SOCx copy pill adopts readable
+   host-page contrast, stays clear of navigation, does not shift page layout,
+   follows SPA URL changes, and copies a compact formatted report. Verify table,
+   key/value and fallback extraction, then toggle **Show floating SOCx buttons**
+   and confirm all page-copy controls are removed or restored. Pages without an
+   IOC in their URL must not receive a button.
 10. If file-URL support is part of the release, enable **Allow access to file
     URLs** in Chrome/Edge and test an explicit local HTML file. This user toggle
     cannot be enabled by the extension.

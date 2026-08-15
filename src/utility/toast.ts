@@ -51,7 +51,9 @@ const getToastContainer = (): HTMLElement => {
     all: "initial",
     position: "fixed",
     right: "12px",
-    bottom: "12px",
+    bottom: document.querySelector("[data-socx-service-copy]")
+      ? "64px"
+      : "12px",
     "z-index": MAX_Z_INDEX,
     display: "flex",
     "flex-direction": "column",

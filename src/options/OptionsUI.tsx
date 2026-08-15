@@ -1,18 +1,23 @@
+import { CheckCircleIcon } from "@heroicons/react/24/solid"
 import React, { useState } from "react"
 import {
-  MdDarkMode,
-  MdLightMode,
-  MdVisibility,
-  MdVisibilityOff,
-  MdShield,
-  MdOutlineKey,
   MdAddCircle,
-  MdDelete
+  MdDarkMode,
+  MdDelete,
+  MdLightMode,
+  MdOutlineKey,
+  MdShield,
+  MdVisibility,
+  MdVisibilityOff
 } from "react-icons/md"
-import { servicesConfig } from "../utility/servicesConfig"
-import { supportedIOCTypes, type IOCType, type CustomService } from "../utility/iocTypes"
-import { CheckCircleIcon } from "@heroicons/react/24/solid"
+
 import { API_CACHE_TTL_MINUTES } from "../utility/apiCacheConfig"
+import {
+  supportedIOCTypes,
+  type CustomService,
+  type IOCType
+} from "../utility/iocTypes"
+import { servicesConfig } from "../utility/servicesConfig"
 
 interface OptionsUIProps {
   isDarkMode: boolean
@@ -169,7 +174,8 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
     {
       id: "floatingButtons",
       label: "Show floating SOCx buttons",
-      helper: "Displays quick-action buttons next to your text selection.",
+      helper:
+        "Displays quick actions next to selections and copy buttons on supported IOC services.",
       enabled: floatingButtonsEnabled,
       onToggle: () => onFloatingButtonsToggle(!floatingButtonsEnabled),
       disabled: false
@@ -178,7 +184,7 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
       id: "clipboardSanitization",
       label: "Sanitize copied intelligence",
       helper:
-        "Defangs VirusTotal and AbuseIPDB IOCs before copying them (recommended).",
+        "Defangs indicators copied from VirusTotal, AbuseIPDB and supported IOC service pages (recommended).",
       enabled: clipboardSanitizationEnabled,
       onToggle: () =>
         onClipboardSanitizationToggle(!clipboardSanitizationEnabled),
@@ -210,7 +216,8 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
             </p>
             <h1 className="mt-2 text-2xl font-semibold">Extension Settings</h1>
             <p className="text-sm text-socx-muted dark:text-socx-muted-dark">
-              Manage API keys, enrichment engines and custom lookups used across the extension.
+              Manage API keys, enrichment engines and custom lookups used across
+              the extension.
             </p>
           </div>
           <button
@@ -230,32 +237,34 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
         </header>
 
         <section className={`grid gap-4 md:grid-cols-2 ${cardClass}`}>
-          {apiFields.map(({ id, label, value, placeholder, onChange, counter }) => (
-            <div key={id} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">{label}</p>
-                <span className="inline-flex items-center rounded-full bg-socx-cloud-soft px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-socx-muted dark:bg-socx-panel/60 dark:text-socx-muted-dark">
-                  Today: {counter}
-                </span>
+          {apiFields.map(
+            ({ id, label, value, placeholder, onChange, counter }) => (
+              <div key={id} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">{label}</p>
+                  <span className="inline-flex items-center rounded-full bg-socx-cloud-soft px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-socx-muted dark:bg-socx-panel/60 dark:text-socx-muted-dark">
+                    Today: {counter}
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type={inputType}
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder={placeholder}
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKeys((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-socx-muted transition hover:text-socx-accent"
+                    aria-label="Toggle key visibility">
+                    {showKeys ? <MdVisibilityOff /> : <MdVisibility />}
+                  </button>
+                </div>
               </div>
-              <div className="relative">
-                <input
-                  type={inputType}
-                  value={value}
-                  onChange={(event) => onChange(event.target.value)}
-                  placeholder={placeholder}
-                  className={inputClass}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKeys((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-socx-muted transition hover:text-socx-accent"
-                  aria-label="Toggle key visibility">
-                  {showKeys ? <MdVisibilityOff /> : <MdVisibility />}
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          )}
           <div className="md:col-span-2">
             <button
               type="button"
@@ -268,77 +277,90 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           <div className="md:col-span-2 space-y-3">
             <p className={labelClass}>Enrichments</p>
             <div className="grid gap-3 md:grid-cols-2">
-              {enrichments.map(({ id, label, helper, enabled, onToggle, disabled }) => (
-                <div
-                  key={id}
-                  className="flex items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50">
-                  <div>
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="text-xs text-socx-muted dark:text-socx-muted-dark">{helper}</p>
+              {enrichments.map(
+                ({ id, label, helper, enabled, onToggle, disabled }) => (
+                  <div
+                    key={id}
+                    className="flex items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50">
+                    <div>
+                      <p className="text-sm font-semibold">{label}</p>
+                      <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                        {helper}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={enabled}
+                      disabled={disabled}
+                      onClick={onToggle}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
+                        enabled
+                          ? "border-socx-accent bg-socx-accent/90"
+                          : "border-socx-border-light bg-white dark:border-socx-border-dark dark:bg-socx-panel"
+                      } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}>
+                      <span
+                        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
+                          enabled ? "translate-x-5" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={enabled}
-                    disabled={disabled}
-                    onClick={onToggle}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
-                      enabled
-                        ? "border-socx-accent bg-socx-accent/90"
-                        : "border-socx-border-light bg-white dark:border-socx-border-dark dark:bg-socx-panel"
-                    } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}>
-                    <span
-                      className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
-                        enabled ? "translate-x-5" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-              ))}
+                )
+              )}
             </div>
           </div>
           <div className="md:col-span-2 space-y-3">
             <p className={labelClass}>Quick actions</p>
             <div className="grid gap-3 md:grid-cols-2">
-              {interfacePreferences.map(({ id, label, helper, enabled, onToggle, disabled }) => (
-                <div
-                  key={id}
-                  className="flex items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50">
-                  <div>
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="text-xs text-socx-muted dark:text-socx-muted-dark">{helper}</p>
+              {interfacePreferences.map(
+                ({ id, label, helper, enabled, onToggle, disabled }) => (
+                  <div
+                    key={id}
+                    className="flex items-center justify-between rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50">
+                    <div>
+                      <p className="text-sm font-semibold">{label}</p>
+                      <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                        {helper}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={enabled}
+                      disabled={disabled}
+                      onClick={onToggle}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
+                        enabled
+                          ? "border-socx-accent bg-socx-accent/90"
+                          : "border-socx-border-light bg-white dark:border-socx-border-dark dark:bg-socx-panel"
+                      } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}>
+                      <span
+                        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
+                          enabled ? "translate-x-5" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={enabled}
-                    disabled={disabled}
-                    onClick={onToggle}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${
-                      enabled
-                        ? "border-socx-accent bg-socx-accent/90"
-                        : "border-socx-border-light bg-white dark:border-socx-border-dark dark:bg-socx-panel"
-                    } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}>
-                    <span
-                      className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
-                        enabled ? "translate-x-5" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-              ))}
+                )
+              )}
             </div>
           </div>
           <div className="md:col-span-2 space-y-3">
             <p className={labelClass}>API response cache</p>
             <div className="flex flex-col gap-3 rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold">Short-lived lookup cache</p>
+                <p className="text-sm font-semibold">
+                  Short-lived lookup cache
+                </p>
                 <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-                  Successful provider responses expire after {API_CACHE_TTL_MINUTES} minutes.
+                  Successful provider responses expire after{" "}
+                  {API_CACHE_TTL_MINUTES} minutes.
                 </p>
                 {apiCacheStatus && (
-                  <p className="mt-1 text-xs text-socx-muted dark:text-socx-muted-dark" aria-live="polite">
+                  <p
+                    className="mt-1 text-xs text-socx-muted dark:text-socx-muted-dark"
+                    aria-live="polite">
                     {apiCacheStatus}
                   </p>
                 )}
@@ -359,7 +381,9 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <p className={labelClass}>Lookup grid</p>
-              <h2 className="text-xl font-semibold">Enabled services per IOC type</h2>
+              <h2 className="text-xl font-semibold">
+                Enabled services per IOC type
+              </h2>
             </div>
             <div className="flex items-center gap-2 text-xs text-socx-muted dark:text-socx-muted-dark">
               <MdShield />
@@ -367,38 +391,43 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
             </div>
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {Object.entries(servicesConfig.availableServices).map(([type, services]) => (
-              <div key={type} className="rounded-2xl border border-socx-border-light p-4 dark:border-socx-border-dark">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">{type}</p>
-                  <span className="text-xs text-socx-muted dark:text-socx-muted-dark">
-                    {selectedServices[type]?.length ?? 0}/{services.length} active
-                  </span>
+            {Object.entries(servicesConfig.availableServices).map(
+              ([type, services]) => (
+                <div
+                  key={type}
+                  className="rounded-2xl border border-socx-border-light p-4 dark:border-socx-border-dark">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">{type}</p>
+                    <span className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                      {selectedServices[type]?.length ?? 0}/{services.length}{" "}
+                      active
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {services.map((service) => {
+                      const checked = selectedServices[type]?.includes(service)
+                      return (
+                        <button
+                          type="button"
+                          key={`${type}-${service}`}
+                          onClick={() => onServiceChange(type, service)}
+                          className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                            checked
+                              ? "border-socx-accent bg-socx-accent text-socx-ink shadow-socx-focus"
+                              : "border-socx-border-light bg-white/80 text-socx-ink hover:border-socx-accent dark:border-socx-border-dark dark:bg-socx-panel/40 dark:text-white"
+                          }`}
+                          aria-pressed={checked}>
+                          <span>{service}</span>
+                          <CheckCircleIcon
+                            className={`h-4 w-4 ${checked ? "text-socx-ink" : "text-socx-muted dark:text-socx-muted-dark"}`}
+                          />
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {services.map((service) => {
-                    const checked = selectedServices[type]?.includes(service)
-                    return (
-                      <button
-                        type="button"
-                        key={`${type}-${service}`}
-                        onClick={() => onServiceChange(type, service)}
-                        className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                          checked
-                            ? "border-socx-accent bg-socx-accent text-socx-ink shadow-socx-focus"
-                            : "border-socx-border-light bg-white/80 text-socx-ink hover:border-socx-accent dark:border-socx-border-dark dark:bg-socx-panel/40 dark:text-white"
-                        }`}
-                        aria-pressed={checked}>
-                        <span>{service}</span>
-                        <CheckCircleIcon
-                          className={`h-4 w-4 ${checked ? "text-socx-ink" : "text-socx-muted dark:text-socx-muted-dark"}`}
-                        />
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         </section>
 
@@ -407,7 +436,8 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
             <p className={labelClass}>Custom services</p>
             <h2 className="text-xl font-semibold">Add private lookups</h2>
             <p className="text-sm text-socx-muted dark:text-socx-muted-dark">
-              Provide a name and URL template with the {"{ioc}"} placeholder. These appear in the Magic IOC context menu.
+              Provide a name and URL template with the {"{ioc}"} placeholder.
+              These appear in the Magic IOC context menu.
             </p>
             <div className="mt-4 space-y-3">
               <div className="space-y-1">
@@ -416,7 +446,9 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                 </label>
                 <select
                   value={newType}
-                  onChange={(event) => setNewType(event.target.value as IOCType)}
+                  onChange={(event) =>
+                    setNewType(event.target.value as IOCType)
+                  }
                   className={`${inputClass} bg-white dark:bg-socx-panel/60`}>
                   {supportedIOCTypes.map((type) => (
                     <option key={type} value={type}>
@@ -477,7 +509,9 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-sm font-semibold">{service.name}</p>
-                        <p className="text-xs text-socx-muted dark:text-socx-muted-dark">{service.type}</p>
+                        <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                          {service.type}
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -487,7 +521,9 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                         Remove
                       </button>
                     </div>
-                    <p className="mt-2 break-all text-xs text-socx-muted dark:text-socx-muted-dark">{service.url}</p>
+                    <p className="mt-2 break-all text-xs text-socx-muted dark:text-socx-muted-dark">
+                      {service.url}
+                    </p>
                   </div>
                 ))}
               </div>
