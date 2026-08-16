@@ -361,47 +361,217 @@ const extractSemanticPairs = (
   container: HTMLElement
 ): Array<[string, string]> => {
   const pairs: Array<[string, string]> = []
+  const containerLabelCount = container.querySelectorAll("label").length
+
+  const addPair = (
+    key: string | null | undefined,
+    value: string | null | undefined
+  ) => {
+    const normalizedKey = normalizeLabel(key ?? "")
+    const normalizedValue = cleanText(value)
+    if (
+      isLikelyLabel(normalizedKey) &&
+      normalizedValue &&
+      normalizedKey.toLowerCase() !== normalizedValue.toLowerCase()
+    ) {
+      pairs.push([normalizedKey, normalizedValue])
+    }
+  }
+
+  const readValueWithoutControls = (
+    root: Element,
+    excluded?: Element
+  ): string => {
+    const clone = root.cloneNode(true) as HTMLElement
+    if (excluded) {
+      const path: number[] = []
+      let current: Element | null = excluded
+      while (current && current !== root) {
+        const parent: Element | null = current.parentElement
+        if (!parent) break
+        path.unshift(Array.from(parent.children).indexOf(current))
+        current = parent
+      }
+      let clonedExcluded: Element | null = clone
+      path.forEach((index) => {
+        clonedExcluded = clonedExcluded?.children[index] ?? null
+      })
+      clonedExcluded?.remove()
+    }
+    removeNoise(clone)
+    clone
+      .querySelectorAll(
+        "label, button, input, select, textarea, [role='button'], [role='checkbox'], [role='tab'], [role='switch']"
+      )
+      .forEach((element) => element.remove())
+    return cleanText(clone.textContent)
+  }
+
+  const readVisibleText = (root: Element): string => {
+    const clone = root.cloneNode(true) as HTMLElement
+    removeNoise(clone)
+    return cleanText(clone.textContent)
+  }
+
+  const closestLabelValueContainer = (
+    label: HTMLElement
+  ): HTMLElement | null => {
+    let candidate = label.parentElement
+    for (let depth = 0; candidate && depth < 6; depth += 1) {
+      if (candidate === container && containerLabelCount > 2) break
+      const visibleLabels = Array.from(
+        candidate.querySelectorAll("label")
+      ).filter(
+        (item) =>
+          !item.hidden &&
+          item.getAttribute("aria-hidden") !== "true" &&
+          cleanText(item.textContent)
+      )
+      if (visibleLabels.length === 1) {
+        const value = readValueWithoutControls(candidate, label)
+        if (value && value.length <= 2_000) return candidate
+      }
+      if (candidate === container) break
+      candidate = candidate.parentElement
+    }
+    return null
+  }
 
   container.querySelectorAll("dt").forEach((term) => {
     const value = term.nextElementSibling
     if (!value?.matches("dd")) return
-    const keyText = cleanText(term.textContent)
-    const valueText = cleanText(value.textContent)
-    if (isLikelyLabel(keyText) && valueText) pairs.push([keyText, valueText])
+    addPair(term.textContent, value.textContent)
   })
 
-  container.querySelectorAll("label").forEach((label) => {
+  container.querySelectorAll<HTMLElement>("label").forEach((label) => {
+    if (
+      label.hidden ||
+      label.getAttribute("aria-hidden") === "true" ||
+      label.matches(".checkbox, [class*='checkbox']")
+    ) {
+      return
+    }
     const targetId = label.getAttribute("for")
     const target = targetId
       ? container.querySelector<HTMLElement>(`#${CSS.escape(targetId)}`)
       : null
-    const valueElement = target ?? label.nextElementSibling
     const keyText = cleanText(label.textContent)
-    const valueText = cleanText(
-      valueElement instanceof HTMLInputElement ||
-        valueElement instanceof HTMLTextAreaElement
-        ? valueElement.value
-        : valueElement?.textContent
+    if (!isLikelyLabel(keyText)) return
+
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement
+    ) {
+      addPair(keyText, target.value)
+      return
+    }
+
+    if (target) {
+      const targetValue = readValueWithoutControls(target)
+      if (targetValue && targetValue.toLowerCase() !== keyText.toLowerCase()) {
+        addPair(keyText, targetValue)
+        return
+      }
+    }
+
+    const pairContainer = closestLabelValueContainer(label)
+    if (pairContainer) {
+      addPair(keyText, readValueWithoutControls(pairContainer, label))
+      return
+    }
+
+    const sibling = label.nextElementSibling
+    if (sibling) addPair(keyText, readValueWithoutControls(sibling))
+  })
+
+  const attributeSelectors = [
+    "data-field-name",
+    "data-field",
+    "context-data-property",
+    "data-column-name"
+  ]
+  const attributeCandidates = new Map<
+    string,
+    Array<{ value: string; score: number }>
+  >()
+  const attributeSelector = attributeSelectors
+    .map((attribute) => `[${attribute}]`)
+    .join(", ")
+  const attributedElements = [
+    ...(container.matches(attributeSelector) ? [container] : []),
+    ...Array.from(container.querySelectorAll<HTMLElement>(attributeSelector))
+  ]
+  attributedElements.forEach((element) => {
+    const attribute = attributeSelectors.find((name) =>
+      element.hasAttribute(name)
     )
-    if (isLikelyLabel(keyText) && valueText) pairs.push([keyText, valueText])
+    const keyText = attribute ? element.getAttribute(attribute) : ""
+    if (!keyText || !isLikelyLabel(keyText)) return
+
+    const nestedWithSameKey = attribute
+      ? Array.from(
+          element.querySelectorAll<HTMLElement>(`[${attribute}]`)
+        ).some((child) => child.getAttribute(attribute) === keyText)
+      : false
+    if (nestedWithSameKey) return
+
+    const marker = `${element.className} ${element.getAttribute("data-test") ?? ""}`
+    if (
+      element.matches(
+        "label, button, [role='button'], [role='checkbox'], [role='tab'], [role='switch']"
+      ) ||
+      /\b(action|field-info|toggle|checkbox)\b/i.test(marker)
+    ) {
+      return
+    }
+
+    const valueText =
+      attribute === "context-data-property"
+        ? readVisibleText(element)
+        : readValueWithoutControls(element)
+    if (
+      !valueText ||
+      normalizeLabel(keyText).toLowerCase() === valueText.toLowerCase()
+    ) {
+      return
+    }
+
+    let score = 0
+    if (/\bf-v\b|\bvalue\b/i.test(marker)) score += 4
+    if (element.hasAttribute("context-data-value")) score += 4
+    if (element.children.length === 0) score += 2
+    if (valueText.length <= 512) score += 1
+    const candidates = attributeCandidates.get(keyText) ?? []
+    candidates.push({ value: valueText, score })
+    attributeCandidates.set(keyText, candidates)
+  })
+
+  attributeCandidates.forEach((candidates, key) => {
+    const best = candidates.sort(
+      (left, right) =>
+        right.score - left.score || left.value.length - right.value.length
+    )[0]
+    if (best) addPair(key, best.value)
   })
 
   container
-    .querySelectorAll<HTMLElement>("[data-field], [data-field-name]")
-    .forEach((element) => {
-      const keyText =
-        element.getAttribute("data-field-name") ??
-        element.getAttribute("data-field") ??
-        ""
-      const valueText = cleanText(element.textContent)
-      if (
-        isLikelyLabel(keyText) &&
-        valueText &&
-        normalizeLabel(keyText) !== valueText
-      ) {
-        pairs.push([keyText, valueText])
-      }
+    .querySelectorAll<HTMLElement>("[role='gridcell'], [role='cell']")
+    .forEach((cell) => {
+      const segments = Array.from(cell.children)
+        .map((child) => cleanText(child.textContent))
+        .filter(Boolean)
+      if (segments.length < 2 || !isLikelyLabel(segments[0])) return
+      const value = segments.slice(1).join(" ")
+      addPair(segments[0], value)
     })
+
+  container.querySelectorAll<HTMLElement>("strong").forEach((label) => {
+    const keyText = cleanText(label.textContent)
+    if (!/[:：]\s*$/.test(keyText) || !isLikelyLabel(keyText)) return
+    const value = label.nextElementSibling
+    if (value) addPair(keyText, value.textContent)
+  })
 
   return unique(
     pairs.map(
@@ -636,6 +806,7 @@ export const formatSmartContainer = (
   removeNoise(container)
   const text = cleanTextPreservingLines(container.textContent)
   const candidates: SmartFormatResult[] = []
+  const matrixPairs: Array<[string, string]> = []
 
   const json = extractJsonCandidate(container)
   if (json) candidates.push(json)
@@ -643,13 +814,22 @@ export const formatSmartContainer = (
   extractSemanticMatrices(container, contextualHeaders).forEach((matrix) => {
     const candidate = matrixCandidate(matrix)
     if (candidate?.text) candidates.push(candidate)
+    if (candidate?.kind === "semantic-key-value") {
+      matrix.rows.forEach((row) => {
+        if (row.length === 2) matrixPairs.push([row[0], row[1]])
+      })
+    }
   })
 
-  const semanticPairs = extractSemanticPairs(container)
+  const semanticPairs = unique(
+    [...extractSemanticPairs(container), ...matrixPairs].map(
+      ([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`
+    )
+  ).map((pair) => pair.split("\u0000") as [string, string])
   if (semanticPairs.length > 0) {
     candidates.push({
       kind: "semantic-key-value",
-      score: Math.min(94, 86 + semanticPairs.length),
+      score: Math.min(99, 86 + semanticPairs.length * 2),
       text: formatKeyValues(semanticPairs)
     })
   }
@@ -699,12 +879,101 @@ const readContextualHeaders = (selection: Selection): string[] => {
     : []
 }
 
+const findAtomicSelectionContainer = (
+  selection: Selection
+): HTMLElement | null => {
+  if (selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  const start = elementFromNode(range.startContainer)
+  const end = elementFromNode(range.endContainer)
+  if (!start || !end) return null
+
+  const dataSelector =
+    "[data-field-name], [data-field], [context-data-property], [data-column-name]"
+  const startData = start.closest<HTMLElement>(dataSelector)
+  const endData = end.closest<HTMLElement>(dataSelector)
+  if (startData && startData === endData) {
+    const attribute = [
+      "data-field-name",
+      "data-field",
+      "context-data-property",
+      "data-column-name"
+    ].find((name) => startData.hasAttribute(name))
+    if (attribute === "context-data-property") return startData
+
+    const key = attribute ? startData.getAttribute(attribute) : null
+    let candidate = startData.parentElement
+    for (
+      let depth = 0;
+      attribute && key && candidate && depth < 5;
+      depth += 1
+    ) {
+      const matching = Array.from(
+        candidate.querySelectorAll<HTMLElement>(`[${attribute}]`)
+      ).filter((element) => element.getAttribute(attribute) === key)
+      if (matching.length >= 2 && matching.length <= 8) return candidate
+      candidate = candidate.parentElement
+    }
+    return startData
+  }
+
+  const startCell = start.closest<HTMLElement>(
+    "td, th, [role='gridcell'], [role='cell']"
+  )
+  const endCell = end.closest<HTMLElement>(
+    "td, th, [role='gridcell'], [role='cell']"
+  )
+  if (startCell && startCell === endCell) {
+    const row = startCell.closest<HTMLElement>("tr, [role='row']")
+    return row ?? startCell
+  }
+
+  const startRow = start.closest<HTMLElement>("tr, [role='row']")
+  const endRow = end.closest<HTMLElement>("tr, [role='row']")
+  if (startRow && startRow === endRow) return startRow
+
+  const findLabelContainer = (element: Element): HTMLElement | null => {
+    let candidate = element.parentElement
+    for (let depth = 0; candidate && depth < 6; depth += 1) {
+      const labels = Array.from(candidate.querySelectorAll("label")).filter(
+        (label) =>
+          !label.hidden &&
+          label.getAttribute("aria-hidden") !== "true" &&
+          cleanText(label.textContent)
+      )
+      if (
+        labels.length === 1 &&
+        cleanText(candidate.textContent).length <= 2_000
+      ) {
+        return candidate
+      }
+      candidate = candidate.parentElement
+    }
+    return null
+  }
+
+  const startLabelContainer = findLabelContainer(start)
+  const endLabelContainer = findLabelContainer(end)
+  return startLabelContainer && startLabelContainer === endLabelContainer
+    ? startLabelContainer
+    : null
+}
+
 export const formatSmartSelection = (
   selection: Selection
 ): SmartFormatResult | null => {
   if (!selection || selection.rangeCount === 0) return null
+  const contextualHeaders = readContextualHeaders(selection)
+  const atomicContainer = findAtomicSelectionContainer(selection)
+  if (atomicContainer) {
+    const contextualResult = formatSmartContainer(
+      atomicContainer,
+      contextualHeaders
+    )
+    if (contextualResult) return contextualResult
+  }
   const range = selection.getRangeAt(0)
   const wrapper = range.startContainer.ownerDocument.createElement("div")
   wrapper.appendChild(range.cloneContents())
-  return formatSmartContainer(wrapper, readContextualHeaders(selection))
+  return formatSmartContainer(wrapper, contextualHeaders)
 }
