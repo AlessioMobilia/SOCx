@@ -491,6 +491,11 @@ const getBadgeClass = (entry: BulkCheckSummaryRow): string => {
   return map[entry.statusKind] ?? map.pending
 }
 
+const formatClipboardEntry = (ioc: string, result: any): string => {
+  const content = parseAndFormatResults(result).trim()
+  return content && content !== "-" ? `## ${ioc}\n${content}\n---\n\n` : ""
+}
+
 const buildQuickFacts = (entry: BulkCheckSummaryRow): QuickFact[] => {
   const highlights: QuickFact[] = []
   const regularFacts: QuickFact[] = []
@@ -821,14 +826,8 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                   type="button"
                   onClick={async () => {
                     const formatted = Object.entries(results)
-                      .filter(([_, result]) => {
-                        const content = parseAndFormatResults(result).trim()
-                        return content && content !== "-"
-                      })
-                      .map(([ioc, result]) => {
-                        const content = parseAndFormatResults(result).trim()
-                        return `## ${ioc}\n${content}\n---\n\n`
-                      })
+                      .map(([ioc, result]) => formatClipboardEntry(ioc, result))
+                      .filter(Boolean)
                       .join("\n")
 
                     if (formatted) {
@@ -979,6 +978,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                 const formatted = entry.result
                   ? parseAndFormatResults(entry.result)
                   : ""
+                const clipboardFormatted = entry.result
+                  ? formatClipboardEntry(entry.ioc, entry.result)
+                  : ""
                 const vtHighlight = buildVirusTotalHighlight(entry)
                 const abuseHighlight = buildAbuseHighlight(entry)
                 const nvdHighlight = buildNvdHighlight(entry)
@@ -1028,14 +1030,17 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                           <button
                             type="button"
                             onClick={async () => {
-                              if (!formatted) {
+                              if (!clipboardFormatted) {
                                 return
                               }
-                              await writeIntelClipboardText(formatted, {
-                                successMessage: "✔️ Raw intelligence copied"
-                              })
+                              await writeIntelClipboardText(
+                                clipboardFormatted,
+                                {
+                                  successMessage: "✔️ Raw intelligence copied"
+                                }
+                              )
                             }}
-                            disabled={!formatted}
+                            disabled={!clipboardFormatted}
                             className="inline-flex items-center gap-1 rounded-full border border-socx-border-light px-2.5 py-1 text-[11px] font-semibold text-socx-muted transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-socx-border-dark">
                             <ClipboardDocumentListIcon className="h-3.5 w-3.5" />
                             Copy

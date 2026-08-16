@@ -198,12 +198,16 @@ Run this matrix on all three browsers before a release:
    must remain readable on light/dark host pages, stay above SOCx overlays, and
    fit narrow popup viewports without inheriting host-page button styles.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
-   list. Confirm errors remain per IOC and do not abort the queue. For VT files,
+   list. An IP-only list must preselect AbuseIPDB without VirusTotal; mixed lists
+   must still select the providers needed by their other IOC types. Confirm errors
+   remain per IOC and do not abort the queue. For VT files,
    verify capped aliases and valid/invalid/unsigned signature states; for
    domains verify compact WHOIS/certificate details; for AbuseIPDB verify capped
-   hostnames, distinct reporters, TOR, and whitelist signals. Copied results
-   must use one aligned field list per provider, without intermediate section
-   headings. Confirm that copied IOC fields are defanged by default, then disable
+   hostnames, distinct reporters, TOR, whitelist, and every available proxy/VPN
+   signal without an `Additional signals` placeholder. Copied results must use one
+   aligned field list per provider, without provider or intermediate section
+   headings; the per-IOC Copy action must match Copy formatted. Confirm that copied
+   IOC fields are defanged by default, then disable
    **Sanitize copied intelligence** in Options and confirm they are copied in
    active form. In the right-hand summary, provider cards must show only their
    risk verdict/counts; contextual fields belong in the result text and the

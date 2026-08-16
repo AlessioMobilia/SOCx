@@ -785,12 +785,19 @@ export const parseAndFormatResults = (data: any): string => {
   console.log("IP Intel Signals:", ipIntelSignals)
 
   if (data?.AbuseIPDB?.data || ipIntelSignals.length > 0) {
-    lines.push(formatAbuseIPDBData(data?.AbuseIPDB, ipIntelSignals))
+    lines.push(
+      formatAbuseIPDBData(data?.AbuseIPDB, ipIntelSignals).replace(
+        /^AbuseIPDB\r?\n/,
+        ""
+      )
+    )
     lines.push("") // Separazione
   }
 
   if (data?.VirusTotal?.data) {
-    lines.push(formatVirusTotalData(data.VirusTotal))
+    lines.push(
+      formatVirusTotalData(data.VirusTotal).replace(/^VirusTotal\r?\n/, "")
+    )
   }
 
   if (data?.NVD?.vulnerabilities?.length) {

@@ -399,16 +399,6 @@ export const buildAbuseIntel = (
     seenSignals.add(key)
     return true
   })
-  const hiddenSignalCount = Math.max(0, signals.length - 6)
-  signals.splice(6)
-  if (hiddenSignalCount > 0) {
-    signals.push({
-      label: "Additional signals",
-      value: `+${hiddenSignalCount}`,
-      tone: "neutral"
-    })
-  }
-
   return {
     title: "AbuseIPDB",
     sections: [

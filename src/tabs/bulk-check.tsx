@@ -346,7 +346,7 @@ const BulkCheck = () => {
     (summary: IOCSummary, ignores: string[]) => {
       const ignoreSet = new Set(ignores)
       const hasIp = Boolean(summary["IP"]?.length) && !ignoreSet.has("IP")
-      const hasVtType = ["IP", "Domain", "URL", "Hash"].some(
+      const hasVtType = ["Domain", "URL", "Hash"].some(
         (type) => Boolean(summary[type]?.length) && !ignoreSet.has(type)
       )
       const hasCve = Boolean(summary["CVE"]?.length) && !ignoreSet.has("CVE")
