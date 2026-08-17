@@ -190,9 +190,14 @@ Run this matrix on all three browsers before a release:
    the SOCx context menus and floating buttons appear and open the expected
    service URLs. A CVE must show the dedicated NVD API button and copy a report
    containing only fields returned by the API.
-5. Test refang, defang, CVE copy, and key/value formatting. Include an EDR/SIEM
-   grid selected with and without its header, a two-column property table, CEF
-   or logfmt text, URLs, timestamps, and IPv6. Confirm clipboard fallbacks work
+5. Test refang, defang, CVE copy, and key/value formatting. Include complete and
+   partial selections in native HTML tables and ARIA grids: one cell, middle
+   columns, multiple rows, empty cells, nested presentation wrappers, grouped
+   headers, `colspan`, and `rowspan`. Tabular selections must remain Markdown
+   tables with only the selected rows/columns and their corresponding real
+   headers (or neutral `Column N` fallbacks). Also cover a two-column property
+   table, marked SIEM key/value fields, CEF or logfmt text, URLs, timestamps,
+   and IPv6. Confirm clipboard fallbacks work
    when the page Clipboard API is unavailable. The floating IOC result must copy
    the same single-entry report as Bulk Check's Copy formatted, without provider
    headings. Confirm the shared fallback and success/error feedback work from

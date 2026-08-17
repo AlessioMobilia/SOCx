@@ -17,6 +17,7 @@ type Matrix = {
   rows: string[][]
   headers?: string[]
   semanticHeaders: boolean
+  explicitHeaders: boolean
   source: "table" | "grid"
 }
 
@@ -136,19 +137,107 @@ const removeNoise = (container: HTMLElement): void => {
   })
 }
 
+const readElementText = (element: HTMLElement): string => {
+  const clone = element.cloneNode(true) as HTMLElement
+  removeNoise(clone)
+  return cleanText(clone.textContent)
+}
+
+const TABLE_ROOT_SELECTOR = "table, [role='grid'], [role='table']"
+const TABLE_ROW_SELECTOR = "tr, [role='row']"
+const TABLE_CELL_SELECTOR =
+  "td, th, [role='columnheader'], [role='rowheader'], [role='gridcell'], [role='cell']"
+
 const directCells = (row: Element): HTMLElement[] =>
-  Array.from(row.children).filter(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
-      (child.matches("th, td") ||
-        ["columnheader", "rowheader", "gridcell", "cell"].includes(
-          child.getAttribute("role") ?? ""
-        ))
+  Array.from(row.querySelectorAll<HTMLElement>(TABLE_CELL_SELECTOR)).filter(
+    (cell) => {
+      if (cell.closest(TABLE_ROW_SELECTOR) !== row) return false
+      const parentCell = cell.parentElement?.closest(TABLE_CELL_SELECTOR)
+      return !parentCell || parentCell.closest(TABLE_ROW_SELECTOR) !== row
+    }
   )
+
+const rowsForRoot = (root: Element, selector: string): Element[] =>
+  Array.from(root.querySelectorAll(selector)).filter((row) => {
+    if (row.closest(TABLE_ROOT_SELECTOR) !== root) return false
+    const parentRow = row.parentElement?.closest(TABLE_ROW_SELECTOR)
+    return !parentRow || parentRow.closest(TABLE_ROOT_SELECTOR) !== root
+  })
 
 const getCellIndex = (cell: HTMLElement, fallback: number): number => {
   const raw = Number(cell.getAttribute("aria-colindex"))
   return Number.isInteger(raw) && raw > 0 ? raw - 1 : fallback
+}
+
+type CellPlacement = {
+  cell: HTMLElement
+  index: number
+  span: number
+}
+
+const placeRowCells = (row: Element): CellPlacement[] => {
+  let nextIndex = 0
+  return directCells(row).map((cell) => {
+    const index = getCellIndex(cell, nextIndex)
+    const span = Math.max(1, Number(cell.getAttribute("colspan")) || 1)
+    nextIndex = Math.max(nextIndex, index + span)
+    return { cell, index, span }
+  })
+}
+
+const placeRows = (rows: Element[]): CellPlacement[][] => {
+  const rowSpans = new Map<number, number>()
+
+  return rows.map((row) => {
+    const blocked = new Set(rowSpans.keys())
+    const used = new Set<number>()
+    const pendingRowSpans: Array<{
+      index: number
+      span: number
+      rows: number
+    }> = []
+    let nextIndex = 0
+
+    const placements = directCells(row).map((cell) => {
+      const explicitIndex = Number(cell.getAttribute("aria-colindex"))
+      const hasExplicitIndex =
+        Number.isInteger(explicitIndex) && explicitIndex > 0
+      const span = Math.max(1, Number(cell.getAttribute("colspan")) || 1)
+      let index = hasExplicitIndex ? explicitIndex - 1 : nextIndex
+
+      while (
+        !hasExplicitIndex &&
+        Array.from({ length: span }, (_, offset) => index + offset).some(
+          (column) => blocked.has(column) || used.has(column)
+        )
+      ) {
+        index += 1
+      }
+
+      for (let offset = 0; offset < span; offset += 1) {
+        used.add(index + offset)
+      }
+      nextIndex = Math.max(nextIndex, index + span)
+
+      const rowsSpanned = Math.max(1, Number(cell.getAttribute("rowspan")) || 1)
+      if (rowsSpanned > 1) {
+        pendingRowSpans.push({ index, span, rows: rowsSpanned - 1 })
+      }
+      return { cell, index, span }
+    })
+
+    rowSpans.forEach((remaining, column) => {
+      if (remaining <= 1) rowSpans.delete(column)
+      else rowSpans.set(column, remaining - 1)
+    })
+    pendingRowSpans.forEach(({ index, span, rows: remaining }) => {
+      for (let offset = 0; offset < span; offset += 1) {
+        rowSpans.set(index + offset, remaining)
+      }
+    })
+
+    return placements
+  })
 }
 
 const readRow = (
@@ -157,10 +246,10 @@ const readRow = (
   const cells = directCells(row)
   if (cells.length === 0) return null
 
-  const indexed = cells.map((cell, index) => ({
-    index: getCellIndex(cell, index),
-    text: cleanText(cell.textContent),
-    span: Math.max(1, Number(cell.getAttribute("colspan")) || 1)
+  const indexed = placeRowCells(row).map(({ cell, index, span }) => ({
+    index,
+    span,
+    text: cleanText(cell.textContent)
   }))
   const width = Math.max(...indexed.map((cell) => cell.index + cell.span))
   const values = Array.from({ length: width }, () => "")
@@ -174,14 +263,64 @@ const readRow = (
   return values.some(Boolean) ? { cells: values, headerCells } : null
 }
 
+const readRows = (
+  rows: Element[]
+): Array<{ cells: string[]; headerCells: boolean }> =>
+  placeRows(rows)
+    .map((placements, rowIndex) => {
+      if (placements.length === 0) return null
+      const width = Math.max(
+        ...placements.map(({ index, span }) => index + span)
+      )
+      const values = Array.from({ length: width }, () => "")
+      placements.forEach(({ cell, index }) => {
+        values[index] = cleanText(cell.textContent)
+      })
+      const cells = directCells(rows[rowIndex])
+      return values.some(Boolean)
+        ? {
+            cells: values,
+            headerCells: cells.every((cell) =>
+              cell.matches("th, [role='columnheader']")
+            )
+          }
+        : null
+    })
+    .filter((row): row is NonNullable<typeof row> => !!row)
+
+const splitMatrixRows = (
+  parsed: Array<{ cells: string[]; headerCells: boolean }>
+): { rows: string[][]; headers?: string[]; explicitHeaders: boolean } => {
+  const headerRows = parsed.filter(({ headerCells }) => headerCells)
+  const rows = parsed
+    .filter(({ headerCells }) => !headerCells)
+    .map(({ cells }) => cells)
+  if (headerRows.length === 0) {
+    return { rows, explicitHeaders: false }
+  }
+
+  const columnCount = Math.max(
+    ...headerRows.map(({ cells }) => cells.length),
+    ...rows.map((row) => row.length),
+    0
+  )
+  const headers = Array.from({ length: columnCount }, () => "")
+  headerRows.forEach(({ cells }) => {
+    cells.forEach((cell, index) => {
+      if (cell) headers[index] = cell
+    })
+  })
+  return { rows, headers, explicitHeaders: true }
+}
+
 const inferHeadersFromCells = (
   rows: Element[],
   columnCount: number
 ): string[] | undefined => {
   const headers = Array.from({ length: columnCount }, () => "")
-  for (const row of rows) {
-    directCells(row).forEach((cell, fallbackIndex) => {
-      const index = getCellIndex(cell, fallbackIndex)
+  const layouts = placeRows(rows)
+  rows.forEach((row, rowIndex) => {
+    layouts[rowIndex].forEach(({ cell, index }) => {
       if (headers[index]) return
       const label =
         cell.getAttribute("data-column-name") ??
@@ -189,7 +328,7 @@ const inferHeadersFromCells = (
         cell.getAttribute("aria-label")
       if (label && isLikelyLabel(label)) headers[index] = normalizeLabel(label)
     })
-  }
+  })
   return headers.every(Boolean) ? headers : undefined
 }
 
@@ -212,6 +351,7 @@ const extractSemanticMatrices = (
       headers:
         contextualHeaders.length === width ? contextualHeaders : undefined,
       semanticHeaders: contextualHeaders.length === width,
+      explicitHeaders: false,
       source: orphanCells.some((cell) => cell.matches("td, th"))
         ? "table"
         : "grid"
@@ -229,22 +369,20 @@ const extractSemanticMatrices = (
     const parsed = orphanRows
       .map(readRow)
       .filter((row): row is NonNullable<typeof row> => !!row)
-    const explicitHeader = parsed.findIndex((row) => row.headerCells)
-    const rows = parsed
-      .filter((_, index) => index !== explicitHeader)
-      .map((row) => row.cells)
+    const split = splitMatrixRows(parsed)
+    const { rows } = split
     if (rows.length > 0) {
       const count = Math.max(...rows.map((row) => row.length))
       matrices.push({
         rows,
-        headers:
-          explicitHeader >= 0
-            ? parsed[explicitHeader].cells
-            : contextualHeaders.length === count
-              ? contextualHeaders
-              : undefined,
+        headers: split.headers
+          ? split.headers
+          : contextualHeaders.length === count
+            ? contextualHeaders
+            : undefined,
         semanticHeaders:
-          explicitHeader >= 0 || contextualHeaders.length === count,
+          split.explicitHeaders || contextualHeaders.length === count,
+        explicitHeaders: split.explicitHeaders,
         source: orphanRows.some((row) => row.matches("tr")) ? "table" : "grid"
       })
     }
@@ -254,17 +392,11 @@ const extractSemanticMatrices = (
   if (container.matches("table")) tableRoots.unshift(container)
 
   tableRoots.forEach((table) => {
-    const rowElements = Array.from(table.querySelectorAll("tr"))
-    const parsed = rowElements
-      .map(readRow)
-      .filter((row): row is NonNullable<typeof row> => !!row)
+    const rowElements = rowsForRoot(table, "tr")
+    const parsed = readRows(rowElements)
     if (parsed.length === 0) return
-    const explicitHeader = parsed.findIndex((row) => row.headerCells)
-    const headers =
-      explicitHeader >= 0 ? parsed[explicitHeader].cells : undefined
-    const rows = parsed
-      .filter((_, index) => index !== explicitHeader)
-      .map((row) => row.cells)
+    const split = splitMatrixRows(parsed)
+    const { headers, rows } = split
     if (rows.length === 0) return
     const count = Math.max(
       ...rows.map((row) => row.length),
@@ -277,7 +409,8 @@ const extractSemanticMatrices = (
         (contextualHeaders.length === count ? contextualHeaders : undefined) ??
         inferHeadersFromCells(rowElements, count),
       semanticHeaders:
-        explicitHeader >= 0 || contextualHeaders.length === count,
+        split.explicitHeaders || contextualHeaders.length === count,
+      explicitHeaders: split.explicitHeaders,
       source: "table"
     })
   })
@@ -289,17 +422,11 @@ const extractSemanticMatrices = (
     gridRoots.unshift(container)
 
   gridRoots.forEach((grid) => {
-    const rowElements = Array.from(grid.querySelectorAll("[role='row']"))
-    const parsed = rowElements
-      .map(readRow)
-      .filter((row): row is NonNullable<typeof row> => !!row)
+    const rowElements = rowsForRoot(grid, "[role='row']")
+    const parsed = readRows(rowElements)
     if (parsed.length === 0) return
-    const explicitHeader = parsed.findIndex((row) => row.headerCells)
-    const headers =
-      explicitHeader >= 0 ? parsed[explicitHeader].cells : undefined
-    const rows = parsed
-      .filter((_, index) => index !== explicitHeader)
-      .map((row) => row.cells)
+    const split = splitMatrixRows(parsed)
+    const { headers, rows } = split
     if (rows.length === 0) return
     const count = Math.max(
       ...rows.map((row) => row.length),
@@ -312,7 +439,8 @@ const extractSemanticMatrices = (
         (contextualHeaders.length === count ? contextualHeaders : undefined) ??
         inferHeadersFromCells(rowElements, count),
       semanticHeaders:
-        explicitHeader >= 0 || contextualHeaders.length === count,
+        split.explicitHeaders || contextualHeaders.length === count,
+      explicitHeaders: split.explicitHeaders,
       source: "grid"
     })
   })
@@ -352,7 +480,13 @@ const matrixCandidate = (matrix: Matrix): SmartFormatResult | null => {
 
   return {
     kind: "semantic-table",
-    score: matrix.semanticHeaders ? 96 : matrix.source === "table" ? 91 : 89,
+    score: matrix.explicitHeaders
+      ? 99
+      : matrix.semanticHeaders
+        ? 96
+        : matrix.source === "table"
+          ? 91
+          : 89,
     text: formatMarkdownTable(normalizedRows, matrix.headers)
   }
 }
@@ -829,7 +963,7 @@ export const formatSmartContainer = (
   if (semanticPairs.length > 0) {
     candidates.push({
       kind: "semantic-key-value",
-      score: Math.min(99, 86 + semanticPairs.length * 2),
+      score: Math.min(98, 86 + semanticPairs.length * 2),
       text: formatKeyValues(semanticPairs)
     })
   }
@@ -865,18 +999,184 @@ const readContextualHeaders = (selection: Selection): string[] => {
   const endRoot = end?.closest("table, [role='grid'], [role='table']")
   if (!startRoot || startRoot !== endRoot) return []
 
-  const headerRow = Array.from(
-    startRoot.querySelectorAll("tr, [role='row']")
-  ).find((row) => {
-    const cells = directCells(row)
-    return (
-      cells.length > 0 &&
-      cells.every((cell) => cell.matches("th, [role='columnheader']"))
+  const rows = rowsForRoot(startRoot, TABLE_ROW_SELECTOR)
+  return splitMatrixRows(readRows(rows)).headers ?? []
+}
+
+const DATA_FIELD_ATTRIBUTES = [
+  "data-field-name",
+  "data-field",
+  "context-data-property",
+  "data-column-name"
+] as const
+const DATA_FIELD_SELECTOR = DATA_FIELD_ATTRIBUTES.map(
+  (attribute) => `[${attribute}]`
+).join(", ")
+
+const formatMarkedSelection = (
+  selection: Selection
+): SmartFormatResult | null => {
+  if (selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  const start = elementFromNode(range.startContainer)
+  const end = elementFromNode(range.endContainer)
+  const startData = start?.closest<HTMLElement>(DATA_FIELD_SELECTOR)
+  const endData = end?.closest<HTMLElement>(DATA_FIELD_SELECTOR)
+  if (!startData || !endData) return null
+
+  const attribute = DATA_FIELD_ATTRIBUTES.find(
+    (name) =>
+      startData.hasAttribute(name) &&
+      endData.hasAttribute(name) &&
+      startData.getAttribute(name) === endData.getAttribute(name)
+  )
+  const key = attribute ? startData.getAttribute(attribute) : null
+  if (!attribute || !key) return null
+
+  let candidate: HTMLElement | null = startData
+  while (candidate && !candidate.contains(endData)) {
+    candidate = candidate.parentElement
+  }
+  if (!candidate) return null
+
+  if (attribute !== "context-data-property") {
+    let groupedCandidate: HTMLElement | null = candidate
+    for (let depth = 0; groupedCandidate && depth < 6; depth += 1) {
+      const matching = Array.from(
+        groupedCandidate.querySelectorAll<HTMLElement>(`[${attribute}]`)
+      ).filter((element) => element.getAttribute(attribute) === key)
+      if (matching.length >= 2 && matching.length <= 8) {
+        candidate = groupedCandidate
+        break
+      }
+      groupedCandidate = groupedCandidate.parentElement
+    }
+  }
+
+  const normalizedKey = normalizeLabel(key).toLowerCase()
+  const pair = extractSemanticPairs(candidate).find(
+    ([label]) => normalizeLabel(label).toLowerCase() === normalizedKey
+  )
+  if (!pair) return null
+  return {
+    kind: "semantic-key-value",
+    score: 99,
+    text: formatKeyValues([pair])
+  }
+}
+
+const closestTableCell = (element: Element): HTMLElement | null =>
+  element.closest<HTMLElement>(TABLE_CELL_SELECTOR)
+
+const formatSelectedTable = (
+  selection: Selection
+): SmartFormatResult | null => {
+  if (selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  const start = elementFromNode(range.startContainer)
+  const end = elementFromNode(range.endContainer)
+  if (!start || !end) return null
+
+  // Product-specific field markers carry stronger key/value semantics than
+  // their surrounding layout table (for example, a Splunk field row).
+  const startData = start.closest(DATA_FIELD_SELECTOR)
+  const endData = end.closest(DATA_FIELD_SELECTOR)
+  if (startData && endData) {
+    const sameField = DATA_FIELD_ATTRIBUTES.some(
+      (attribute) =>
+        startData.hasAttribute(attribute) &&
+        endData.hasAttribute(attribute) &&
+        startData.getAttribute(attribute) === endData.getAttribute(attribute)
     )
+    if (sameField) return null
+  }
+
+  const startCell = closestTableCell(start)
+  const endCell = closestTableCell(end)
+  const startRoot = startCell?.closest(TABLE_ROOT_SELECTOR)
+  const endRoot = endCell?.closest(TABLE_ROOT_SELECTOR)
+  if (!startCell || !endCell || !startRoot || startRoot !== endRoot) return null
+
+  const rows = rowsForRoot(startRoot, TABLE_ROW_SELECTOR)
+  const rowLayouts = placeRows(rows)
+  const layouts = rows.map((row, index) => {
+    const cells = directCells(row)
+    return {
+      row,
+      placements: rowLayouts[index],
+      header:
+        cells.length > 0 &&
+        cells.every((cell) => cell.matches("th, [role='columnheader']"))
+    }
   })
-  return headerRow
-    ? directCells(headerRow).map((cell) => cleanText(cell.textContent))
-    : []
+  const startRowIndex = layouts.findIndex(({ placements }) =>
+    placements.some(({ cell }) => cell === startCell)
+  )
+  const endRowIndex = layouts.findIndex(({ placements }) =>
+    placements.some(({ cell }) => cell === endCell)
+  )
+  if (startRowIndex < 0 || endRowIndex < 0) return null
+
+  const startPlacement = layouts[startRowIndex].placements.find(
+    ({ cell }) => cell === startCell
+  )
+  const endPlacement = layouts[endRowIndex].placements.find(
+    ({ cell }) => cell === endCell
+  )
+  if (!startPlacement || !endPlacement) return null
+
+  const firstColumn = Math.min(startPlacement.index, endPlacement.index)
+  const lastColumn = Math.max(
+    startPlacement.index + startPlacement.span - 1,
+    endPlacement.index + endPlacement.span - 1
+  )
+  const columnCount = lastColumn - firstColumn + 1
+  const firstRow = Math.min(startRowIndex, endRowIndex)
+  const lastRow = Math.max(startRowIndex, endRowIndex)
+
+  const sliceLayout = (placements: CellPlacement[]): string[] => {
+    const values = Array.from({ length: columnCount }, () => "")
+    placements.forEach(({ cell, index, span }) => {
+      const overlapStart = Math.max(index, firstColumn)
+      const overlapEnd = Math.min(index + span - 1, lastColumn)
+      if (overlapStart <= overlapEnd) {
+        values[overlapStart - firstColumn] = readElementText(cell)
+      }
+    })
+    return values
+  }
+
+  const selectedRows = layouts
+    .slice(firstRow, lastRow + 1)
+    .filter(({ header }) => !header)
+    .map(({ placements }) => sliceLayout(placements))
+  if (selectedRows.length === 0) return null
+
+  const headerLayouts = layouts.filter(({ header }) => header)
+  const inferredHeaders = inferHeadersFromCells(
+    rows,
+    Math.max(lastColumn + 1, 1)
+  )
+  const headers = headerLayouts.length
+    ? headerLayouts.reduce<string[]>(
+        (combined, { placements }) => {
+          sliceLayout(placements).forEach((header, index) => {
+            if (header) combined[index] = header
+          })
+          return combined
+        },
+        Array.from({ length: columnCount }, () => "")
+      )
+    : inferredHeaders?.slice(firstColumn, lastColumn + 1)
+  const normalizedHeaders = headers?.map(
+    (header, index) => header || `Column ${firstColumn + index + 1}`
+  )
+
+  return {
+    kind: "semantic-table",
+    score: normalizedHeaders ? 98 : 93,
+    text: formatMarkdownTable(selectedRows, normalizedHeaders)
+  }
 }
 
 const findAtomicSelectionContainer = (
@@ -888,17 +1188,12 @@ const findAtomicSelectionContainer = (
   const end = elementFromNode(range.endContainer)
   if (!start || !end) return null
 
-  const dataSelector =
-    "[data-field-name], [data-field], [context-data-property], [data-column-name]"
-  const startData = start.closest<HTMLElement>(dataSelector)
-  const endData = end.closest<HTMLElement>(dataSelector)
+  const startData = start.closest<HTMLElement>(DATA_FIELD_SELECTOR)
+  const endData = end.closest<HTMLElement>(DATA_FIELD_SELECTOR)
   if (startData && startData === endData) {
-    const attribute = [
-      "data-field-name",
-      "data-field",
-      "context-data-property",
-      "data-column-name"
-    ].find((name) => startData.hasAttribute(name))
+    const attribute = DATA_FIELD_ATTRIBUTES.find((name) =>
+      startData.hasAttribute(name)
+    )
     if (attribute === "context-data-property") return startData
 
     const key = attribute ? startData.getAttribute(attribute) : null
@@ -963,6 +1258,10 @@ export const formatSmartSelection = (
   selection: Selection
 ): SmartFormatResult | null => {
   if (!selection || selection.rangeCount === 0) return null
+  const markedResult = formatMarkedSelection(selection)
+  if (markedResult) return markedResult
+  const tableResult = formatSelectedTable(selection)
+  if (tableResult) return tableResult
   const contextualHeaders = readContextualHeaders(selection)
   const atomicContainer = findAtomicSelectionContainer(selection)
   if (atomicContainer) {
