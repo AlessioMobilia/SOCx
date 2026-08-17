@@ -14,7 +14,10 @@ import {
   getNvdCvss,
   type IntelTone
 } from "../utility/intelFormatting"
-import { parseAndFormatResults } from "../utility/utils"
+import {
+  formatIOCClipboardEntry,
+  parseAndFormatResults
+} from "../utility/utils"
 import type { BulkCheckSummaryRow, BulkStatusKind } from "./bulk-check.types"
 
 interface BulkCheckUIProps {
@@ -491,11 +494,6 @@ const getBadgeClass = (entry: BulkCheckSummaryRow): string => {
   return map[entry.statusKind] ?? map.pending
 }
 
-const formatClipboardEntry = (ioc: string, result: any): string => {
-  const content = parseAndFormatResults(result).trim()
-  return content && content !== "-" ? `## ${ioc}\n${content}\n---\n\n` : ""
-}
-
 const buildQuickFacts = (entry: BulkCheckSummaryRow): QuickFact[] => {
   const highlights: QuickFact[] = []
   const regularFacts: QuickFact[] = []
@@ -826,7 +824,9 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                   type="button"
                   onClick={async () => {
                     const formatted = Object.entries(results)
-                      .map(([ioc, result]) => formatClipboardEntry(ioc, result))
+                      .map(([ioc, result]) =>
+                        formatIOCClipboardEntry(ioc, result)
+                      )
                       .filter(Boolean)
                       .join("\n")
 
@@ -979,7 +979,7 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                   ? parseAndFormatResults(entry.result)
                   : ""
                 const clipboardFormatted = entry.result
-                  ? formatClipboardEntry(entry.ioc, entry.result)
+                  ? formatIOCClipboardEntry(entry.ioc, entry.result)
                   : ""
                 const vtHighlight = buildVirusTotalHighlight(entry)
                 const abuseHighlight = buildAbuseHighlight(entry)

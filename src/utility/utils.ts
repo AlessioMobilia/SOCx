@@ -808,6 +808,11 @@ export const parseAndFormatResults = (data: any): string => {
   return lines.join("\n").trim()
 }
 
+export const formatIOCClipboardEntry = (ioc: string, data: any): string => {
+  const content = parseAndFormatResults(data).trim()
+  return content && content !== "-" ? `## ${ioc}\n${content}\n---\n\n` : ""
+}
+
 export const formatAbuseIPDBData = (
   abuseData: any,
   extraSignals: string[] = []

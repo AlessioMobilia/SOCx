@@ -193,8 +193,10 @@ Run this matrix on all three browsers before a release:
 5. Test refang, defang, CVE copy, and key/value formatting. Include an EDR/SIEM
    grid selected with and without its header, a two-column property table, CEF
    or logfmt text, URLs, timestamps, and IPv6. Confirm clipboard fallbacks work
-   when the page Clipboard API is unavailable. Confirm the shared fallback and
-   success/error feedback work from Bulk Check and both subnet tools. Toasts
+   when the page Clipboard API is unavailable. The floating IOC result must copy
+   the same single-entry report as Bulk Check's Copy formatted, without provider
+   headings. Confirm the shared fallback and success/error feedback work from
+   Bulk Check and both subnet tools. Toasts
    must remain readable on light/dark host pages, stay above SOCx overlays, and
    fit narrow popup viewports without inheriting host-page button styles.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC

@@ -14,11 +14,10 @@ import { createTooltip } from "../utility/tooltipFactory"
 import {
   collectIpIntelSignals,
   extractIOCs,
-  formatAbuseIPDBData,
-  formatNvdData,
+  formatIOCClipboardEntry,
   formatSelectedText,
-  formatVirusTotalData,
   identifyIOC,
+  parseAndFormatResults,
   saveIOC,
   showNotification
 } from "../utility/utils"
@@ -788,21 +787,12 @@ if (!(window as any)._formatScriptInitialized) {
               data?.Ipapi,
               data?.ProxyCheck
             )
-            const baseInfo =
-              type === "IP"
-                ? formatAbuseIPDBData(data?.AbuseIPDB, ipSignals) ||
-                  "⚠️ No data from AbuseIPDB"
-                : type === "CVE"
-                  ? formatNvdData(data?.NVD) || "⚠️ No data from NVD"
-                  : formatVirusTotalData(data?.VirusTotal) ||
-                    "⚠️ No data from VirusTotal"
-            const tooltipInfo =
-              type === "IP" && ipSignals.length > 0
-                ? `${baseInfo}\nEnriched Signals: ${ipSignals.join(", ")}`
-                : baseInfo
+            const fallbackInfo = "⚠️ No intelligence data available"
+            const baseInfo = parseAndFormatResults(data) || fallbackInfo
+            const clipboardInfo = formatIOCClipboardEntry(ioc, data) || baseInfo
 
             await createTooltip(baseInfo, button, ipSignals, type)
-            await writeIntelClipboardText(baseInfo)
+            await writeIntelClipboardText(clipboardInfo)
             if (!(await saveIOC(type, ioc))) {
               showNotification("Error", "Failed to save the IOC")
             }
