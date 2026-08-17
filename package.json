@@ -1,7 +1,7 @@
 {
   "name": "so-cx",
   "displayName": "SOCx",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=20"
