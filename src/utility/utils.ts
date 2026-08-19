@@ -19,22 +19,68 @@ import { showToast } from "./toast"
 export { showToast } from "./toast"
 
 // Defang e Refang
+// The scheme keeps its original transport marker so that a defanged value can
+// be restored without losing the TLS information.
+const defangScheme = (text: string): string =>
+  text.replace(
+    /\bhttp(s?):\/\//gi,
+    (_match, secure: string) => `hxxp${secure ? "s" : ""}://`
+  )
+
 export const defang = (text: string): string => {
-  return text.replace(/https?:\/\//gi, "hxxp://").replace(/\./g, "[.]")
+  const scheme = defangScheme(text)
+  const trimmed = scheme.trim()
+
+  // IPv6 addresses carry no dots, so they are neutralised on their separator.
+  if (STRICT_IPV6_REGEX.test(trimmed)) {
+    return scheme.replace(/:/g, "[:]")
+  }
+
+  return scheme.replace(/\./g, "[.]")
 }
 
+// Common obfuscation markers used across reports, advisories and ticketing
+// systems. They are restored before the scheme so that `hxxp[://]` also works.
+const REFANG_SEPARATORS: [RegExp, string][] = [
+  [/\[\s*:\s*\/\s*\/\s*\]/g, "://"],
+  [/\[\s*(?:\.|dot|punto)\s*\]/gi, "."],
+  [/\(\s*(?:\.|dot|punto)\s*\)/gi, "."],
+  [/\{\s*(?:\.|dot|punto)\s*\}/gi, "."],
+  // A literal escaped dot (``\.``), not an arbitrary backslash sequence such
+  // as a Windows path.
+  [/\\\./g, "."],
+  [/\[\s*(?::|colon)\s*\]/gi, ":"],
+  [/\(\s*:\s*\)/g, ":"],
+  [/\{\s*:\s*\}/g, ":"],
+  [/\[\s*(?:@|at)\s*\]/gi, "@"],
+  [/\(\s*(?:@|at)\s*\)/gi, "@"],
+  [/\{\s*(?:@|at)\s*\}/gi, "@"],
+  [/\[\s*\/\s*\]/g, "/"]
+]
+
+// `hxxp`, `hxxtp`, `h**p` and `meow` are the schemes seen in the wild. The
+// replacement is applied everywhere in the text, not only at its beginning.
+const REFANG_SCHEMES: [RegExp, string][] = [
+  [/\bh(?:xx|\*\*|kk)t?p(s?)\b/gi, "http$1"],
+  [/\bmeow(s?)(?=:\/\/)/gi, "http$1"]
+]
+
 export const refang = (text: string): string => {
-  const normalizedText = text.trim().toLowerCase()
-  return normalizedText
-    .replace(/^hxxp:\/\//i, "http://")
-    .replace(/^hxxps:\/\//i, "https://")
-    .replace(/\[\.\]/g, ".")
-    .replace(/\(\.\)/g, ".")
-    .replace(/{\.}/g, ".")
+  let value = text
+
+  for (const [pattern, replacement] of REFANG_SEPARATORS) {
+    value = value.replace(pattern, replacement)
+  }
+
+  for (const [pattern, replacement] of REFANG_SCHEMES) {
+    value = value.replace(pattern, replacement)
+  }
+
+  return value
 }
 
 export const isAlreadyDefanged = (text: string): boolean => {
-  return /\[\.\]|hxxp:\/\/|hxxps:\/\//i.test(text)
+  return /\[\s*(?:\.|dot)\s*\]|\[:\]|\bh(?:xx|\*\*|kk)t?ps?\b/i.test(text)
 }
 
 export const uniqueStrings = (values: string[]): string[] => {
@@ -54,6 +100,144 @@ export const uniqueStrings = (values: string[]): string[] => {
 const IPV6_SEGMENT = "[0-9a-fA-F]{1,4}"
 const IPV4_BYTE = "(25[0-5]|(2[0-4]|1?[0-9])?[0-9])"
 const IPV4_ADDRESS = `(?:${IPV4_BYTE}\\.){3}${IPV4_BYTE}`
+// Group-free variant, safe to embed in the combined extraction pattern.
+const IPV4_BYTE_ATOM = "(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])"
+export const IPV4_ADDRESS_SOURCE = `(?:${IPV4_BYTE_ATOM}\\.){3}${IPV4_BYTE_ATOM}`
+const STRICT_IPV4_REGEX = new RegExp(`^${IPV4_ADDRESS_SOURCE}$`)
+
+// Suffixes that look like a TLD but only ever appear as file extensions.
+// Anything delegated by IANA (com, sh, py, zip, mov, app, md, ...) is
+// deliberately absent so that real domains keep being recognised.
+const NON_TLD_FILE_EXTENSIONS = new Set([
+  "apk",
+  "aspx",
+  "avi",
+  "bak",
+  "bat",
+  "bin",
+  "bmp",
+  "cab",
+  "cer",
+  "cfg",
+  "chm",
+  "cmd",
+  "conf",
+  "crt",
+  "csv",
+  "dat",
+  "deb",
+  "der",
+  "dll",
+  "dmg",
+  "dmp",
+  "doc",
+  "docm",
+  "docx",
+  "drv",
+  "dylib",
+  "egg",
+  "elf",
+  "eml",
+  "eot",
+  "etl",
+  "evtx",
+  "exe",
+  "flac",
+  "gem",
+  "gif",
+  "gz",
+  "hta",
+  "htm",
+  "html",
+  "ini",
+  "ipa",
+  "iso",
+  "jar",
+  "jpeg",
+  "jpg",
+  "jse",
+  "jsp",
+  "jsx",
+  "json",
+  "less",
+  "lnk",
+  "log",
+  "mkv",
+  "mof",
+  "msg",
+  "msi",
+  "nupkg",
+  "ocx",
+  "ost",
+  "otf",
+  "pcap",
+  "pcapng",
+  "pdf",
+  "pem",
+  "pfx",
+  "pkg",
+  "png",
+  "ppt",
+  "pptx",
+  "psd",
+  "pst",
+  "pyc",
+  "pyw",
+  "rar",
+  "reg",
+  "rpm",
+  "rtf",
+  "sass",
+  "scr",
+  "scss",
+  "sql",
+  "svg",
+  "sys",
+  "tar",
+  "tgz",
+  "tmp",
+  "torrent",
+  "tsv",
+  "tsx",
+  "ttf",
+  "txt",
+  "vbe",
+  "vbs",
+  "vue",
+  "wav",
+  "webp",
+  "whl",
+  "wsf",
+  "xls",
+  "xlsm",
+  "xlsx",
+  "xml",
+  "xz",
+  "yaml",
+  "yml",
+  "zipx"
+])
+
+// `invoice.pdf` and `setup.exe` match every domain pattern, so the last label
+// is checked against the known file-extension list before an indicator is
+// reported as a domain.
+export const looksLikeFileName = (value: string): boolean => {
+  const candidate = value.trim().replace(/\.$/, "")
+  const lastLabel = candidate.split(".").pop()
+  return (
+    Boolean(lastLabel) && NON_TLD_FILE_EXTENSIONS.has(lastLabel!.toLowerCase())
+  )
+}
+
+// Domain labels accept internationalised characters so that IDN indicators
+// (and their punycode form) are detected instead of being silently dropped.
+// Only letter blocks are allowed: punctuation and symbols stay out so that
+// prose keeps producing no spurious domains.
+const UNICODE_LETTER_RANGES =
+  "\\u00c0-\\u024f\\u0370-\\u03ff\\u0400-\\u04ff\\u0530-\\u058f\\u0590-\\u05ff\\u0600-\\u06ff\\u0900-\\u097f\\u0e00-\\u0e7f\\u3040-\\u30ff\\u4e00-\\u9fff\\uac00-\\ud7af"
+const DOMAIN_LABEL_CHARS = `a-zA-Z0-9${UNICODE_LETTER_RANGES}`
+export const DOMAIN_REGEX_SOURCE = `(?:[${DOMAIN_LABEL_CHARS}](?:[${DOMAIN_LABEL_CHARS}-]*[${DOMAIN_LABEL_CHARS}])?\\.)+[a-zA-Z${UNICODE_LETTER_RANGES}]{2,}`
+const STRICT_DOMAIN_REGEX = new RegExp(`^${DOMAIN_REGEX_SOURCE}$`)
 const IPV6_REGEX_PARTS = [
   `(?:${IPV6_SEGMENT}:){7}${IPV6_SEGMENT}`,
   `(?:${IPV6_SEGMENT}:){1,6}:${IPV6_SEGMENT}`,
@@ -74,9 +258,7 @@ const STRICT_IPV6_REGEX = new RegExp(`^${IPV6_REGEX_SOURCE}$`, "i")
 // Logic to identify the type of IOC
 export const identifyIOC = (text: string): string | null => {
   // Regex to validate IP, hash, domain, URL, email, MAC address, and ASN
-  const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
   const hashRegex = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/
-  const domainRegex = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
   const urlRegex = /https?:\/\/[^\s]+/
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
   const macAddressRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/
@@ -97,8 +279,9 @@ export const identifyIOC = (text: string): string | null => {
     return "ASN"
   }
 
-  // Check if the input is an IP (IPv4 or IPv6)
-  if (ipRegex.test(text) || STRICT_IPV6_REGEX.test(text)) {
+  // Check if the input is an IP (IPv4 or IPv6). Octets are range checked so
+  // that values such as 999.1.2.3 are not sent to the providers.
+  if (STRICT_IPV4_REGEX.test(text) || STRICT_IPV6_REGEX.test(text)) {
     if (isPrivateIP(text)) {
       //showNotification("Error", text + " is a Private IP");
       return "Private IP"
@@ -111,7 +294,9 @@ export const identifyIOC = (text: string): string | null => {
   if (hashRegex.test(text)) return "Hash"
 
   // Check if the input is a domain
-  if (domainRegex.test(text)) return "Domain"
+  if (STRICT_DOMAIN_REGEX.test(text) && !looksLikeFileName(text)) {
+    return "Domain"
+  }
 
   // Check if the input is a URL
   if (urlRegex.test(text)) return "URL"
@@ -181,27 +366,25 @@ export const showNotification = (title: string, message: string): void => {
 
 const storage = new Storage({ area: "local" })
 
+export const IOC_HISTORY_LIMIT = 20
+
 export const saveIOC = async (type: string, text: string): Promise<boolean> => {
   try {
     const history = (await storage.get<any[]>("iocHistory")) || []
-    let iocHistory = history || []
-    // Check if the IOC is already present
-    const isDuplicate = iocHistory.some(
-      (ioc) => ioc.text === text && ioc.type === type
+    const previous = Array.isArray(history) ? history : []
+    // A repeated lookup is still the most recent one: the existing entry is
+    // moved back to the top with a refreshed timestamp instead of being
+    // silently ignored, so the popup keeps a truthful recency order.
+    const withoutDuplicate = previous.filter(
+      (ioc) => !(ioc?.text === text && ioc?.type === type)
     )
-    if (!isDuplicate) {
-      // Add the new IOC at the beginning of the array
-      iocHistory.unshift({ type, text, timestamp: new Date().toISOString() })
-      // Keep only the latest 20 IOCs
-      if (iocHistory.length > 20) {
-        iocHistory = iocHistory.slice(0, 20)
-      }
-      // Save the updated history
-      await storage.set("iocHistory", iocHistory) // Use chrome.storage.local
-      return true
-    } else {
-      return true // The IOC is already present, but we consider the operation valid
-    }
+    const iocHistory = [
+      { type, text, timestamp: new Date().toISOString() },
+      ...withoutDuplicate
+    ].slice(0, IOC_HISTORY_LIMIT)
+
+    await storage.set("iocHistory", iocHistory) // Use chrome.storage.local
+    return true
   } catch (error) {
     return false
   }
@@ -225,25 +408,83 @@ export const copyToClipboard = async (text: string): Promise<void> => {
   }
 }
 
+const DEFANGED_DOT =
+  "(?:\\[\\s*(?:\\.|dot)\\s*\\]|\\(\\s*\\.\\s*\\)|\\{\\s*\\.\\s*\\})"
+const DEFANGED_SCHEME_SEPARATOR = "(?::\\/\\/|\\[:\\]\\/\\/|\\[:\\/\\/\\])"
+
 const IOC_IPV6_REGEX = new RegExp(IPV6_REGEX_SOURCE, "gi")
-const IOC_IPV4_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g
-const IOC_DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/g
+const IOC_IPV4_REGEX = new RegExp(`\\b${IPV4_ADDRESS_SOURCE}\\b`, "g")
+// Word boundaries are ASCII-only, so IDN labels rely on explicit lookarounds.
+const IOC_DOMAIN_REGEX = new RegExp(
+  `(?<![\\w.@-])${DOMAIN_REGEX_SOURCE}(?![\\w-])`,
+  "g"
+)
 const IOC_URL_REGEX = /\bhttps?:\/\/[^\s,;\r\n]+\b/g
 const IOC_MD5_REGEX = /\b[a-fA-F0-9]{32}\b/g
 const IOC_SHA1_REGEX = /\b[a-fA-F0-9]{40}\b/g
 const IOC_SHA256_REGEX = /\b[a-fA-F0-9]{64}\b/g
 const IOC_EMAIL_REGEX = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g
-const IOC_DEFANGED_URL_REGEX = /\bhxxps?:\/\/[^\s,;\r\n]+\b/g
-const IOC_DEFANGED_DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\[\.\])+[a-zA-Z]{2,}\b/g
-const IOC_DEFANGED_IP_REGEX = /\b(?:\d{1,3}\[\.\]){3}\d{1,3}\b/g
+const IOC_DEFANGED_URL_REGEX = new RegExp(
+  `\\bh(?:xx|\\*\\*|kk)t?ps?${DEFANGED_SCHEME_SEPARATOR}[^\\s,;\\r\\n]+\\b`,
+  "gi"
+)
+const IOC_DEFANGED_DOMAIN_REGEX = new RegExp(
+  `\\b(?:[a-zA-Z0-9-]+${DEFANGED_DOT})+[a-zA-Z]{2,}\\b`,
+  "gi"
+)
+const IOC_DEFANGED_IP_REGEX = new RegExp(
+  `\\b(?:\\d{1,3}${DEFANGED_DOT}){3}\\d{1,3}\\b`,
+  "gi"
+)
+const DEFANGED_AT =
+  "(?:@|\\[\\s*(?:@|at)\\s*\\]|\\(\\s*(?:@|at)\\s*\\)|\\{\\s*(?:@|at)\\s*\\})"
+const IOC_DEFANGED_EMAIL_REGEX = new RegExp(
+  `\\b(?:[a-zA-Z0-9._%+-]|${DEFANGED_DOT})+${DEFANGED_AT}(?:[a-zA-Z0-9-]+(?:\\.|${DEFANGED_DOT}))+[a-zA-Z]{2,}\\b`,
+  "gi"
+)
 const IOC_MAC_REGEX = /\b([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})\b/g
 const IOC_ASN_REGEX = /\bAS\d{1,5}(?:\.\d{1,5})?\b/gi
 const IOC_CVE_REGEX = /\bCVE-\d{4}-\d{4,}\b/gi
 
 const COMBINED_IOC_REGEX = new RegExp(
-  `(${IOC_CVE_REGEX.source}|${IOC_IPV6_REGEX.source}|${IOC_IPV4_REGEX.source}|${IOC_DOMAIN_REGEX.source}|${IOC_URL_REGEX.source}|${IOC_MD5_REGEX.source}|${IOC_SHA1_REGEX.source}|${IOC_SHA256_REGEX.source}|${IOC_EMAIL_REGEX.source}|${IOC_DEFANGED_URL_REGEX.source}|${IOC_DEFANGED_DOMAIN_REGEX.source}|${IOC_DEFANGED_IP_REGEX.source}|${IOC_MAC_REGEX.source}|${IOC_ASN_REGEX.source})`,
+  `(${IOC_CVE_REGEX.source}|${IOC_IPV6_REGEX.source}|${IOC_IPV4_REGEX.source}|${IOC_DEFANGED_EMAIL_REGEX.source}|${IOC_DOMAIN_REGEX.source}|${IOC_URL_REGEX.source}|${IOC_MD5_REGEX.source}|${IOC_SHA1_REGEX.source}|${IOC_SHA256_REGEX.source}|${IOC_EMAIL_REGEX.source}|${IOC_DEFANGED_URL_REGEX.source}|${IOC_DEFANGED_DOMAIN_REGEX.source}|${IOC_DEFANGED_IP_REGEX.source}|${IOC_MAC_REGEX.source}|${IOC_ASN_REGEX.source})`,
   "gi"
 )
+
+const HEX_HASH_REGEX = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/
+
+// Case folding is applied only where it is safe: URL paths and query strings
+// stay untouched because they are frequently victim-specific and case
+// sensitive, while hosts, hashes and identifiers are normalised for dedup.
+export const canonicalizeIOC = (value: string): string => {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return trimmed
+  }
+
+  if (/^cve-\d/i.test(trimmed) || /^as\d/i.test(trimmed)) {
+    return trimmed.toUpperCase()
+  }
+
+  if (HEX_HASH_REGEX.test(trimmed)) {
+    return trimmed.toLowerCase()
+  }
+
+  const urlParts = trimmed.match(/^(https?:\/\/)([^/?#]*)([\s\S]*)$/i)
+  if (urlParts) {
+    return `${urlParts[1].toLowerCase()}${urlParts[2].toLowerCase()}${urlParts[3]}`
+  }
+
+  const atIndex = trimmed.lastIndexOf("@")
+  if (atIndex > 0) {
+    return `${trimmed.slice(0, atIndex)}${trimmed.slice(atIndex).toLowerCase()}`
+  }
+
+  return STRICT_DOMAIN_REGEX.test(trimmed) ? trimmed.toLowerCase() : trimmed
+}
+
+const isFileNameMatch = (value: string): boolean =>
+  !/:\/\/|@/.test(value) && looksLikeFileName(value)
 
 export const extractIOCs = (
   text: string,
@@ -260,16 +501,18 @@ export const extractIOCs = (
     return null
   }
 
+  const relevantMatches = matches.filter((ioc) => {
+    const normalized = refang(ioc).trim()
+    return (
+      Boolean(normalized) &&
+      !isFileNameMatch(normalized) &&
+      Boolean(identifyIOC(normalized))
+    )
+  })
+
   const normalizedMatches = refanged
-    ? matches
-        .map((ioc) => {
-          const normalized = refang(ioc).trim()
-          return /^cve-/i.test(normalized)
-            ? normalized.toUpperCase()
-            : normalized
-        })
-        .filter(Boolean)
-    : matches.filter(Boolean)
+    ? relevantMatches.map((ioc) => canonicalizeIOC(refang(ioc)))
+    : relevantMatches
 
   return normalizedMatches.length > 0 ? normalizedMatches : null
 }

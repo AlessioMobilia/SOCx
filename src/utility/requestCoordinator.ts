@@ -1,12 +1,15 @@
 import { Storage } from "@plasmohq/storage"
 
-import { API_CACHE_TTL_MS } from "./apiCacheConfig"
+import { API_CACHE_TTL_MS, readApiCacheTtlMs } from "./apiCacheConfig"
 
 export type ApiProvider =
   "VirusTotal" | "AbuseIPDB" | "IPAPI" | "ProxyCheck" | "NVD"
 
 type CacheRecord<T> = {
   expiresAt: number
+  // Recorded so that shortening the configured TTL expires existing entries
+  // immediately instead of honouring the window they were written with.
+  storedAt?: number
   value: T
 }
 
@@ -23,6 +26,7 @@ type CoordinatorOptions = {
   sleep?: (ms: number) => Promise<void>
   providerIntervals?: Partial<Record<ApiProvider, number>>
   cacheTtlMs?: number
+  resolveCacheTtlMs?: () => Promise<number>
 }
 
 type CoordinatedRequest<T> = {
@@ -90,7 +94,8 @@ export class ApiRequestCoordinator {
   private readonly now: () => number
   private readonly sleep: (ms: number) => Promise<void>
   private readonly providerIntervals: Record<ApiProvider, number>
-  private readonly cacheTtlMs: number
+  private readonly cacheTtlMs?: number
+  private readonly resolveCacheTtlMs: () => Promise<number>
   private readonly providerQueues = new Map<ApiProvider, Promise<void>>()
   private readonly providerLastStartedAt = new Map<ApiProvider, number>()
   private readonly inFlight = new Map<string, Promise<unknown>>()
@@ -106,7 +111,23 @@ export class ApiRequestCoordinator {
       ...DEFAULT_PROVIDER_INTERVALS,
       ...options.providerIntervals
     }
-    this.cacheTtlMs = options.cacheTtlMs ?? API_CACHE_TTL_MS
+    this.cacheTtlMs = options.cacheTtlMs
+    this.resolveCacheTtlMs =
+      options.resolveCacheTtlMs ??
+      (async () => {
+        try {
+          return await readApiCacheTtlMs()
+        } catch {
+          return API_CACHE_TTL_MS
+        }
+      })
+  }
+
+  private async currentCacheTtlMs(): Promise<number> {
+    if (typeof this.cacheTtlMs === "number") {
+      return this.cacheTtlMs
+    }
+    return this.resolveCacheTtlMs()
   }
 
   run<T>({
@@ -147,6 +168,7 @@ export class ApiRequestCoordinator {
     minimumIntervalMs?: number
   ): Promise<T> {
     const storageKey = `${CACHE_PREFIX}${provider}:${hashCacheKey(requestKey)}`
+    const cacheTtlMs = await this.currentCacheTtlMs()
     let cached: CacheRecord<T> | undefined
     try {
       cached = await this.cacheStore.get<T>(storageKey)
@@ -154,7 +176,13 @@ export class ApiRequestCoordinator {
       console.warn("Unable to read the API response cache:", error)
     }
     if (cached) {
-      if (cached.expiresAt > this.now()) return cached.value
+      // The configured TTL wins over the one the entry was written with, so a
+      // shorter window takes effect on the next lookup.
+      const expiresAt =
+        typeof cached.storedAt === "number"
+          ? Math.min(cached.expiresAt, cached.storedAt + cacheTtlMs)
+          : cached.expiresAt
+      if (expiresAt > this.now()) return cached.value
       try {
         await this.cacheStore.remove(storageKey)
       } catch (error) {
@@ -167,8 +195,10 @@ export class ApiRequestCoordinator {
     )
     if (generation === this.cacheGeneration && this.isCacheable(value)) {
       try {
+        const storedAt = this.now()
         await this.cacheStore.set(storageKey, {
-          expiresAt: this.now() + this.cacheTtlMs,
+          expiresAt: storedAt + cacheTtlMs,
+          storedAt,
           value
         })
       } catch (error) {

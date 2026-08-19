@@ -183,4 +183,32 @@ describe("API request coordinator", () => {
 
     expect(sleep).toHaveBeenCalledWith(1_000)
   })
+
+  it("honours the configured cache window on every lookup", async () => {
+    let now = 1_000
+    let ttlMs = 600_000
+    const request = vi.fn().mockResolvedValue({ verdict: "clean" })
+    const coordinator = new ApiRequestCoordinator({
+      cacheStore: createMemoryStore(),
+      resolveCacheTtlMs: async () => ttlMs,
+      now: () => now,
+      providerIntervals: zeroIntervals
+    })
+
+    const options = {
+      provider: "AbuseIPDB" as const,
+      cacheKey: "ip:203.0.113.10",
+      request
+    }
+
+    await coordinator.run(options)
+    now += 300_000
+    await coordinator.run(options)
+    expect(request).toHaveBeenCalledTimes(1)
+
+    // Shortening the window must expire the entry that is already stored.
+    ttlMs = 120_000
+    await coordinator.run(options)
+    expect(request).toHaveBeenCalledTimes(2)
+  })
 })

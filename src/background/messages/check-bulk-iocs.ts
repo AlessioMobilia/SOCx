@@ -43,22 +43,6 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         ? includeProxyCheck
         : proxyCheckGlobal
 
-    for (const service of services) {
-      if (service === "VirusTotal" && !virusTotalApiKey) {
-        showNotification("Error", "Missing VirusTotal API key.")
-        return res.send({ results: {} })
-      }
-      if (service === "AbuseIPDB" && !abuseIPDBApiKey) {
-        showNotification("Error", "Missing AbuseIPDB API key.")
-        return res.send({ results: {} })
-      }
-    }
-
-    if (effectiveProxyCheck && !proxyCheckApiKey) {
-      showNotification("Error", "ProxyCheck API key is missing.")
-      return res.send({ results: {} })
-    }
-
     const vtTasks: Promise<void>[] = []
     let warnedPrivateIp = false
 
@@ -81,17 +65,29 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
       }
 
       if (services.includes("AbuseIPDB") && type === "IP") {
-        try {
-          result.AbuseIPDB = await checkAbuseIPDB(ioc)
-          if (effectiveIpapi) {
-            try {
-              result.Ipapi = await checkIpapi(ioc)
-            } catch (err) {
-              console.warn("IPAPI error:", err)
-              result.Ipapi = { error: "Fetch failed" }
-            }
+        if (!abuseIPDBApiKey) {
+          result.AbuseIPDB = { error: "Missing AbuseIPDB API key" }
+        } else {
+          try {
+            result.AbuseIPDB = await checkAbuseIPDB(ioc)
+          } catch (err) {
+            console.warn("AbuseIPDB error:", err)
+            result.AbuseIPDB = { error: "Fetch failed" }
           }
-          if (effectiveProxyCheck) {
+        }
+
+        if (effectiveIpapi) {
+          try {
+            result.Ipapi = await checkIpapi(ioc)
+          } catch (err) {
+            console.warn("IPAPI error:", err)
+            result.Ipapi = { error: "Fetch failed" }
+          }
+        }
+        if (effectiveProxyCheck) {
+          if (!proxyCheckApiKey) {
+            result.ProxyCheck = { error: "Missing ProxyCheck API key" }
+          } else {
             try {
               result.ProxyCheck = await checkProxyCheck(ioc)
             } catch (err) {
@@ -99,9 +95,6 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
               result.ProxyCheck = { error: "Fetch failed" }
             }
           }
-        } catch (err) {
-          console.warn("AbuseIPDB error:", err)
-          result.AbuseIPDB = { error: "Fetch failed" }
         }
       }
 
@@ -110,6 +103,10 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
         ["IP", "Domain", "URL", "Hash"].includes(type)
       ) {
         const vtTask = (async () => {
+          if (!virusTotalApiKey) {
+            result.VirusTotal = { error: "Missing VirusTotal API key" }
+            return
+          }
           try {
             const vtData = await checkVirusTotal(ioc, type)
             result.VirusTotal = vtData ?? {

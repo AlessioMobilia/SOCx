@@ -3,9 +3,11 @@ import {
   ArrowPathIcon,
   ClipboardDocumentListIcon,
   PlayCircleIcon,
+  ShieldExclamationIcon,
+  StopCircleIcon,
   TrashIcon
 } from "@heroicons/react/24/outline"
-import React, { useMemo } from "react"
+import React, { useMemo, useState } from "react"
 
 import { writeIntelClipboardText } from "../utility/clipboard"
 import {
@@ -19,14 +21,32 @@ import {
   parseAndFormatResults
 } from "../utility/utils"
 import type { BulkCheckSummaryRow, BulkStatusKind } from "./bulk-check.types"
+import {
+  applyServiceSeverity,
+  deriveAbuseSeverity,
+  deriveNvdSeverity,
+  deriveVirusTotalSeverity,
+  extractProxyCheckDetails,
+  getSeverityLevel,
+  getVerdict,
+  isAffirmativeFlag,
+  VERDICT_LABEL,
+  type BulkVerdict,
+  type Severity
+} from "./bulk-verdict"
 
 interface BulkCheckUIProps {
   textareaValue: string
   onTextAreaChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onFileDrop: (files: FileList | null) => void
   selectedServices: string[]
   onServiceToggle: (service: string, checked: boolean) => void
   onCheckBulk: () => void
+  onCancelCheck: () => void
+  onRetryFailed: () => void
+  failedCount: number
+  isCancelling: boolean
   onClearList: () => void
   isLoading: boolean
   message: string
@@ -94,12 +114,28 @@ type ServiceHighlight = {
   headline: string
 }
 
-type Severity = "low" | "medium" | "high"
-
 const getServiceStatus = (entry: BulkCheckSummaryRow, serviceName: string) =>
   entry.serviceStatuses.find((service) => service.name === serviceName)
 
-const SEVERITY_ORDER: Severity[] = ["low", "medium", "high"]
+const VERDICT_FILTERS: (BulkVerdict | "all")[] = [
+  "all",
+  "malicious",
+  "suspicious",
+  "clean",
+  "error",
+  "pending",
+  "skipped"
+]
+
+const VERDICT_BADGE: Record<BulkVerdict, string> = {
+  malicious: "bg-rose-500/25 text-rose-900 dark:text-rose-100",
+  suspicious: "bg-amber-500/25 text-amber-900 dark:text-amber-100",
+  clean: "bg-emerald-500/20 text-emerald-900 dark:text-emerald-100",
+  pending: "bg-sky-500/20 text-sky-900 dark:text-sky-100",
+  error: "bg-slate-500/25 text-slate-900 dark:text-slate-100",
+  skipped:
+    "bg-socx-cloud-soft/80 text-socx-muted dark:bg-socx-panel/60 dark:text-socx-muted-dark"
+}
 
 const INTEL_TEXT_TONE: Record<IntelTone, string> = {
   danger: "text-rose-700 dark:text-rose-300",
@@ -116,104 +152,6 @@ const INTEL_PILL_TONE: Record<IntelTone, string> = {
     "bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
   neutral:
     "bg-socx-cloud-soft text-socx-ink dark:bg-socx-panel/70 dark:text-white"
-}
-
-const escalateSeverity = (current: Severity, next: Severity): Severity =>
-  SEVERITY_ORDER[
-    Math.max(SEVERITY_ORDER.indexOf(current), SEVERITY_ORDER.indexOf(next))
-  ]
-
-const deriveVirusTotalSeverity = (payload: any): Severity | null => {
-  const stats = payload?.data?.attributes?.last_analysis_stats
-  if (!stats) {
-    return null
-  }
-
-  const malicious = Number(stats.malicious) || 0
-  const suspicious = Number(stats.suspicious) || 0
-  const harmless = Number(stats.harmless) || 0
-  const harmlessBonus = Math.min(harmless * 0.2, 5)
-  const vtScore = malicious * 3 + suspicious - harmlessBonus
-
-  if (vtScore >= 20 || malicious >= 5) {
-    return "high"
-  }
-  if (vtScore >= 5 || malicious > 0 || suspicious > 0) {
-    return "medium"
-  }
-  return "low"
-}
-
-const deriveAbuseSeverity = (payload: any): Severity | null => {
-  const data = payload?.data
-  if (!data) {
-    return null
-  }
-
-  const abuseScore = Number(data.abuseConfidenceScore) || 0
-  const totalReports = Number(data.totalReports) || 0
-  if (abuseScore >= 60 || totalReports >= 10) {
-    return "high"
-  }
-  if (abuseScore >= 20 || totalReports > 0) {
-    return "medium"
-  }
-  return "low"
-}
-
-const deriveNvdSeverity = (payload: any): Severity | null => {
-  const cve = getNvdCve(payload)
-  if (!cve) return null
-  if (cve.cisaExploitAdd) return "high"
-  const score = getNvdCvss(payload)?.score ?? 0
-  if (score >= 7) return "high"
-  if (score >= 4) return "medium"
-  return "low"
-}
-
-const applyServiceSeverity = (
-  base: BulkStatusKind,
-  severity: Severity | null
-): HighlightStatus => {
-  if (!severity || ["pending", "error", "skipped"].includes(base)) {
-    return base
-  }
-  if (severity === "high") {
-    return "flagged-high"
-  }
-  if (severity === "medium") {
-    return "flagged-medium"
-  }
-  return base
-}
-
-const extractProxyCheckDetails = (
-  entry: BulkCheckSummaryRow
-): { proxyPayload: any | null; proxyDetections: any | null } => {
-  const proxyData = entry.result?.ProxyCheck
-  if (!proxyData || typeof proxyData !== "object") {
-    return { proxyPayload: null, proxyDetections: null }
-  }
-  const ipEntryKey = Object.keys(proxyData).find(
-    (key) => key.includes(".") && typeof proxyData[key] === "object"
-  )
-  const proxyPayload = ipEntryKey ? proxyData[ipEntryKey] : proxyData
-  const proxyDetections = proxyPayload?.detections ?? null
-  return { proxyPayload, proxyDetections }
-}
-
-const isAffirmativeFlag = (value: unknown): boolean => {
-  if (typeof value === "boolean") {
-    return value
-  }
-  if (typeof value === "number") {
-    return value > 0
-  }
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase()
-    return ["true", "yes", "y", "1", "detected"].includes(normalized)
-  }
-  return false
 }
 
 const buildVirusTotalHighlight = (
@@ -354,123 +292,6 @@ const CARD_TONE: Record<Severity, string> = {
   medium:
     "border-amber-500/50 bg-white/95 dark:border-amber-400/50 dark:bg-socx-panel/60",
   high: "border-rose-500/50 bg-white/95 dark:border-rose-400/50 dark:bg-socx-panel/60"
-}
-
-const getSeverityLevel = (entry: BulkCheckSummaryRow): Severity => {
-  const vt = entry.result?.VirusTotal
-  const abuse = entry.result?.AbuseIPDB
-  const nvd = entry.result?.NVD
-  const ipapiData = entry.result?.Ipapi?.data ?? entry.result?.Ipapi
-  const { proxyPayload, proxyDetections } = extractProxyCheckDetails(entry)
-
-  let vtLevel: Severity = deriveVirusTotalSeverity(vt) ?? "low"
-  let abuseLevel: Severity = deriveAbuseSeverity(abuse) ?? "low"
-  const nvdLevel: Severity = deriveNvdSeverity(nvd) ?? "low"
-  let proxyLevel: Severity = "low"
-  let ipapiLevel: Severity = "low"
-
-  if (proxyPayload || proxyDetections) {
-    const parseRiskScore = (value: unknown): number => {
-      if (typeof value === "number") {
-        return value
-      }
-      if (typeof value === "string") {
-        const parsed = Number(value)
-        return Number.isFinite(parsed) ? parsed : 0
-      }
-      return 0
-    }
-
-    const rawRisk = proxyDetections?.risk ?? proxyPayload?.risk
-    const riskScore = parseRiskScore(rawRisk)
-    if (riskScore >= 80) {
-      proxyLevel = "high"
-    } else if (riskScore >= 40) {
-      proxyLevel = "medium"
-    }
-
-    const applyDetection = (fields: string[], level: Severity) => {
-      if (!proxyDetections) {
-        return
-      }
-      if (fields.some((field) => isAffirmativeFlag(proxyDetections[field]))) {
-        proxyLevel = escalateSeverity(proxyLevel, level)
-      }
-    }
-
-    applyDetection(["tor", "compromised", "anonymous", "hosting"], "high")
-    applyDetection(["vpn", "proxy", "scraper"], "medium")
-
-    if (proxyPayload) {
-      if (isAffirmativeFlag(proxyPayload.proxy)) {
-        proxyLevel = escalateSeverity(proxyLevel, "medium")
-      }
-      if (typeof proxyPayload.type === "string") {
-        const normalized = proxyPayload.type.toLowerCase()
-        if (["tor", "compromised"].includes(normalized)) {
-          proxyLevel = escalateSeverity(proxyLevel, "high")
-        } else if (["vpn", "proxy", "hosting"].includes(normalized)) {
-          proxyLevel = escalateSeverity(proxyLevel, "medium")
-        }
-      }
-    }
-  }
-
-  if (ipapiData && typeof ipapiData === "object") {
-    const escalateForFields = (fields: string[], level: Severity) => {
-      if (fields.some((field) => ipapiData?.[field] === true)) {
-        ipapiLevel = escalateSeverity(ipapiLevel, level)
-      }
-    }
-    escalateForFields(["is_tor", "is_abuser"], "high")
-    escalateForFields(["is_proxy", "is_vpn", "is_datacenter"], "medium")
-    if (ipapiData?.vpn?.service) {
-      ipapiLevel = escalateSeverity(ipapiLevel, "medium")
-    }
-  }
-
-  let severity: Severity = escalateSeverity(vtLevel, abuseLevel)
-  severity = escalateSeverity(severity, nvdLevel)
-  severity = escalateSeverity(severity, proxyLevel)
-  severity = escalateSeverity(severity, ipapiLevel)
-
-  const cleanNoDetections =
-    entry.statusKind !== "flagged" &&
-    typeof entry.statusText === "string" &&
-    entry.statusText.toLowerCase().includes("no detection")
-
-  if (severity === "low") {
-    const abuseStatus = entry.serviceStatuses.find(
-      (service) => service.name === "AbuseIPDB"
-    )
-    if (abuseStatus) {
-      const scoreMatch = abuseStatus.text.match(/(\d+)%/)
-      const reportsMatch = abuseStatus.text.match(/(\d+)\s+reports?/)
-      const score = scoreMatch ? Number(scoreMatch[1]) : 0
-      const reports = reportsMatch ? Number(reportsMatch[1]) : 0
-      if (score >= 60 || reports >= 10) {
-        severity = "high"
-      } else if (score >= 20 || reports > 0) {
-        severity = "medium"
-      }
-    }
-  }
-
-  if (severity === "low" && entry.statusKind === "flagged") {
-    severity = "medium"
-  }
-
-  const hasPrimaryHigh =
-    vtLevel === "high" || abuseLevel === "high" || nvdLevel === "high"
-  if (!hasPrimaryHigh && severity === "high") {
-    severity = "medium"
-  }
-
-  if (cleanNoDetections && severity === "high") {
-    severity = "medium"
-  }
-
-  return severity
 }
 
 const getBadgeClass = (entry: BulkCheckSummaryRow): string => {
@@ -614,9 +435,14 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   textareaValue,
   onTextAreaChange,
   onFileUpload,
+  onFileDrop,
   selectedServices,
   onServiceToggle,
   onCheckBulk,
+  onCancelCheck,
+  onRetryFailed,
+  failedCount,
+  isCancelling,
   onClearList,
   isLoading,
   message,
@@ -631,6 +457,49 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
   dailyCounters,
   iocSummaries
 }) => {
+  const [verdictFilter, setVerdictFilter] = useState<BulkVerdict | "all">("all")
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
+
+  const verdictByIoc = useMemo(() => {
+    const map = new Map<string, BulkVerdict>()
+    iocSummaries.forEach((entry) => map.set(entry.ioc, getVerdict(entry)))
+    return map
+  }, [iocSummaries])
+
+  const verdictCounts = useMemo(() => {
+    const counts: Record<BulkVerdict, number> = {
+      malicious: 0,
+      suspicious: 0,
+      clean: 0,
+      pending: 0,
+      error: 0,
+      skipped: 0
+    }
+    verdictByIoc.forEach((verdict) => {
+      counts[verdict] += 1
+    })
+    return counts
+  }, [verdictByIoc])
+
+  const visibleSummaries = useMemo(
+    () =>
+      verdictFilter === "all"
+        ? iocSummaries
+        : iocSummaries.filter(
+            (entry) => verdictByIoc.get(entry.ioc) === verdictFilter
+          ),
+    [iocSummaries, verdictByIoc, verdictFilter]
+  )
+
+  const maliciousSummaries = useMemo(
+    () =>
+      iocSummaries.filter((entry) => {
+        const verdict = verdictByIoc.get(entry.ioc)
+        return verdict === "malicious" || verdict === "suspicious"
+      }),
+    [iocSummaries, verdictByIoc]
+  )
+
   const iocStats = useMemo(() => {
     const total = iocSummaries.length
     let flagged = 0
@@ -718,12 +587,35 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                 Refresh
               </button>
             </div>
-            <textarea
-              className="socx-scroll h-72 w-full rounded-2xl border border-socx-border-light bg-white/95 px-4 py-3 text-sm text-socx-ink outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white"
-              placeholder="Paste IPs, domains, hashes, emails, URLs, CVEs..."
-              value={textareaValue}
-              onChange={onTextAreaChange}
-            />
+            <div
+              onDragOver={(event) => {
+                event.preventDefault()
+                setIsDraggingFile(true)
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault()
+                setIsDraggingFile(false)
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                setIsDraggingFile(false)
+                onFileDrop(event.dataTransfer?.files ?? null)
+              }}
+              className={`relative rounded-2xl transition ${
+                isDraggingFile ? "ring-2 ring-socx-accent" : ""
+              }`}>
+              <textarea
+                className="socx-scroll h-72 w-full rounded-2xl border border-socx-border-light bg-white/95 px-4 py-3 text-sm text-socx-ink outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white"
+                placeholder="Paste IPs, domains, hashes, emails, URLs, CVEs — or drop a .txt, .csv, .log or .eml file here"
+                value={textareaValue}
+                onChange={onTextAreaChange}
+              />
+              {isDraggingFile && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-socx-accent/15 text-sm font-semibold text-socx-ink dark:text-white">
+                  Drop the file to append its indicators
+                </div>
+              )}
+            </div>
             <div className="rounded-2xl border border-socx-border-light bg-white/80 p-4 text-sm dark:border-socx-border-dark dark:bg-socx-panel/50">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-socx-muted dark:text-socx-muted-dark">
                 Daily counters
@@ -752,11 +644,12 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-semibold">
                 <ArrowDownTrayIcon className="h-4 w-4 text-socx-muted" />
-                Upload .txt file
+                Import a file
               </label>
               <input
                 type="file"
-                accept=".txt"
+                accept=".txt,.csv,.tsv,.log,.eml,.json,.md,text/plain"
+                multiple
                 onChange={onFileUpload}
                 className="block w-full text-sm text-socx-muted file:mr-4 file:flex file:items-center file:gap-2 file:rounded-full file:border-0 file:bg-socx-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-socx-ink hover:file:bg-socx-accent-strong"
               />
@@ -788,13 +681,33 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
             </div>
 
             <div className="flex flex-col gap-2">
+              {isLoading ? (
+                <button
+                  type="button"
+                  onClick={onCancelCheck}
+                  disabled={isCancelling}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-socx-danger px-4 py-3 text-sm font-semibold text-socx-danger transition hover:bg-socx-danger/10 focus-visible:outline-none focus-visible:shadow-socx-focus disabled:cursor-not-allowed disabled:opacity-60">
+                  <StopCircleIcon className="h-5 w-5" />
+                  {isCancelling ? "Cancelling…" : "Cancel analysis"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onCheckBulk}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-3 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong focus-visible:outline-none focus-visible:shadow-socx-focus">
+                  <PlayCircleIcon className="h-5 w-5" />
+                  Run analysis
+                </button>
+              )}
               <button
                 type="button"
-                onClick={onCheckBulk}
-                disabled={isLoading}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-3 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong focus-visible:outline-none focus-visible:shadow-socx-focus disabled:cursor-not-allowed disabled:opacity-60">
-                <PlayCircleIcon className="h-5 w-5" />
-                {isLoading ? "Running analysis…" : "Run analysis"}
+                onClick={onRetryFailed}
+                disabled={isLoading || failedCount === 0}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
+                <ArrowPathIcon className="h-4 w-4" />
+                {failedCount > 0
+                  ? `Retry ${failedCount} failed IOC${failedCount === 1 ? "" : "s"}`
+                  : "Retry failed"}
               </button>
               <div className="grid gap-2 sm:grid-cols-2">
                 <button
@@ -842,6 +755,34 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                   className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-accent hover:text-socx-accent disabled:cursor-not-allowed disabled:opacity-40 dark:border-socx-border-dark dark:text-white">
                   <ClipboardDocumentListIcon className="h-4 w-4" />
                   Copy formatted
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    // Only the indicators that carry a verdict worth escalating,
+                    // ready to be pasted into a ticket.
+                    const formatted = maliciousSummaries
+                      .map((entry) =>
+                        formatIOCClipboardEntry(entry.ioc, entry.result)
+                      )
+                      .filter(Boolean)
+                      .join("\n")
+
+                    if (formatted) {
+                      await writeIntelClipboardText(formatted, {
+                        successMessage: `✔️ ${maliciousSummaries.length} flagged IOC${
+                          maliciousSummaries.length === 1 ? "" : "s"
+                        } copied`
+                      })
+                    }
+                  }}
+                  disabled={maliciousSummaries.length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-500/50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-500 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-rose-300">
+                  <ShieldExclamationIcon className="h-4 w-4" />
+                  Copy flagged
+                  {maliciousSummaries.length > 0
+                    ? ` (${maliciousSummaries.length})`
+                    : ""}
                 </button>
               </div>
             </div>
@@ -963,6 +904,30 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                 </div>
               ))}
             </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
+                Verdict
+              </p>
+              {VERDICT_FILTERS.map((filter) => {
+                const count =
+                  filter === "all" ? iocSummaries.length : verdictCounts[filter]
+                const active = verdictFilter === filter
+                return (
+                  <button
+                    type="button"
+                    key={filter}
+                    onClick={() => setVerdictFilter(filter)}
+                    aria-pressed={active}
+                    className={`socx-chip ${
+                      active
+                        ? "socx-chip-active"
+                        : "border-socx-border-light bg-white/90 dark:border-socx-border-dark dark:bg-socx-panel/40"
+                    }`}>
+                    {filter === "all" ? "All" : VERDICT_LABEL[filter]} ({count})
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {iocSummaries.length === 0 ? (
@@ -970,10 +935,16 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
               Paste IOCs in the workspace to start tracking their status across
               services.
             </p>
+          ) : visibleSummaries.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-socx-border-light bg-white/60 px-4 py-3 text-sm text-socx-muted dark:border-socx-border-dark dark:bg-socx-panel/40 dark:text-socx-muted-dark">
+              No IOC matches the {VERDICT_LABEL[verdictFilter as BulkVerdict]}{" "}
+              verdict.
+            </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {iocSummaries.map((entry) => {
+              {visibleSummaries.map((entry) => {
                 const severity = getSeverityLevel(entry)
+                const verdict = verdictByIoc.get(entry.ioc) ?? "skipped"
                 const badgeClass = getBadgeClass(entry)
                 const formatted = entry.result
                   ? parseAndFormatResults(entry.result)
@@ -1003,10 +974,16 @@ const BulkCheckUI: React.FC<BulkCheckUIProps> = ({
                     className={`rounded-3xl border p-5 shadow-sm transition hover:shadow-lg ${cardTone}`}>
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
-                          {entry.displayType}
-                        </p>
-                        <h3 className="text-lg font-semibold break-words">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] ${VERDICT_BADGE[verdict]}`}>
+                            {VERDICT_LABEL[verdict]}
+                          </span>
+                          <p className="text-xs uppercase tracking-[0.2em] text-socx-muted dark:text-socx-muted-dark">
+                            {entry.displayType}
+                          </p>
+                        </div>
+                        <h3 className="mt-1 text-lg font-semibold break-words">
                           {entry.ioc}
                         </h3>
                       </div>
