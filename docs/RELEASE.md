@@ -27,10 +27,20 @@ pnpm verify
 pnpm dlx web-ext@10.6.0 lint --source-dir build/firefox-prod
 ```
 
+For releases that change query packs or their consumer, also audit the exact
+catalogue commit being released:
+
+```bash
+git clone --depth 1 https://github.com/AlessioMobilia/socx-query-packs.git ../socx-query-packs-audit
+node ../socx-query-packs-audit/scripts/validate.mjs
+SOCX_QUERY_PACK_AUDIT_DIR=../socx-query-packs-audit pnpm test
+```
+
 Then complete the manual matrix in `docs/DEVELOPMENT.md` using all three
 browsers. At minimum, test the popup, Options storage, context menus, floating
-buttons, clipboard, Field Notes, Bulk Check, subnet tools, and one live request
-per configured service.
+buttons, clipboard, Field Notes, Bulk Check, query workspace/palette/builder,
+the persistent page menu, shortcut settings, Magic IOC grouping, subnet tools,
+and one live request per configured service.
 
 Review `package.json` and each generated `manifest.json` for:
 

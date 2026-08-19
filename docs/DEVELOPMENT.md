@@ -45,6 +45,8 @@ lock and is also used by the publication workflow.
 - `src/sidepanel`: Chrome/Edge side panel and Firefox sidebar UI.
 - `src/tabs`: bulk and subnet tools opened as extension tabs.
 - `src/utility`: IOC parsing, API clients, exports, storage, and UI helpers.
+- `src/utility/query`: untrusted pack validation, source pinning, dialects,
+  rendering, grouping, palette insertion, and the personal rule builder.
 - `scripts/validate-builds.mjs`: validates target manifests and referenced files.
 - `scripts/publish-chrome.mjs`: Chrome Web Store V2 publisher with temporary V1
   compatibility.
@@ -104,10 +106,10 @@ button or remove the old copy before loading the new directory.
 
 After a source change, wait for the terminal to report a successful rebuild,
 reload SOCx from `chrome://extensions`, and reload the web page under test.
-Clicking the toolbar icon must open the popup. The SOCx context menu is
-selection-only: select text on a normal `http://` or `https://` page, then
-right-click the selection. It is intentionally unavailable on `chrome://`
-pages.
+Clicking the toolbar icon must open the popup. The SOCx root and Query workspace
+entry appear on a normal `http://` or `https://` page even without a selection;
+IOC actions appear only after selecting text. Browser-owned `chrome://` pages
+remain unavailable to extension context menus.
 
 Firefox receives the native `menus` permission through the Plasmo manifest
 override. Its persistent background page reconciles menu registrations both at
@@ -159,6 +161,9 @@ pnpm validate:builds
 # Recommended local/CI verification
 pnpm verify
 
+# Optional release audit against a local socx-query-packs checkout
+SOCX_QUERY_PACK_AUDIT_DIR=/path/to/socx-query-packs pnpm test
+
 # Firefox AMO static lint (warnings are reported without failing the build)
 pnpm dlx web-ext@10.6.0 lint --source-dir build/firefox-prod
 ```
@@ -168,6 +173,12 @@ production targets, and generated-manifest checks. The validator also rejects
 bundles that leave runtime packages unresolved, which would otherwise produce
 a blank popup or a background process that cannot create its context menus. A
 successful build does not replace interactive browser testing.
+
+The optional catalogue audit loads the current `index.json`, verifies every
+declared pack with SOCx's own defensive parser, checks index metadata and
+template counts, then renders every template against representative IOC values.
+Run the catalogue repository's `node scripts/validate.mjs` as well: the two
+validators cover the producer and consumer sides of the format.
 
 The smart-formatting fixtures use Vitest with Happy DOM. When changing
 selection parsing, add a fixture for both the newly supported markup and a
@@ -238,6 +249,27 @@ Run this matrix on all three browsers before a release:
 10. If file-URL support is part of the release, enable **Allow access to file
     URLs** in Chrome/Edge and test an explicit local HTML file. This user toggle
     cannot be enabled by the extension.
+11. On a fresh profile, open Query workspace from both the popup and a page
+    context menu without selecting text. Paste a mixed IOC list, browse both IOC
+    and standard templates, set variables and copy a rendered query. Confirm
+    IOC-specific context actions remain selection-only.
+12. Open the query palette and confirm the built-in sources populate
+    automatically. Verify the catalogue count, platform matching,
+    fuzzy search, keyboard navigation, insertion into a plain input and a
+    React/Monaco/CodeMirror console, and clipboard fallback. Confirm Sentinel
+    packs do not appear on unrelated Azure portal routes. Refresh a modified
+    test source and verify its old cache remains active until **Accept change**.
+    Test a private HTTPS source, disable/re-enable a source, and confirm two
+    sources with the same pack id remain distinct. Confirm index-level
+    `verified` values are inherited when the pack omits the field, while an
+    explicit mismatch is rejected. In Query packs settings, import a JSON pack,
+    add a link and open the browser shortcut manager. In Rule builder, create an
+    IOC template with variables and per-type bindings, preview it, export it,
+    import it again, and confirm the variables survive the round trip.
+13. Trigger Magic IOC with grouping enabled and disabled. On Chrome/Edge,
+    confirm background tabs are adjacent, grouped, labelled and colour-stable;
+    on Firefox confirm they open without grouping. Configure more than five
+    destinations and verify cancelling the in-page confirmation opens none.
 
 Use separate, low-privilege test API keys. Never add `.env` files, BPP keys, or
 store credentials to Git.
