@@ -3,19 +3,32 @@ import { describe, expect, it, vi } from "vitest"
 import {
   getContextMenuDefinitions,
   setupContextMenus,
+  SOCX_MENU_ROOT,
+  SOCX_QUERY_WORKSPACE_MENU,
   type ContextMenuApi
 } from "./menus"
 
 describe("context menu registration", () => {
-  it("builds unique selection menu definitions with valid parents", () => {
+  it("builds a persistent SOCx root with selection-only IOC actions", () => {
     const definitions = getContextMenuDefinitions()
     const ids = definitions.map(({ id }) => String(id))
     const idSet = new Set(ids)
 
     expect(definitions.length).toBeGreaterThan(10)
     expect(idSet.size).toBe(ids.length)
+    const root = definitions.find(({ id }) => id === SOCX_MENU_ROOT)
+    const workspace = definitions.find(
+      ({ id }) => id === SOCX_QUERY_WORKSPACE_MENU
+    )
+    expect(root?.contexts).toEqual(["page", "selection", "editable"])
+    expect(workspace?.contexts).toContain("page")
     expect(
-      definitions.every(({ contexts }) => contexts?.includes("selection"))
+      definitions
+        .filter(
+          ({ id }) =>
+            ![SOCX_MENU_ROOT, SOCX_QUERY_WORKSPACE_MENU].includes(String(id))
+        )
+        .every(({ contexts }) => contexts?.includes("selection"))
     ).toBe(true)
 
     definitions.forEach(({ parentId }) => {

@@ -2,8 +2,17 @@ import {
   SELECTION_BUTTONS_MESSAGE,
   SERVICE_PAGE_COPY_BUTTONS_MESSAGE
 } from "../utility/buttonPreferences"
+import {
+  DEFAULT_QUERY_MENU_ENABLED,
+  OPEN_QUERY_PALETTE_MESSAGE,
+  QUERY_MENU_ENABLED_KEY,
+  resolveBooleanPreference
+} from "../utility/query/paletteBridge"
+import { refreshAllSources } from "../utility/query/registry"
 import { handleMenuClick } from "./menu-handler"
 import { getContextMenuApi, setupContextMenus } from "./menus"
+import { setupQueryMenus } from "./query-menus"
+import { openQueryWorkspace } from "./query-workspace"
 
 type ChromiumExtensionApi = typeof chrome & {
   sidePanel?: {
@@ -25,15 +34,55 @@ const buttonPreferenceMessages = new Set([
 
 console.log("Background script loaded")
 
+const queryMenusEnabled = async (): Promise<boolean> => {
+  try {
+    const stored = await chrome.storage.local.get(QUERY_MENU_ENABLED_KEY)
+    return resolveBooleanPreference(
+      stored?.[QUERY_MENU_ENABLED_KEY],
+      DEFAULT_QUERY_MENU_ENABLED
+    )
+  } catch {
+    return DEFAULT_QUERY_MENU_ENABLED
+  }
+}
+
 const scheduleContextMenuSetup = (reason: string): Promise<void> => {
   contextMenuSetup = contextMenuSetup
     .catch(() => undefined)
-    .then(() => setupContextMenus(contextMenuApi))
+    .then(() =>
+      setupContextMenus(contextMenuApi, [
+        async () => {
+          if (await queryMenusEnabled()) {
+            await setupQueryMenus(contextMenuApi)
+          }
+        }
+      ])
+    )
     .catch((error) => {
       console.error(`Context menu setup failed (${reason}):`, error)
     })
 
   return contextMenuSetup
+}
+
+/** Opens the palette in the active tab, falling back to the SOCx query page. */
+const openPaletteInActiveTab = async (
+  body: Record<string, unknown> = {}
+): Promise<void> => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (typeof tab?.id !== "number") return
+
+  chrome.tabs.sendMessage(
+    tab.id,
+    { name: OPEN_QUERY_PALETTE_MESSAGE, body },
+    () => {
+      if (chrome.runtime.lastError) {
+        // Restricted page: the palette cannot be injected there, so the
+        // standalone query page is opened instead of failing silently.
+        void openQueryWorkspace()
+      }
+    }
+  )
 }
 
 // Firefox uses a persistent MV2 background page, where menus should also be
@@ -49,6 +98,9 @@ chrome.runtime.onInstalled.addListener(async () => {
       await extensionApi.sidePanel.setOptions({ enabled: true })
     }
 
+    // Populate the built-in catalogue before building its menu. Existing pins
+    // are respected: an upstream change is reported, never silently adopted.
+    await refreshAllSources()
     await scheduleContextMenuSetup("extension install/update")
   } catch (e) {
     console.error("Error during onInstalled setup:", e)
@@ -65,6 +117,30 @@ contextMenuApi.onClicked.addListener((info, tab) => {
     handleMenuClick(info, tab)
   } catch (e) {
     console.error("Error in handleMenuClick:", e)
+  }
+})
+
+// Keyboard shortcut. The combination itself is remapped by the user from the
+// browser shortcuts page; the extension can only declare a default.
+if (chrome.commands?.onCommand) {
+  chrome.commands.onCommand.addListener((command) => {
+    if (command === "open-query-palette") {
+      void openPaletteInActiveTab()
+    }
+  })
+}
+
+// The menu mirrors the enabled packs, so it is rebuilt whenever they change.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return
+  const relevant = [
+    "queryPackSources",
+    "queryPackCache",
+    "queryPackUserLibrary",
+    QUERY_MENU_ENABLED_KEY
+  ]
+  if (relevant.some((key) => key in changes)) {
+    void scheduleContextMenuSetup("query packs changed")
   }
 })
 

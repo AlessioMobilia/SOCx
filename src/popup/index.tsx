@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
+
 import PopupUI from "./PopupUI"
+
 import "../styles/tailwind.css"
+
 import { Storage } from "@plasmohq/storage"
+
 import { showNotification } from "~src/utility/utils"
+
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 const storage = new Storage({ area: "local" })
@@ -65,7 +70,6 @@ const Popup = () => {
     })
   }, [])
 
-
   useEffect(() => {
     if (!themeLoaded) return
     persistIsDarkMode(isDarkMode)
@@ -112,6 +116,12 @@ const Popup = () => {
     showNotification("Error", "Open the browser side panel manually.")
   }
 
+  const handleQueryWorkspaceClick = () => {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL("/tabs/query-workspace.html")
+    })
+  }
+
   const handleClearHistory = () => {
     setIocHistory([])
     storage.set("iocHistory", [])
@@ -131,12 +141,13 @@ const Popup = () => {
       isDarkMode={isDarkMode}
       iocHistory={iocHistory}
       onBulkCheckClick={handleBulkCheckClick}
+      onQueryWorkspaceClick={handleQueryWorkspaceClick}
       onSubnetExtractorClick={handleSubnetExtractorClick}
       onSubnetCheckClick={handleSubnetCheckClick}
-  onOpenSidePanelClick={handleOpenSidePanelClick}
-  onClearHistory={handleClearHistory}
-  onToggleTheme={() => setIsDarkMode((prev) => !prev)}
-  onOpenOptionsClick={handleOpenOptionsClick}
+      onOpenSidePanelClick={handleOpenSidePanelClick}
+      onClearHistory={handleClearHistory}
+      onToggleTheme={() => setIsDarkMode((prev) => !prev)}
+      onOpenOptionsClick={handleOpenOptionsClick}
     />
   )
 }

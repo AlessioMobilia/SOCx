@@ -11,13 +11,17 @@ import {
   MdVisibilityOff
 } from "react-icons/md"
 
-import { API_CACHE_TTL_MINUTES } from "../utility/apiCacheConfig"
+import {
+  API_CACHE_TTL_OPTIONS,
+  formatApiCacheTtl
+} from "../utility/apiCacheConfig"
 import {
   supportedIOCTypes,
   type CustomService,
   type IOCType
 } from "../utility/iocTypes"
 import { servicesConfig } from "../utility/servicesConfig"
+import QueryPackSettings from "./QueryPackSettings"
 
 interface OptionsUIProps {
   isDarkMode: boolean
@@ -30,6 +34,8 @@ interface OptionsUIProps {
   floatingButtonsEnabled: boolean
   servicePageCopyButtonsEnabled: boolean
   clipboardSanitizationEnabled: boolean
+  tabGroupingEnabled: boolean
+  apiCacheTtlMinutes: number
   selectedServices: { [key: string]: string[] }
   customServices: CustomService[]
   onDarkModeToggle: () => void
@@ -43,6 +49,14 @@ interface OptionsUIProps {
   onFloatingButtonsToggle: (value: boolean) => void
   onServicePageCopyButtonsToggle: (value: boolean) => void
   onClipboardSanitizationToggle: (value: boolean) => void
+  onTabGroupingToggle: (value: boolean) => void
+  queryPaletteEnabled: boolean
+  queryMenuEnabled: boolean
+  queryPaletteScope: "matched" | "all"
+  onQueryPaletteToggle: (value: boolean) => void
+  onQueryMenuToggle: (value: boolean) => void
+  onQueryPaletteScopeChange: (value: "matched" | "all") => void
+  onApiCacheTtlChange: (minutes: number) => void
   onClearApiCache: () => void
   isClearingApiCache: boolean
   apiCacheStatus: string
@@ -78,6 +92,8 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   floatingButtonsEnabled,
   servicePageCopyButtonsEnabled,
   clipboardSanitizationEnabled,
+  tabGroupingEnabled,
+  apiCacheTtlMinutes,
   selectedServices,
   customServices,
   onDarkModeToggle,
@@ -91,6 +107,14 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
   onFloatingButtonsToggle,
   onServicePageCopyButtonsToggle,
   onClipboardSanitizationToggle,
+  onTabGroupingToggle,
+  queryPaletteEnabled,
+  queryMenuEnabled,
+  queryPaletteScope,
+  onQueryPaletteToggle,
+  onQueryMenuToggle,
+  onQueryPaletteScopeChange,
+  onApiCacheTtlChange,
   onClearApiCache,
   isClearingApiCache,
   apiCacheStatus,
@@ -215,6 +239,15 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
       enabled: clipboardSanitizationEnabled,
       onToggle: () =>
         onClipboardSanitizationToggle(!clipboardSanitizationEnabled),
+      disabled: false
+    },
+    {
+      id: "tabGrouping",
+      label: "Group Magic IOC tabs",
+      helper:
+        "Collects the lookup tabs of one indicator in a labelled tab group. Not available on Firefox.",
+      enabled: tabGroupingEnabled,
+      onToggle: () => onTabGroupingToggle(!tabGroupingEnabled),
       disabled: false
     }
   ]
@@ -387,12 +420,11 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
             <p className={labelClass}>API response cache</p>
             <div className="flex flex-col gap-3 rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold">
-                  Short-lived lookup cache
-                </p>
+                <p className="text-sm font-semibold">Lookup cache lifetime</p>
                 <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-                  Successful provider responses expire after{" "}
-                  {API_CACHE_TTL_MINUTES} minutes.
+                  Successful provider responses are reused for{" "}
+                  {formatApiCacheTtl(apiCacheTtlMinutes)}, saving daily quota
+                  while an indicator is investigated.
                 </p>
                 {apiCacheStatus && (
                   <p
@@ -402,14 +434,29 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={onClearApiCache}
-                disabled={isClearingApiCache}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-danger hover:text-socx-danger disabled:cursor-not-allowed disabled:opacity-50 dark:border-socx-border-dark dark:text-white">
-                <MdDelete />
-                {isClearingApiCache ? "Clearing..." : "Clear cache"}
-              </button>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <select
+                  value={apiCacheTtlMinutes}
+                  onChange={(event) =>
+                    onApiCacheTtlChange(Number(event.target.value))
+                  }
+                  aria-label="Lookup cache lifetime"
+                  className="rounded-lg border border-socx-border-light bg-white/85 px-3 py-2 text-sm text-socx-ink outline-none transition focus:border-socx-accent focus:ring-2 focus:ring-socx-accent/40 dark:border-socx-border-dark dark:bg-socx-panel/60 dark:text-white">
+                  {API_CACHE_TTL_OPTIONS.map((option) => (
+                    <option key={option.minutes} value={option.minutes}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={onClearApiCache}
+                  disabled={isClearingApiCache}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-4 py-2 text-sm font-semibold text-socx-ink transition hover:border-socx-danger hover:text-socx-danger disabled:cursor-not-allowed disabled:opacity-50 dark:border-socx-border-dark dark:text-white">
+                  <MdDelete />
+                  {isClearingApiCache ? "Clearing..." : "Clear cache"}
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -567,6 +614,15 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
             )}
           </div>
         </section>
+
+        <QueryPackSettings
+          paletteEnabled={queryPaletteEnabled}
+          menuEnabled={queryMenuEnabled}
+          paletteScope={queryPaletteScope}
+          onPaletteToggle={onQueryPaletteToggle}
+          onMenuToggle={onQueryMenuToggle}
+          onPaletteScopeChange={onQueryPaletteScopeChange}
+        />
       </div>
     </div>
   )

@@ -6,5 +6,7 @@ declare module "@plasmohq/messaging" {
     "check-subnet-abuse": {}
     "clear-api-cache": {}
     "magic-ioc-request": {}
+    "query-library": {}
+    "query-sources": {}
   }
 }

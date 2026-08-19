@@ -12,6 +12,11 @@ import "../styles/tailwind.css"
 import { Storage } from "@plasmohq/storage"
 
 import {
+  API_CACHE_TTL_KEY,
+  DEFAULT_API_CACHE_TTL_MINUTES,
+  normalizeApiCacheTtlMinutes
+} from "../utility/apiCacheConfig"
+import {
   resolveSelectionButtonsPreference,
   resolveServicePageCopyButtonsPreference,
   SELECTION_BUTTONS_KEY,
@@ -24,7 +29,23 @@ import {
   DEFAULT_CLIPBOARD_SANITIZATION_ENABLED
 } from "../utility/clipboardSanitization"
 import { defaultServices } from "../utility/defaultServices"
+import {
+  DEFAULT_TAB_GROUPING_ENABLED,
+  resolveTabGroupingPreference,
+  TAB_GROUPING_KEY
+} from "../utility/iocTabs"
 import type { CustomService } from "../utility/iocTypes"
+import {
+  DEFAULT_QUERY_MENU_ENABLED,
+  DEFAULT_QUERY_PALETTE_ENABLED,
+  DEFAULT_QUERY_PALETTE_SCOPE,
+  QUERY_MENU_ENABLED_KEY,
+  QUERY_PALETTE_ENABLED_KEY,
+  QUERY_PALETTE_SCOPE_KEY,
+  resolveBooleanPreference,
+  resolvePaletteScope,
+  type PaletteScope
+} from "../utility/query/paletteBridge"
 import { ensureIsDarkMode, persistIsDarkMode } from "../utility/theme"
 
 const storage = new Storage({ area: "local" })
@@ -47,6 +68,21 @@ const Options = () => {
     useState(true)
   const [clipboardSanitizationEnabled, setClipboardSanitizationEnabled] =
     useState(DEFAULT_CLIPBOARD_SANITIZATION_ENABLED)
+  const [tabGroupingEnabled, setTabGroupingEnabled] = useState(
+    DEFAULT_TAB_GROUPING_ENABLED
+  )
+  const [apiCacheTtlMinutes, setApiCacheTtlMinutes] = useState(
+    DEFAULT_API_CACHE_TTL_MINUTES
+  )
+  const [queryPaletteEnabled, setQueryPaletteEnabled] = useState(
+    DEFAULT_QUERY_PALETTE_ENABLED
+  )
+  const [queryMenuEnabled, setQueryMenuEnabled] = useState(
+    DEFAULT_QUERY_MENU_ENABLED
+  )
+  const [queryPaletteScope, setQueryPaletteScope] = useState<PaletteScope>(
+    DEFAULT_QUERY_PALETTE_SCOPE
+  )
   const [dailyCounters, setDailyCounters] = useState({
     vt: 0,
     abuse: 0,
@@ -120,6 +156,11 @@ const Options = () => {
     storage.set(SELECTION_BUTTONS_KEY, floatingButtonsEnabled)
     storage.set(SERVICE_PAGE_COPY_BUTTONS_KEY, servicePageCopyButtonsEnabled)
     storage.set(CLIPBOARD_SANITIZATION_KEY, clipboardSanitizationEnabled)
+    storage.set(TAB_GROUPING_KEY, tabGroupingEnabled)
+    storage.set(API_CACHE_TTL_KEY, apiCacheTtlMinutes)
+    storage.set(QUERY_PALETTE_ENABLED_KEY, queryPaletteEnabled)
+    storage.set(QUERY_MENU_ENABLED_KEY, queryMenuEnabled)
+    storage.set(QUERY_PALETTE_SCOPE_KEY, queryPaletteScope)
   }, [
     virusTotalApiKey,
     abuseIPDBApiKey,
@@ -132,7 +173,12 @@ const Options = () => {
     proxyCheckEnabled,
     floatingButtonsEnabled,
     servicePageCopyButtonsEnabled,
-    clipboardSanitizationEnabled
+    clipboardSanitizationEnabled,
+    tabGroupingEnabled,
+    apiCacheTtlMinutes,
+    queryPaletteEnabled,
+    queryMenuEnabled,
+    queryPaletteScope
   ])
 
   useEffect(() => {
@@ -203,6 +249,11 @@ const Options = () => {
       const clipboardSanitizationSetting = await storage.get(
         CLIPBOARD_SANITIZATION_KEY
       )
+      const tabGroupingSetting = await storage.get(TAB_GROUPING_KEY)
+      const apiCacheTtlSetting = await storage.get(API_CACHE_TTL_KEY)
+      const paletteSetting = await storage.get(QUERY_PALETTE_ENABLED_KEY)
+      const queryMenuSetting = await storage.get(QUERY_MENU_ENABLED_KEY)
+      const paletteScopeSetting = await storage.get(QUERY_PALETTE_SCOPE_KEY)
 
       if (vtKey) setVirusTotalApiKey(vtKey)
       if (abKey) setAbuseIPDBApiKey(abKey)
@@ -250,6 +301,15 @@ const Options = () => {
           ? clipboardSanitizationSetting
           : DEFAULT_CLIPBOARD_SANITIZATION_ENABLED
       )
+      setTabGroupingEnabled(resolveTabGroupingPreference(tabGroupingSetting))
+      setApiCacheTtlMinutes(normalizeApiCacheTtlMinutes(apiCacheTtlSetting))
+      setQueryPaletteEnabled(
+        resolveBooleanPreference(paletteSetting, DEFAULT_QUERY_PALETTE_ENABLED)
+      )
+      setQueryMenuEnabled(
+        resolveBooleanPreference(queryMenuSetting, DEFAULT_QUERY_MENU_ENABLED)
+      )
+      setQueryPaletteScope(resolvePaletteScope(paletteScopeSetting))
     } catch (err) {
       console.error("Failed to load settings:", err)
       setSelectedServices(defaultServices)
@@ -438,6 +498,8 @@ const Options = () => {
       floatingButtonsEnabled={floatingButtonsEnabled}
       servicePageCopyButtonsEnabled={servicePageCopyButtonsEnabled}
       clipboardSanitizationEnabled={clipboardSanitizationEnabled}
+      tabGroupingEnabled={tabGroupingEnabled}
+      apiCacheTtlMinutes={apiCacheTtlMinutes}
       onDarkModeToggle={() => setIsDarkMode((prev) => !prev)}
       onServiceChange={handleServiceChange}
       onVirusTotalApiKeyChange={setVirusTotalApiKey}
@@ -449,6 +511,16 @@ const Options = () => {
       onFloatingButtonsToggle={handleFloatingButtonsToggle}
       onServicePageCopyButtonsToggle={handleServicePageCopyButtonsToggle}
       onClipboardSanitizationToggle={setClipboardSanitizationEnabled}
+      onTabGroupingToggle={setTabGroupingEnabled}
+      queryPaletteEnabled={queryPaletteEnabled}
+      queryMenuEnabled={queryMenuEnabled}
+      queryPaletteScope={queryPaletteScope}
+      onQueryPaletteToggle={setQueryPaletteEnabled}
+      onQueryMenuToggle={setQueryMenuEnabled}
+      onQueryPaletteScopeChange={setQueryPaletteScope}
+      onApiCacheTtlChange={(minutes) =>
+        setApiCacheTtlMinutes(normalizeApiCacheTtlMinutes(minutes))
+      }
       onClearApiCache={handleClearApiCache}
       isClearingApiCache={isClearingApiCache}
       apiCacheStatus={apiCacheStatus}

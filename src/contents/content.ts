@@ -8,6 +8,14 @@ import {
   writeClipboardText,
   writeIntelClipboardText
 } from "../utility/clipboard"
+import { SOCX_CONFIRM_MESSAGE } from "../utility/confirmBridge"
+import { showConfirmDialog } from "../utility/confirmDialog"
+import { rememberEditableTarget } from "../utility/query/insertText"
+import {
+  OPEN_QUERY_PALETTE_MESSAGE,
+  type OpenPaletteMessage
+} from "../utility/query/paletteBridge"
+import { openQueryPalette } from "../utility/query/paletteController"
 import { servicesConfig } from "../utility/servicesConfig"
 import { copySmartFormattedText } from "../utility/smartFormattingClipboard"
 import { createTooltip } from "../utility/tooltipFactory"
@@ -96,6 +104,13 @@ if (!(window as any)._formatScriptInitialized) {
     true
   )
   document.addEventListener("selectionchange", handleSelectionChange)
+  // Captured before the browser menu opens: after the click the focus may have
+  // moved, and this is the field a query has to be inserted into.
+  document.addEventListener(
+    "contextmenu",
+    (event) => rememberEditableTarget(event.target),
+    true
+  )
 
   const destroyButtonGroup = () => {
     buttonGroup?.remove()
@@ -969,6 +984,30 @@ if (!(window as any)._formatScriptInitialized) {
       } else {
         sendResponse({ success: false, error: "Invalid text" })
       }
+    } else if (message?.name === OPEN_QUERY_PALETTE_MESSAGE) {
+      const body = (message as OpenPaletteMessage).body ?? {}
+      openQueryPalette({
+        indicators: body.indicators,
+        kind: body.kind,
+        templateKey: body.templateKey
+      }).then(
+        () => sendResponse({ opened: true }),
+        (error) => {
+          console.error("Query palette failed to open:", error)
+          sendResponse({ opened: false })
+        }
+      )
+
+      return true // Keep channel open for async response
+    } else if (message?.name === SOCX_CONFIRM_MESSAGE) {
+      showConfirmDialog({
+        title: message.body?.title ?? "Confirm",
+        message: message.body?.message ?? "",
+        confirmLabel: message.body?.confirmLabel,
+        cancelLabel: message.body?.cancelLabel
+      }).then((confirmed) => sendResponse({ confirmed }))
+
+      return true // Keep channel open for async response
     } else if (message?.name === "format-selection") {
       const formattedText = lastValidSelection
         ? formatSelectedText(lastValidSelection)

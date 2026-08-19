@@ -1,19 +1,21 @@
-import React, { useMemo } from "react"
 import {
   AdjustmentsHorizontalIcon,
   BoltIcon,
   DocumentTextIcon,
-  MoonIcon,
-  SunIcon,
-  GlobeAltIcon,
+  ExclamationCircleIcon,
   ExclamationTriangleIcon,
-  ExclamationCircleIcon
+  GlobeAltIcon,
+  MagnifyingGlassIcon,
+  MoonIcon,
+  SunIcon
 } from "@heroicons/react/24/outline"
+import React, { useMemo } from "react"
 
 interface PopupUIProps {
   isDarkMode: boolean
   iocHistory: { type: string; text: string; timestamp: string }[]
   onBulkCheckClick: () => void
+  onQueryWorkspaceClick: () => void
   onSubnetExtractorClick: () => void
   onSubnetCheckClick: () => void
   onOpenSidePanelClick: () => void
@@ -26,6 +28,7 @@ const PopupUI: React.FC<PopupUIProps> = ({
   isDarkMode,
   iocHistory,
   onBulkCheckClick,
+  onQueryWorkspaceClick,
   onSubnetExtractorClick,
   onSubnetCheckClick,
   onOpenSidePanelClick,
@@ -36,12 +39,21 @@ const PopupUI: React.FC<PopupUIProps> = ({
   const recentHistory = useMemo(
     () =>
       [...iocHistory]
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
         .slice(0, 10),
     [iocHistory]
   )
 
   const actions = [
+    {
+      label: "Query workspace",
+      helper: "Browse and generate queries",
+      icon: MagnifyingGlassIcon,
+      action: onQueryWorkspaceClick
+    },
     {
       label: "Bulk IOC check",
       helper: "Launch the check tab",
@@ -82,14 +94,20 @@ const PopupUI: React.FC<PopupUIProps> = ({
             <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-socx-muted dark:text-socx-muted-dark">
               SOCx
             </p>
-            <p className="text-xs text-socx-muted dark:text-socx-muted-dark">Quick OSINT cockpit</p>
+            <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+              Quick OSINT cockpit
+            </p>
           </div>
           <button
             type="button"
             onClick={onToggleTheme}
             aria-label="Toggle color theme"
             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-socx-border-light text-socx-muted transition hover:border-socx-accent hover:text-socx-ink focus-visible:outline-none focus-visible:shadow-socx-focus dark:border-socx-border-dark dark:text-socx-muted-dark">
-            {isDarkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+            {isDarkMode ? (
+              <SunIcon className="h-5 w-5" />
+            ) : (
+              <MoonIcon className="h-5 w-5" />
+            )}
           </button>
         </header>
 
@@ -132,7 +150,9 @@ const PopupUI: React.FC<PopupUIProps> = ({
           </div>
           <div className="socx-scroll socx-scroll-mini max-h-24 space-y-1 overflow-y-auto rounded-xl border border-socx-border-light bg-white/70 p-2 dark:border-socx-border-dark dark:bg-socx-panel/40">
             {recentHistory.length === 0 ? (
-              <p className="py-4 text-center text-xs text-socx-muted dark:text-socx-muted-dark">No IOCs recorded yet.</p>
+              <p className="py-4 text-center text-xs text-socx-muted dark:text-socx-muted-dark">
+                No IOCs recorded yet.
+              </p>
             ) : (
               recentHistory.map((entry, index) => (
                 <div
@@ -145,7 +165,10 @@ const PopupUI: React.FC<PopupUIProps> = ({
                     </p>
                   </div>
                   <span className="text-[11px] text-socx-muted dark:text-socx-muted-dark">
-                    {new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(entry.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    })}
                   </span>
                 </div>
               ))
