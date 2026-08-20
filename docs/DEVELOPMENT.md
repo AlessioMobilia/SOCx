@@ -261,7 +261,10 @@ Run this matrix on all three browsers before a release:
     packs do not appear on unrelated Azure portal routes. Refresh a modified
     test source and verify its old cache remains active until **Accept change**.
     Test a private HTTPS source, disable/re-enable a source, and confirm two
-    sources with the same pack id remain distinct. Confirm index-level
+    sources with the same pack id remain distinct. Add a plain `http://` source
+    served from the local network and confirm it imports, that it is labelled
+    **not encrypted** in the settings, and that an unreachable one reports the
+    clear-text hint instead of a bare fetch error. Confirm index-level
     `verified` values are inherited when the pack omits the field, while an
     explicit mismatch is rejected. In Query packs settings, import a JSON pack,
     add a link and open the browser shortcut manager. In Rule builder, create an

@@ -13,6 +13,7 @@ import { sendToBackground } from "@plasmohq/messaging"
 
 import type { PackKind } from "../utility/query/packSchema"
 import {
+  isPlainHttpPackSourceUrl,
   QUERY_PACK_REPOSITORY,
   toRawPackUrl,
   type PackSource
@@ -275,6 +276,13 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
                         built-in
                       </span>
                     )}
+                    {isPlainHttpPackSourceUrl(source.url) && (
+                      <span
+                        title="Fetched in clear text: anyone on the network path can read or rewrite these queries."
+                        className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">
+                        not encrypted
+                      </span>
+                    )}
                   </p>
                   <p className="break-all text-[11px] text-socx-muted dark:text-socx-muted-dark">
                     {source.url}
@@ -535,11 +543,11 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
               Add {activeTab.title.toLowerCase()} from a link
             </p>
             <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-              A GitHub or GitLab link, a gist, or an internal HTTPS server. The
-              file may be a single pack, a catalogue index, or an index that
-              only links to other index files — SOCx follows them all. Links
-              copied from the browser address bar are rewritten to their raw
-              form automatically.
+              A GitHub or GitLab link, a gist, or an internal server over HTTPS
+              or plain HTTP. The file may be a single pack, a catalogue index,
+              or an index that only links to other index files — SOCx follows
+              them all. Links copied from the browser address bar are rewritten
+              to their raw form automatically.
             </p>
             <div className="grid gap-2 md:grid-cols-3">
               <input
@@ -580,6 +588,16 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
               <p className="text-[11px] text-socx-muted dark:text-socx-muted-dark">
                 {rewrite.reason}:{" "}
                 <span className="break-all">{rewrite.url}</span>
+              </p>
+            )}
+            {isPlainHttpPackSourceUrl(rewrite.url) && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                This source is fetched in clear text. Anyone on the network path
+                can read the queries and replace them with their own
+                {newToken.trim()
+                  ? ", and the access token is sent unencrypted as well"
+                  : ""}{" "}
+                — prefer HTTPS whenever the server offers it.
               </p>
             )}
             {error && <p className="text-xs text-socx-danger">{error}</p>}

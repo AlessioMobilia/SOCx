@@ -13,13 +13,18 @@ import {
   dialectSelectionTag,
   hashPackContent,
   isAllowedPackSourceUrl,
+  isPlainHttpPackSourceUrl,
   isSelectedDialect,
   looksLikeHtmlResponse,
   resolveIncludeUrl,
   resolvePackUrl,
   toRawPackUrl
 } from "./packSources"
-import { applyIndexMetadata, applyIndexVerification } from "./registry"
+import {
+  applyIndexMetadata,
+  applyIndexVerification,
+  describeFetchFailure
+} from "./registry"
 
 const knownDialects = new Set(["kql", "spl"])
 
@@ -206,11 +211,46 @@ describe("catalogues split across files", () => {
     expect(result.value.packs).toEqual([])
   })
 
-  it("refuses an include that leaves HTTPS or climbs out of the tree", () => {
+  it("accepts an include served over plain HTTP", () => {
+    const result = validatePackIndex({
+      schema: "socx.packindex/v1",
+      includes: ["http://intranet.example/packs.json"]
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.includes).toEqual([
+      "http://intranet.example/packs.json"
+    ])
+  })
+
+  it("refuses a protocol relative path that would change host", () => {
     expect(
       validatePackIndex({
         schema: "socx.packindex/v1",
-        includes: ["http://intranet.example/packs.json"]
+        includes: ["//attacker.example/index.json"]
+      }).ok
+    ).toBe(false)
+    const entry = validatePackIndex({
+      schema: "socx.packindex/v1",
+      packs: [
+        {
+          id: "demo",
+          kind: "ioc",
+          dialect: "kql",
+          path: "//attacker.example/pack.json"
+        }
+      ]
+    })
+    expect(entry.ok).toBe(false)
+    if (entry.ok) return
+    expect(entry.errors[0].message).toMatch(/unsafe pack path/)
+  })
+
+  it("refuses an include on another scheme or one climbing out of the tree", () => {
+    expect(
+      validatePackIndex({
+        schema: "socx.packindex/v1",
+        includes: ["ftp://intranet.example/packs.json"]
       }).ok
     ).toBe(false)
     expect(
@@ -344,15 +384,79 @@ describe("source URL handling", () => {
     ).toBe("https://raw.githubusercontent.com/org/repo/main/packs/ioc/a.json")
   })
 
-  it("rejects non-HTTPS sources and cross-origin pack paths", () => {
+  it("accepts HTTP and HTTPS sources and refuses every other scheme", () => {
     expect(isAllowedPackSourceUrl("https://example.com/index.json")).toBe(true)
-    expect(isAllowedPackSourceUrl("http://example.com/index.json")).toBe(false)
+    expect(isAllowedPackSourceUrl("http://intranet.example/index.json")).toBe(
+      true
+    )
+    expect(isAllowedPackSourceUrl("ftp://example.com/index.json")).toBe(false)
+    expect(isAllowedPackSourceUrl("file:///etc/passwd")).toBe(false)
+    expect(isAllowedPackSourceUrl("javascript:alert(1)")).toBe(false)
+    expect(isAllowedPackSourceUrl("not a url")).toBe(false)
+  })
+
+  it("flags a source fetched in clear text", () => {
+    expect(isPlainHttpPackSourceUrl("http://intranet.example/index.json")).toBe(
+      true
+    )
+    expect(isPlainHttpPackSourceUrl("https://example.com/index.json")).toBe(
+      false
+    )
+    expect(isPlainHttpPackSourceUrl("nonsense")).toBe(false)
+  })
+
+  it("keeps pack paths on the origin, scheme included", () => {
     expect(() =>
       resolvePackUrl(
         "https://example.com/index.json",
         "https://attacker.example/pack.json"
       )
     ).toThrow(/source origin/)
+    // An HTTPS catalogue cannot be downgraded to plain HTTP, nor the reverse.
+    expect(() =>
+      resolvePackUrl(
+        "https://example.com/index.json",
+        "http://example.com/pack.json"
+      )
+    ).toThrow(/source origin/)
+    expect(
+      resolvePackUrl("http://intranet.example/index.json", "packs/a.json")
+    ).toBe("http://intranet.example/packs/a.json")
+  })
+
+  it("resolves an include over plain HTTP", () => {
+    expect(
+      resolveIncludeUrl("http://intranet.example/index.json", "team/other.json")
+    ).toBe("http://intranet.example/team/other.json")
+    expect(
+      resolveIncludeUrl(
+        "https://example.test/index.json",
+        "http://intranet.example/index.json"
+      )
+    ).toBe("http://intranet.example/index.json")
+  })
+
+  it("explains a failed plain HTTP fetch", () => {
+    expect(
+      describeFetchFailure(
+        new TypeError("Failed to fetch"),
+        "http://intranet.example/index.json"
+      )
+    ).toMatch(/plain HTTP/)
+    // An HTTPS failure keeps the original message, and so does an HTTP error
+    // the server itself answered with.
+    expect(
+      describeFetchFailure(
+        new TypeError("Failed to fetch"),
+        "https://example.com/index.json"
+      )
+    ).toBe("Failed to fetch")
+    expect(
+      describeFetchFailure(
+        new Error("HTTP 404"),
+        "http://intranet.example/index.json"
+      )
+    ).toBe("HTTP 404")
   })
 
   it("pins content with a SHA-256 digest", async () => {

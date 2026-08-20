@@ -161,8 +161,8 @@ selection is applied before the download, not after it.
 A source URL may point at a single pack, at a catalogue index, or at an index
 that only **links to other index files** — so a SOC can publish one link to its
 analysts and still keep queries split per platform, per team or per customer.
-Included files are followed recursively (HTTPS only, capped in depth and file
-count) and every file of the tree is part of the pinned content hash.
+Included files are followed recursively (HTTP or HTTPS only, capped in depth and
+file count) and every file of the tree is part of the pinned content hash.
 
 Beyond groups, a repository can declare **its own filter dimensions**: a pack or
 an index adds `facets` (for example `customer`, `tenant`, `squad`) and tags its
@@ -193,7 +193,9 @@ how an MSSP filters its catalogue down to one customer.
 The Query packs settings expose all three authoring paths in one place:
 
 - import a `.json` query pack from a local file;
-- paste a GitHub, GitLab (including self-hosted), gist or internal HTTPS URL;
+- paste a GitHub, GitLab (including self-hosted), gist or internal URL, over
+  HTTPS or over the plain HTTP many internal servers still use — a clear-text
+  source is marked **not encrypted** in the settings;
 - create or edit a template directly in the SOCx rule builder.
 
 SOCx rewrites `blob` links to their raw form automatically. Private repositories
@@ -270,11 +272,19 @@ production SIEM, so it is treated as untrusted data throughout: packs contain
 the extension rather than code supplied by the pack, unknown fields are dropped,
 every fetched file is pinned together with a SHA‑256 content hash and a changed
 source is blocked until the analyst accepts it, ids are namespaced per source,
-and console links never open by themselves. A catalogue index is authoritative
+and console links never open by themselves. Sources are fetched over HTTPS or,
+for the internal servers that still need it, plain HTTP — no other scheme — and
+a clear-text source is labelled **not encrypted** wherever it is listed, because
+its queries can be read and rewritten in transit. A catalogue index is authoritative
 for its `verified` attestation: packs may omit the duplicate field, but an
 explicit pack value that contradicts the index is rejected.
 
-Format documentation lives in the pack repository:
+Writing your own pack files is documented in
+[**Writing SOCx query pack JSON files**](docs/QUERY_PACK_FORMAT.md) — the
+complete field reference, the template placeholder and filter syntax, the
+dialect table, index catalogues, validation rules and worked examples.
+
+Further format documentation lives in the pack repository:
 [schema](https://github.com/AlessioMobilia/socx-query-packs/blob/main/docs/SCHEMA.md),
 [template syntax](https://github.com/AlessioMobilia/socx-query-packs/blob/main/docs/TEMPLATE-SYNTAX.md),
 [dialects](https://github.com/AlessioMobilia/socx-query-packs/blob/main/docs/DIALECTS.md),
@@ -284,9 +294,10 @@ Format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.2.0 release notes](docs/RELEASE_NOTES_1.2.0.md) for the newest
-flows, and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query pack
-foundations, safety model and validation scope.
+See the [SOCx 1.3.0 release notes](docs/RELEASE_NOTES_1.3.0.md) for the newest
+flows, the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
+catalogue work, and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query
+pack foundations, safety model and validation scope.
 
 SOCx uses Node.js 22.13+ and pnpm 11.19.0. Install dependencies with the
 version pinned in `package.json`:

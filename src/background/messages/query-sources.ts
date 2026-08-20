@@ -60,7 +60,7 @@ const handler: PlasmoMessaging.MessageHandler<
     if (!isAllowedPackSourceUrl(rewritten.url)) {
       res.send({
         sources,
-        error: "Query pack sources must use a valid HTTPS URL."
+        error: "Query pack sources must use a valid HTTP or HTTPS URL."
       })
       return
     }

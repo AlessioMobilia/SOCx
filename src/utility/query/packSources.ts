@@ -85,10 +85,29 @@ export const dialectSelectionTag = (
     ? [...source.dialects].sort().join(",")
     : "all"
 
-/** Remote query text is accepted only over TLS. */
+/**
+ * Schemes a pack source may be fetched over. TLS is what a public catalogue
+ * should use, but an internal repository is often published by a plain HTTP
+ * server on the corporate network, so `http:` is accepted as well and flagged
+ * to the analyst instead of being refused.
+ */
+const PACK_SOURCE_PROTOCOLS = ["https:", "http:"]
+
 export const isAllowedPackSourceUrl = (input: string): boolean => {
   try {
-    return new URL(input).protocol === "https:"
+    return PACK_SOURCE_PROTOCOLS.includes(new URL(input).protocol)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * A source fetched in clear text: the query text can be read and rewritten in
+ * transit, so every surface that shows a source says so.
+ */
+export const isPlainHttpPackSourceUrl = (input: string): boolean => {
+  try {
+    return new URL(input).protocol === "http:"
   } catch {
     return false
   }
@@ -164,12 +183,19 @@ export const looksLikeHtmlResponse = (
   return /^\s*<(!doctype|html)\b/i.test(body)
 }
 
-/** Resolve a pack path from the index against the index URL itself. */
+/**
+ * Resolve a pack path from the index against the index URL itself. The origin
+ * check carries the scheme with it, so an HTTPS catalogue can never be talked
+ * into reading its packs over plain HTTP, and the other way round.
+ */
 export const resolvePackUrl = (indexUrl: string, packPath: string): string => {
   const resolved = new URL(packPath.replace(/^\.\//, ""), indexUrl)
   const index = new URL(indexUrl)
-  if (resolved.protocol !== "https:" || resolved.origin !== index.origin) {
-    throw new Error("pack paths must stay on the HTTPS source origin")
+  if (
+    !PACK_SOURCE_PROTOCOLS.includes(resolved.protocol) ||
+    resolved.origin !== index.origin
+  ) {
+    throw new Error("pack paths must stay on the source origin")
   }
   return resolved.toString()
 }
@@ -177,20 +203,21 @@ export const resolvePackUrl = (indexUrl: string, packPath: string): string => {
 /**
  * Resolve an entry of an index `includes` list. A relative path stays on the
  * origin of the index that referenced it, exactly like a pack path; an absolute
- * URL is allowed so a catalogue can point at a file hosted elsewhere, but only
- * over HTTPS — and the whole tree is content hashed, so a change anywhere still
- * has to be re-accepted before it is used.
+ * URL is allowed so a catalogue can point at a file hosted elsewhere, over
+ * HTTPS or over the plain HTTP of an internal server — and the whole tree is
+ * content hashed, so a change anywhere still has to be re-accepted before it is
+ * used.
  */
 export const resolveIncludeUrl = (
   indexUrl: string,
   reference: string
 ): string => {
   const trimmed = reference.trim()
-  if (/^https:\/\//i.test(trimmed)) {
+  if (/^https?:\/\//i.test(trimmed)) {
     return toRawPackUrl(trimmed).url
   }
   if (/^[a-z]+:/i.test(trimmed)) {
-    throw new Error("included indexes must use HTTPS")
+    throw new Error("included indexes must use HTTP or HTTPS")
   }
   return resolvePackUrl(indexUrl, trimmed)
 }

@@ -28,6 +28,7 @@ import {
   dialectSelectionTag,
   hashPackContent,
   isAllowedPackSourceUrl,
+  isPlainHttpPackSourceUrl,
   isSelectedDialect,
   looksLikeHtmlResponse,
   QUERY_PACK_SOURCES_KEY,
@@ -151,7 +152,7 @@ const fetchText = async (
   token?: string
 ): Promise<{ body: string; contentType: string | null }> => {
   if (!isAllowedPackSourceUrl(url)) {
-    throw new Error("Query pack sources must use HTTPS")
+    throw new Error("Query pack sources must use HTTP or HTTPS")
   }
   const headers: Record<string, string> = { Accept: "application/json" }
   if (token) {
@@ -222,6 +223,20 @@ export const applyIndexMetadata = (
     facets: mergeFacets(verified.facets, ...indexFacets),
     labels: mergeLabels(entry.labels, verified.labels)
   }
+}
+
+/**
+ * A plain HTTP source that cannot be reached at all is worth a hint: the server
+ * may be down, but the request can also have been stopped by the browser or by
+ * a policy that only allows TLS, and "Failed to fetch" alone sends the analyst
+ * looking in the wrong place.
+ */
+export const describeFetchFailure = (error: unknown, url: string): string => {
+  const message = error instanceof Error ? error.message : "fetch failed"
+  if (!isPlainHttpPackSourceUrl(url) || !/fetch|network/i.test(message)) {
+    return message
+  }
+  return `${message} — this source is plain HTTP; check that the server is reachable and that the browser is allowed to load it without TLS.`
 }
 
 /**
@@ -469,7 +484,7 @@ export const fetchSource = async (
     return {
       sourceId: source.id,
       status: "error",
-      message: error instanceof Error ? error.message : "fetch failed"
+      message: describeFetchFailure(error, url)
     }
   }
 }

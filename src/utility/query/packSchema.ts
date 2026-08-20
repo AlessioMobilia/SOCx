@@ -716,17 +716,20 @@ export const validatePackIndex = (
         })
         return
       }
-      if (reference.includes("..")) {
+      // `//host/file.json` is not a relative path: it inherits the scheme and
+      // silently changes host, so it is refused here rather than left to the
+      // origin check at fetch time.
+      if (reference.includes("..") || reference.startsWith("//")) {
         errors.push({
           path: `$.includes[${index}]`,
           message: `unsafe index path "${reference}"`
         })
         return
       }
-      if (/^[a-z]+:/i.test(reference) && !/^https:\/\//i.test(reference)) {
+      if (/^[a-z]+:/i.test(reference) && !/^https?:\/\//i.test(reference)) {
         errors.push({
           path: `$.includes[${index}]`,
-          message: "an included index must be a relative path or an HTTPS URL"
+          message: "an included index must be a relative path or an HTTP(S) URL"
         })
         return
       }
@@ -773,8 +776,13 @@ export const validatePackIndex = (
         return
       }
       seenEntryIds.add(entryId)
-      // A relative path must not climb out of the index location.
-      if (entryPath.includes("..") || /^[a-z]+:/i.test(entryPath)) {
+      // A relative path must not climb out of the index location, name a
+      // scheme of its own, or hop to another host through `//elsewhere/x.json`.
+      if (
+        entryPath.includes("..") ||
+        entryPath.startsWith("//") ||
+        /^[a-z]+:/i.test(entryPath)
+      ) {
         errors.push({
           path: `$.packs[${index}].path`,
           message: `unsafe pack path "${entryPath}"`
