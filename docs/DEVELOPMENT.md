@@ -186,6 +186,50 @@ selection parsing, add a fixture for both the newly supported markup and a
 nearby case that must remain unmodified, such as URLs, timestamps, IPv6 values,
 empty table cells, or clipped first/last rows.
 
+### Smart-formatting architecture
+
+The browser path is visual-first. The content script freezes an immutable
+selection snapshot as soon as the Range changes, before hover tooltips,
+virtualized rows, or other page mutations can alter it. The snapshot records
+only selected, rendered text nodes together with their rectangles, styles, DOM
+order, and conservative label signals.
+
+`visualFormatting.ts` reconstructs field relationships rather than flattening
+an ancestor's `textContent`. It supports:
+
+- labels and values on the same visual row;
+- labels placed above values;
+- repeated unmarked vertical field blocks;
+- multiple columns whose labels form a row above their values;
+- multiline values ending at the next strong label.
+
+A value selected on its own can be enriched only from a nearby explicit label
+(`label`, `dt`, `aria-labelledby`, a field marker, or a trailing colon).
+Surrounding values are never pulled into the selection.
+
+Native tables, ARIA grids, and explicitly marked product fields retain their
+strong semantics. Their values are nevertheless read through the rendered-text
+filter so CSS-hidden descendants, action controls, and semantic tooltips do not
+leak into the clipboard. Attribute payloads such as `data-raw` and `data-json`
+are never considered selected visual values.
+
+Visual candidates must cover at least 70% of the selected rendered text. A
+single horizontal field or explicit vertical label may be accepted at high
+coverage; weak vertical inference requires a repeated pattern. When geometry
+is available but no interpretation is sufficiently safe, SOCx returns the
+frozen rendered text instead of parsing a wider ancestor. The older semantic
+fallback remains only for environments that expose no usable text rectangles.
+
+Any change to this pipeline must add positive and negative fixtures covering:
+
+- same-row and stacked fields;
+- multi-column stacked fields and multiline values;
+- a nearby heading/paragraph that must remain plain text;
+- visible values accompanied by hidden or semantic tooltips;
+- internal `data-raw`/`data-json` payloads containing fields such as `origin`
+  or serialized HTML;
+- mutation of the live page after the snapshot has been captured.
+
 ## Cross-browser manual test matrix
 
 Run this matrix on all three browsers before a release:
@@ -209,7 +253,10 @@ Run this matrix on all three browsers before a release:
    tables with only the selected rows/columns and their corresponding real
    headers (or neutral `Column N` fallbacks). Also cover a two-column property
    table, marked SIEM key/value fields, CEF or logfmt text, URLs, timestamps,
-   and IPv6. Confirm clipboard fallbacks work
+   and IPv6. Also include horizontal fields, labels above values, multi-column
+   stacked fields, multiline values, an open hover tooltip, and a widget with
+   hidden tooltip or raw state. Confirm that only text intersecting the frozen
+   rendered selection is copied. Confirm clipboard fallbacks work
    when the page Clipboard API is unavailable. The floating IOC result must copy
    the same single-entry report as Bulk Check's Copy formatted, without provider
    headings. Confirm the shared fallback and success/error feedback work from

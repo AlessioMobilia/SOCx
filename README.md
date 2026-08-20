@@ -87,7 +87,10 @@ You can install SOCx directly from your browser’s official store:
 - ✨ **Smart selection formatting**
   Selected EDR, SIEM, OSINT, JSON, CEF, logfmt, key/value, CSV, HTML table, and
   ARIA grid data can be normalized for copying. Partial table selections reuse
-  real headers when available and otherwise use neutral column names.
+  real headers when available and otherwise use neutral column names. Generic
+  dashboards are reconstructed from the rendered selection, including fields
+  whose labels sit above their values, without copying hidden tooltips or
+  internal widget state.
 
 - 🧩 **Query packs for SIEM and EDR hunting**
   SOCx ships the [SOCx query packs](https://github.com/AlessioMobilia/socx-query-packs)
