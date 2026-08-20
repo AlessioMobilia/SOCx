@@ -217,8 +217,8 @@ The in-page palette never appears on its own. It opens only when you ask for it:
 The palette is not a long list to scroll: a filter bar narrows it down by
 **favorites**, by **kind** (IOC or hunting), by **query language**, by
 **category**, and by any custom dimension the repository declared. Search runs
-over everything — name, description, group, tags, labels — *and over the query
-itself*, so `DeviceNetworkEvents`, `src_ip` or `T1059` find the templates that
+over everything — name, description, group, tags, labels — _and over the query
+itself_, so `DeviceNetworkEvents`, `src_ip` or `T1059` find the templates that
 actually contain them; space separated terms all have to match. Star a query
 with `Alt+F` or the ☆ next to its name and it is pinned to the top of the list
 under **★ Favorites**, on every console, until you unstar it.
@@ -294,8 +294,9 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.3.0 release notes](docs/RELEASE_NOTES_1.3.0.md) for the newest
-flows, the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
+See the [SOCx 1.3.1 release notes](docs/RELEASE_NOTES_1.3.1.md) for the newest
+fixes, the [1.3.0 notes](docs/RELEASE_NOTES_1.3.0.md) for HTTP repositories and
+the pack format reference, the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
 catalogue work, and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query
 pack foundations, safety model and validation scope.
 

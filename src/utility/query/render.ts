@@ -282,12 +282,52 @@ export const MERGE_REFUSALS = {
   tables: "the indicator types are read from different tables"
 } as const
 
+/** Placeholders whose value depends on which indicator type is rendered. */
+const PER_TYPE_PLACEHOLDERS = ["field", "table", "op"]
+
+const bindingSignature = (binding: TypeBinding | undefined): string =>
+  JSON.stringify([
+    binding?.table ?? "",
+    binding?.field ?? "",
+    binding?.op ?? "",
+    binding?.suffix ?? ""
+  ])
+
+/**
+ * Whether the template reads nothing that distinguishes one indicator type from
+ * another: no `{{field}}`, `{{table}}` or `{{op}}`, and bindings that are all
+ * the same — typically empty, as in a search that matches raw terms anywhere in
+ * the event.
+ *
+ * Such a template renders byte for byte the same text whatever type a value
+ * happens to be, so splitting the selection per type produces several queries
+ * that differ only in which indicators they left out. The whole selection goes
+ * into one query instead.
+ */
+export const isTypeAgnostic = (
+  body: string,
+  bindings: (TypeBinding | undefined)[]
+): boolean => {
+  if (
+    scanPlaceholders(body).some((token) =>
+      PER_TYPE_PLACEHOLDERS.includes(token.name)
+    )
+  ) {
+    return false
+  }
+  const first = bindingSignature(bindings[0])
+  return bindings.every((binding) => bindingSignature(binding) === first)
+}
+
 /** Why a merge is impossible, or `null` when it can go ahead. */
 export const explainMergeRefusal = (
   body: string,
   bindings: (TypeBinding | undefined)[]
 ): string | null => {
   if (bindings.length < 2) return MERGE_REFUSALS.singleType
+  // Nothing to merge and nothing to refuse: the body never asks which type it
+  // is rendering, so one query already covers the whole selection.
+  if (isTypeAgnostic(body, bindings)) return null
   if (!findPredicateSpan(body)) return MERGE_REFUSALS.shape
   const tables = new Set(bindings.map((binding) => binding?.table ?? ""))
   if (tables.size > 1) return MERGE_REFUSALS.tables
@@ -457,6 +497,37 @@ export const renderTemplate = ({
       types.map((type) => byType[type])
     )
     if (!refusal) {
+      // A body that never asks which type it is rendering needs no comparison
+      // surgery: every indicator goes into one list, chunked as one selection.
+      if (
+        isTypeAgnostic(
+          template.body,
+          types.map((type) => byType[type])
+        )
+      ) {
+        const values: string[] = []
+        for (const type of types) {
+          for (const value of grouped.get(type) ?? []) {
+            if (!values.includes(value)) values.push(value)
+          }
+        }
+        const chunks = chunkValues(values, maxItems)
+        chunks.forEach((chunkValuesList, index) => {
+          queries.push(
+            buildQuery(
+              chunkValuesList,
+              byType[types[0]],
+              undefined,
+              index + 1,
+              chunks.length,
+              template.body,
+              types
+            )
+          )
+        })
+        return { queries, uncoveredTypes: [...uncovered], errors: [] }
+      }
+
       const span = findPredicateSpan(template.body)!
       const separator = ` ${dialect.operators?.or ?? "OR"} `
       // A sentinel keeps the merged comparisons out of the second pass, so a

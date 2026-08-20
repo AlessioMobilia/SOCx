@@ -13,7 +13,11 @@ import { writeIntelClipboardText } from "../utility/clipboard"
 import { USER_QUERY_LIBRARY_KEY } from "../utility/query/builder"
 import { readFavorites, toggleFavorite } from "../utility/query/favorites"
 import { buildGroupTree } from "../utility/query/groups"
-import type { PackKind, QueryPack } from "../utility/query/packSchema"
+import {
+  templateVariables,
+  type PackKind,
+  type QueryPack
+} from "../utility/query/packSchema"
 import { QUERY_PACK_SOURCES_KEY } from "../utility/query/packSources"
 import { entriesFromTree, type PaletteEntry } from "../utility/query/palette"
 import {
@@ -581,87 +585,106 @@ const QueryWorkspace = () => {
               </p>
             ) : (
               <>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-semibold">
-                      {selected.template.name}
-                    </h2>
-                    <button
-                      type="button"
-                      aria-pressed={favorites.includes(selected.key)}
-                      aria-label={
-                        favorites.includes(selected.key)
-                          ? "Remove from favorites"
-                          : "Add to favorites"
-                      }
-                      onClick={() => void toggleStar(selected.key)}
-                      className={`rounded-full text-lg leading-none transition ${
-                        favorites.includes(selected.key)
-                          ? "text-socx-accent"
-                          : "text-socx-muted hover:text-socx-accent dark:text-socx-muted-dark"
-                      }`}>
-                      {favorites.includes(selected.key) ? "★" : "☆"}
-                    </button>
-                    {selected.pack.verified === true && (
-                      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                        verified
-                      </span>
-                    )}
-                    {Object.entries(resolveEntryLabels(selected)).map(
-                      ([facetId, values]) => (
-                        <span
-                          key={facetId}
-                          title={facetId}
-                          className="rounded-full bg-socx-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-socx-muted dark:text-socx-muted-dark">
-                          {values.join(" · ")}
+                {/* Name, badges, description and variable fields share a
+                    capped, scrollable band, so the query underneath keeps its
+                    room however much of them a template carries. */}
+                <div className="socx-scroll max-h-[40%] shrink space-y-3 overflow-y-auto pr-1">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold">
+                        {selected.template.name}
+                      </h2>
+                      <button
+                        type="button"
+                        aria-pressed={favorites.includes(selected.key)}
+                        aria-label={
+                          favorites.includes(selected.key)
+                            ? "Remove from favorites"
+                            : "Add to favorites"
+                        }
+                        onClick={() => void toggleStar(selected.key)}
+                        className={`rounded-full text-lg leading-none transition ${
+                          favorites.includes(selected.key)
+                            ? "text-socx-accent"
+                            : "text-socx-muted hover:text-socx-accent dark:text-socx-muted-dark"
+                        }`}>
+                        {favorites.includes(selected.key) ? "★" : "☆"}
+                      </button>
+                      {selected.pack.verified === true && (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                          verified
                         </span>
+                      )}
+                      {Object.entries(resolveEntryLabels(selected)).map(
+                        ([facetId, values]) => (
+                          <span
+                            key={facetId}
+                            title={facetId}
+                            className="rounded-full bg-socx-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-socx-muted dark:text-socx-muted-dark">
+                            {values.join(" · ")}
+                          </span>
+                        )
+                      )}
+                    </div>
+                    <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+                      {selected.pack.name} ·{" "}
+                      {selected.template.dialect ?? selected.pack.dialect}
+                    </p>
+                    {selected.template.description && (
+                      <p className="mt-2 text-sm">
+                        {selected.template.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Only the variables this template substitutes: a pack
+                    declares them once for all of its queries, and offering a
+                    field the selected query never reads makes it look as if
+                    filling it in had no effect. */}
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {templateVariables(selected.pack, selected.template).map(
+                      (variable) => (
+                        <label key={variable.id} className="space-y-1 text-xs">
+                          <span className="font-semibold">
+                            {variable.label}
+                          </span>
+                          {variable.options?.length ? (
+                            <select
+                              className={input}
+                              value={
+                                variables[variable.id] ?? variable.default ?? ""
+                              }
+                              onChange={(event) =>
+                                setVariables((previous) => ({
+                                  ...previous,
+                                  [variable.id]: event.target.value
+                                }))
+                              }>
+                              {variable.options.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              className={input}
+                              value={
+                                variables[variable.id] ?? variable.default ?? ""
+                              }
+                              onChange={(event) =>
+                                setVariables((previous) => ({
+                                  ...previous,
+                                  [variable.id]: event.target.value
+                                }))
+                              }
+                            />
+                          )}
+                        </label>
                       )
                     )}
                   </div>
-                  <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-                    {selected.pack.name} ·{" "}
-                    {selected.template.dialect ?? selected.pack.dialect}
-                  </p>
-                  {selected.template.description && (
-                    <p className="mt-2 text-sm">
-                      {selected.template.description}
-                    </p>
-                  )}
                 </div>
-
-                {(selected.pack.variables ?? []).map((variable) => (
-                  <label key={variable.id} className="space-y-1 text-xs">
-                    <span className="font-semibold">{variable.label}</span>
-                    {variable.options?.length ? (
-                      <select
-                        className={input}
-                        value={variables[variable.id] ?? variable.default ?? ""}
-                        onChange={(event) =>
-                          setVariables((previous) => ({
-                            ...previous,
-                            [variable.id]: event.target.value
-                          }))
-                        }>
-                        {variable.options.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        className={input}
-                        value={variables[variable.id] ?? variable.default ?? ""}
-                        onChange={(event) =>
-                          setVariables((previous) => ({
-                            ...previous,
-                            [variable.id]: event.target.value
-                          }))
-                        }
-                      />
-                    )}
-                  </label>
-                ))}
 
                 {(rendered.errors.length > 0 ||
                   rendered.uncoveredTypes.length > 0 ||
@@ -684,7 +707,7 @@ const QueryWorkspace = () => {
 
                 {/* min-h-0, so the preview scrolls inside the card instead of
                     pushing past it when the column has a fixed height. */}
-                <div className="socx-scroll min-h-0 flex-1 space-y-3 overflow-y-auto">
+                <div className="socx-scroll min-h-[8rem] flex-1 space-y-3 overflow-y-auto">
                   {rendered.queries.length === 0 ? (
                     <p className="rounded-xl border border-dashed border-socx-border-light p-4 text-sm text-socx-muted dark:border-socx-border-dark">
                       {selected.template.requiresIocs

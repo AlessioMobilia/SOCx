@@ -381,7 +381,39 @@ instead produce **one query covering every type**, joining the per‑type
 comparisons with the dialect's `or`. This only works when SOCx can identify the
 single comparison to repeat, and the rules are deliberately strict.
 
-A template is mergeable when its body contains
+### Templates that never ask which type they render
+
+The simplest case needs no merging at all. When the body contains **no**
+`{{field}}`, `{{table}}` or `{{op}}` placeholder, and every bound type carries
+the **same binding** — typically an empty one, as in a search that matches raw
+terms anywhere in the event — the rendered text does not depend on the type of a
+value. Splitting such a selection would produce several queries differing only
+in which indicators they left out, so the whole selection goes into **one
+query**, chunked as one list:
+
+```json
+{
+  "id": "generic-ioc-correlation",
+  "name": "Generic IOC correlation",
+  "requiresIocs": true,
+  "byType": { "IP": {}, "Domain": {}, "URL": {}, "SHA256": {} },
+  "body": "search index={{var:index}} ({{iocs|or-terms}})\n| stats count by index, src_ip"
+}
+```
+
+```spl
+search index=main ("203.0.113.10" OR "evil.test" OR "aaaa…")
+| stats count by index, src_ip
+```
+
+Bindings must be equal, not merely empty: `{{iocs|or-values}}` reads `field`,
+`op` and `suffix` from the binding, so two types pointing at different fields
+are still rendered separately. Switching to **One per type** still splits the
+selection, for the analyst who wants one query per indicator kind.
+
+### Templates that compare one field to one list
+
+A template with per-type fields is mergeable when its body contains
 
 - **exactly one** `{{field}}` placeholder, and
 - **exactly one** `{{iocs}}` or `{{ioc}}` placeholder, after it, and
@@ -421,6 +453,11 @@ the platform allows it.
 
 Variables are pack‑level, analyst‑editable values — a time range, an index name,
 a tenant. Declared once, referenced as `{{var:id}}`.
+
+Declaring them once for the whole pack does not mean every query is asked about
+every one of them: the palette and the query workspace offer **only the
+variables the selected template actually substitutes**, in `body` or in `open`.
+A variable another template in the same file uses is simply not shown.
 
 ```json
 "variables": [

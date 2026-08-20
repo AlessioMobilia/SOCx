@@ -11,7 +11,11 @@ import { showToast } from "../toast"
 import { toggleFavoriteKey } from "./favorites"
 import { flattenGroupTree, type GroupNode } from "./groups"
 import { insertQueryText, resolveTarget, type InsertMode } from "./insertText"
-import type { QueryPack, QueryTemplate } from "./packSchema"
+import {
+  templateVariables,
+  type QueryPack,
+  type QueryTemplate
+} from "./packSchema"
 import {
   ALL_FILTERS,
   applyPaletteFilters,
@@ -643,7 +647,9 @@ export const openPalette = (request: PaletteRequest): void => {
     flex: "1 1 auto",
     "min-width": "0",
     "min-height": "0",
-    "overflow-y": "auto",
+    // The two children scroll on their own, so the query keeps its share of the
+    // column however much metadata sits above it.
+    overflow: "hidden",
     padding: "14px 16px",
     gap: "8px",
     "font-family": font
@@ -911,6 +917,38 @@ export const openPalette = (request: PaletteRequest): void => {
     const variables = variablesByEntry.get(entry.key) ?? {}
     variablesByEntry.set(entry.key, variables)
 
+    // Everything that describes the query goes in the top box, which takes at
+    // most half the column and scrolls; the query itself owns the rest. A
+    // template with a long description and a handful of variables used to push
+    // its own output out of sight.
+    const meta = document.createElement("div")
+    setStyles(meta, {
+      all: "initial",
+      display: "flex",
+      "flex-direction": "column",
+      gap: "8px",
+      flex: "0 1 auto",
+      "min-height": "0",
+      "max-height": "45%",
+      "overflow-y": "auto",
+      "font-family": font
+    })
+    const queryBox = document.createElement("div")
+    setStyles(queryBox, {
+      all: "initial",
+      display: "flex",
+      "flex-direction": "column",
+      gap: "8px",
+      flex: "1 1 auto",
+      // The floor is what actually guarantees the query is on screen: the meta
+      // box above is allowed to shrink, so the percentage cap is only there to
+      // keep the split comfortable when the column is tall.
+      "min-height": "120px",
+      "overflow-y": "auto",
+      "font-family": font
+    })
+    preview.append(meta, queryBox)
+
     const titleLine = document.createElement("div")
     setStyles(titleLine, {
       all: "initial",
@@ -933,7 +971,7 @@ export const openPalette = (request: PaletteRequest): void => {
       }),
       star
     )
-    preview.appendChild(titleLine)
+    meta.appendChild(titleLine)
 
     const badges = document.createElement("div")
     setStyles(badges, {
@@ -951,12 +989,19 @@ export const openPalette = (request: PaletteRequest): void => {
     if (entry.pack.verified !== true) {
       badges.appendChild(makeBadge("unverified fields", "warn"))
     }
-    for (const tag of (entry.template.tags ?? []).slice(0, 4)) {
+    const tags = entry.template.tags ?? []
+    for (const tag of tags.slice(0, 4)) {
       badges.appendChild(makeBadge(tag, "neutral"))
     }
-    preview.appendChild(badges)
+    if (tags.length > 4) {
+      const rest = tags.slice(4)
+      const more = makeBadge(`+${rest.length}`, "neutral")
+      more.title = rest.join(", ")
+      badges.appendChild(more)
+    }
+    meta.appendChild(badges)
 
-    preview.appendChild(
+    meta.appendChild(
       makeText("p", `${entry.path.join(" › ")} · ${entry.pack.name}`, {
         "font-size": "11px",
         color: muted
@@ -964,7 +1009,7 @@ export const openPalette = (request: PaletteRequest): void => {
     )
 
     if (entry.template.description) {
-      preview.appendChild(
+      meta.appendChild(
         makeText("p", entry.template.description, {
           "font-size": "12px",
           "line-height": "1.5",
@@ -973,21 +1018,40 @@ export const openPalette = (request: PaletteRequest): void => {
       )
     }
 
-    // Variable inputs, which are the only input a standard query needs.
-    for (const variable of entry.pack.variables ?? []) {
+    // Variable inputs, which are the only input a standard query needs. Only
+    // the ones this template actually substitutes are offered: a pack declares
+    // its variables once for every template in it, and a field the query never
+    // reads does nothing when it is filled in.
+    const variableFields = templateVariables(entry.pack, entry.template)
+    const variableGrid = document.createElement("div")
+    setStyles(variableGrid, {
+      all: "initial",
+      display: "grid",
+      "grid-template-columns": "repeat(auto-fit, minmax(210px, 1fr))",
+      gap: "6px 10px",
+      "font-family": font
+    })
+    if (variableFields.length > 0) meta.appendChild(variableGrid)
+
+    for (const variable of variableFields) {
       const row = document.createElement("label")
       setStyles(row, {
         all: "initial",
         display: "flex",
         "align-items": "center",
         gap: "8px",
+        "min-width": "0",
         "font-family": font,
         "font-size": "12px",
         color: ink
       })
       const label = makeText("span", variable.label, {
         "font-size": "12px",
-        "min-width": "110px",
+        "min-width": "0",
+        "max-width": "45%",
+        "white-space": "nowrap",
+        overflow: "hidden",
+        "text-overflow": "ellipsis",
         color: muted
       })
 
@@ -1034,7 +1098,7 @@ export const openPalette = (request: PaletteRequest): void => {
       })
 
       row.append(label, input)
-      preview.appendChild(row)
+      variableGrid.appendChild(row)
     }
 
     rendered = request.onRender(entry, {
@@ -1044,7 +1108,7 @@ export const openPalette = (request: PaletteRequest): void => {
     })
 
     if (rendered.length === 0) {
-      preview.appendChild(
+      queryBox.appendChild(
         makeText(
           "p",
           "This template needs indicators of a type the current selection does not contain.",
@@ -1056,16 +1120,16 @@ export const openPalette = (request: PaletteRequest): void => {
 
     rendered.forEach((query) => {
       if (query.warning) {
-        preview.appendChild(
+        queryBox.appendChild(
           makeText("p", query.warning, { "font-size": "11px", color: warn })
         )
       }
       if (query.note) {
-        preview.appendChild(
+        queryBox.appendChild(
           makeText("p", query.note, { "font-size": "11px", color: faint })
         )
       }
-      preview.appendChild(
+      queryBox.appendChild(
         makeText("pre", query.text, {
           display: "block",
           "font-family": mono,

@@ -120,6 +120,48 @@ describe("query palette", () => {
     document.body.innerHTML = ""
   })
 
+  it("asks only for the variables the selected template uses", () => {
+    // The pack declares four variables, shared by every template in it; the
+    // selected query substitutes two of them.
+    const variablePack = makePack({
+      id: "splunk-variables",
+      name: "Splunk variables",
+      dialect: "spl",
+      variables: [
+        { id: "index", label: "Index", default: "main" },
+        { id: "time-span", label: "Time span", default: "1h" },
+        { id: "pre-filter", label: "Pre-filter" },
+        { id: "dest-domain", label: "Destination domain" }
+      ],
+      templates: [
+        {
+          id: "log-volume-trend",
+          name: "General log volume trend",
+          group: "network",
+          requiresIocs: false,
+          body: "index={{var:index}}\n| timechart span={{var:time-span}} count"
+        }
+      ],
+      kind: "standard"
+    })
+    openPalette({
+      entries: entriesFromTree(
+        buildGroupTree([{ ...variablePack, sourceId: "v" }])
+      ),
+      onRender: () => [{ text: "rendered" }]
+    } as never)
+
+    const labels = Array.from(document.querySelectorAll("label")).map(
+      (node) => node.textContent ?? ""
+    )
+    expect(labels.some((text) => text.includes("Index"))).toBe(true)
+    expect(labels.some((text) => text.includes("Time span"))).toBe(true)
+    expect(labels.some((text) => text.includes("Destination domain"))).toBe(
+      false
+    )
+    expect(labels.some((text) => text.includes("Pre-filter"))).toBe(false)
+  })
+
   it("opens with every template and closes on demand", () => {
     open()
     expect(isPaletteOpen()).toBe(true)

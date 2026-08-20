@@ -414,6 +414,26 @@ export const parseTemplatePlaceholders = (
   return { names, filters }
 }
 
+/**
+ * The variables a template actually substitutes, in the order the pack declares
+ * them. Variables are declared once per pack and shared by every template in
+ * it, so a form built from `pack.variables` offers fields the selected query
+ * never reads: filling one in changes nothing, which reads as a bug. Every
+ * surface that asks for variable values asks only for these.
+ */
+export const templateVariables = (
+  pack: Pick<QueryPack, "variables">,
+  template: Pick<QueryTemplate, "body" | "open">
+): NonNullable<QueryPack["variables"]> => {
+  const { names } = parseTemplatePlaceholders(
+    `${template.body ?? ""}\n${template.open ?? ""}`
+  )
+  const used = new Set(
+    names.filter((name) => name.startsWith("var:")).map((name) => name.slice(4))
+  )
+  return (pack.variables ?? []).filter((variable) => used.has(variable.id))
+}
+
 export const validateQueryPack = (
   input: unknown,
   options: { knownDialects?: Set<string> } = {}
