@@ -71,6 +71,17 @@ const waitForOperation = async ({
   throw new Error(`${action} did not complete before the workflow deadline`)
 }
 
+/**
+ * Edge reports "a submission is already in progress" in two places: as a 409 on
+ * the request, which postWithRetry waits out, and as a *failed operation* after
+ * the same request was accepted with 202. The second form is the one that comes
+ * back while an earlier version is still in certification, and it means exactly
+ * the same thing — wait, then submit the draft again — so it must not end the
+ * job. Without this the long wait the workflow is configured for never engages.
+ */
+const SUBMISSION_IN_PROGRESS =
+  /submission is in progress|already in progress|try again later/i
+
 const postWithRetry = async ({
   url,
   headers,
@@ -155,31 +166,47 @@ export const publishEdgeExtension = async ({
   })
 
   log("Submitting the latest Edge draft for certification.")
-  const publishResponse = await postWithRetry({
-    url: submissionEndpoint,
-    headers: { ...authHeaders, "Content-Type": "application/json" },
-    body: JSON.stringify({ notes }),
-    fetchImpl,
-    sleepImpl,
-    retryMilliseconds,
-    deadline,
-    action: "Edge publication",
-    log
-  })
-  const publishOperation = publishResponse.headers.get("location")
-  if (!publishOperation)
-    throw new Error("Edge publication returned no operation ID")
+  for (;;) {
+    const publishResponse = await postWithRetry({
+      url: submissionEndpoint,
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ notes }),
+      fetchImpl,
+      sleepImpl,
+      retryMilliseconds,
+      deadline,
+      action: "Edge publication",
+      log
+    })
+    const publishOperation = publishResponse.headers.get("location")
+    if (!publishOperation)
+      throw new Error("Edge publication returned no operation ID")
 
-  await waitForOperation({
-    endpoint: submissionEndpoint,
-    operationId: publishOperation,
-    headers: authHeaders,
-    fetchImpl,
-    sleepImpl,
-    pollMilliseconds,
-    deadline,
-    action: "Edge publication"
-  })
+    try {
+      await waitForOperation({
+        endpoint: submissionEndpoint,
+        operationId: publishOperation,
+        headers: authHeaders,
+        fetchImpl,
+        sleepImpl,
+        pollMilliseconds,
+        deadline,
+        action: "Edge publication"
+      })
+      break
+    } catch (error) {
+      if (
+        !SUBMISSION_IN_PROGRESS.test(error?.message ?? "") ||
+        Date.now() >= deadline
+      ) {
+        throw error
+      }
+      log(
+        "::notice::Edge is still certifying an earlier submission; the draft will be submitted again shortly."
+      )
+      await sleepImpl(retryMilliseconds)
+    }
+  }
 
   log("Edge accepted the latest package for certification.")
 }

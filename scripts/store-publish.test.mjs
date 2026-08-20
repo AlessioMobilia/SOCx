@@ -72,6 +72,88 @@ describe("store publishers", () => {
     )
   })
 
+  it("waits when Edge refuses to publish through a failed operation", async () => {
+    const archive = await temporaryArchive()
+    const calls = []
+    const responses = [
+      // upload
+      jsonResponse({}, 202, { Location: "upload-1" }),
+      jsonResponse({ status: "Succeeded" }, 202),
+      // first publish attempt: accepted, then refused by the operation itself
+      // because the previous version is still in certification
+      jsonResponse({}, 202, { Location: "publish-1" }),
+      jsonResponse(
+        {
+          status: "Failed",
+          message:
+            "Can't publish extension as your extension submission is in progress. Please try again later."
+        },
+        202
+      ),
+      // second attempt, once certification has moved on
+      jsonResponse({}, 202, { Location: "publish-2" }),
+      jsonResponse({ status: "Succeeded" }, 202)
+    ]
+    const fetchImpl = async (url, options = {}) => {
+      calls.push({ url, options })
+      return responses.shift()
+    }
+
+    await publishEdgeExtension({
+      credentials: {
+        productId: "edge-product",
+        clientId: "edge-client",
+        apiKey: "edge-key"
+      },
+      filePath: archive,
+      fetchImpl,
+      sleepImpl: async () => {},
+      retryMilliseconds: 1,
+      pollMilliseconds: 1,
+      maxWaitMilliseconds: 10_000,
+      log: () => {}
+    })
+
+    expect(
+      calls.filter(
+        (call) => call.url.endsWith("/submissions") && call.options.method
+      )
+    ).toHaveLength(2)
+    expect(
+      calls.some((call) => call.url.endsWith("/operations/publish-2"))
+    ).toBe(true)
+  })
+
+  it("still fails on an Edge operation error that is not a conflict", async () => {
+    const archive = await temporaryArchive()
+    const responses = [
+      jsonResponse({}, 202, { Location: "upload-1" }),
+      jsonResponse({ status: "Succeeded" }, 202),
+      jsonResponse({}, 202, { Location: "publish-1" }),
+      jsonResponse(
+        { status: "Failed", message: "The package is missing an icon." },
+        202
+      )
+    ]
+
+    await expect(
+      publishEdgeExtension({
+        credentials: {
+          productId: "edge-product",
+          clientId: "edge-client",
+          apiKey: "edge-key"
+        },
+        filePath: archive,
+        fetchImpl: async () => responses.shift(),
+        sleepImpl: async () => {},
+        retryMilliseconds: 1,
+        pollMilliseconds: 1,
+        maxWaitMilliseconds: 10_000,
+        log: () => {}
+      })
+    ).rejects.toThrow(/missing an icon/)
+  })
+
   it("uses Chrome V2 and cancels the previous active submission", async () => {
     const archive = await temporaryArchive()
     const calls = []
