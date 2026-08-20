@@ -49,12 +49,6 @@ const PopupUI: React.FC<PopupUIProps> = ({
 
   const actions = [
     {
-      label: "Query workspace",
-      helper: "Browse and generate queries",
-      icon: MagnifyingGlassIcon,
-      action: onQueryWorkspaceClick
-    },
-    {
       label: "Bulk IOC check",
       helper: "Launch the check tab",
       icon: ExclamationTriangleIcon,
@@ -77,6 +71,12 @@ const PopupUI: React.FC<PopupUIProps> = ({
       helper: "Open analyst pad",
       icon: DocumentTextIcon,
       action: onOpenSidePanelClick
+    },
+    {
+      label: "Query workspace",
+      helper: "Build queries",
+      icon: MagnifyingGlassIcon,
+      action: onQueryWorkspaceClick
     },
     {
       label: "Options",

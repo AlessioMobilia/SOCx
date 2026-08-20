@@ -14,6 +14,12 @@ export type PackSource = {
   builtIn?: boolean
   /** Personal access token header value, for private repositories. */
   token?: string
+  /**
+   * Dialect ids to import from this source. Empty or missing means "every
+   * technology": a SOC that only runs Defender and Splunk selects those two and
+   * never downloads the other twenty packs.
+   */
+  dialects?: string[]
   /** Content hash of the last accepted version, used to detect changes. */
   pinnedHash?: string
   lastFetched?: number
@@ -55,6 +61,29 @@ export const DEFAULT_PACK_SOURCES: PackSource[] = [
 
 export const QUERY_PACK_REPOSITORY =
   "https://github.com/AlessioMobilia/socx-query-packs"
+
+/**
+ * Whether a pack written in `dialect` is part of what this source imports.
+ * An unknown dialect is always kept: the decision is then taken again on the
+ * pack file itself, which is the only place that always names its language.
+ */
+export const isSelectedDialect = (
+  source: Pick<PackSource, "dialects">,
+  dialect?: string
+): boolean => {
+  const selection = source.dialects
+  if (!Array.isArray(selection) || selection.length === 0) return true
+  if (!dialect || dialect === "unknown") return true
+  return selection.includes(dialect)
+}
+
+/** Stable fingerprint of the selection, so a change re-pins the source. */
+export const dialectSelectionTag = (
+  source: Pick<PackSource, "dialects">
+): string =>
+  Array.isArray(source.dialects) && source.dialects.length > 0
+    ? [...source.dialects].sort().join(",")
+    : "all"
 
 /** Remote query text is accepted only over TLS. */
 export const isAllowedPackSourceUrl = (input: string): boolean => {
@@ -143,6 +172,27 @@ export const resolvePackUrl = (indexUrl: string, packPath: string): string => {
     throw new Error("pack paths must stay on the HTTPS source origin")
   }
   return resolved.toString()
+}
+
+/**
+ * Resolve an entry of an index `includes` list. A relative path stays on the
+ * origin of the index that referenced it, exactly like a pack path; an absolute
+ * URL is allowed so a catalogue can point at a file hosted elsewhere, but only
+ * over HTTPS — and the whole tree is content hashed, so a change anywhere still
+ * has to be re-accepted before it is used.
+ */
+export const resolveIncludeUrl = (
+  indexUrl: string,
+  reference: string
+): string => {
+  const trimmed = reference.trim()
+  if (/^https:\/\//i.test(trimmed)) {
+    return toRawPackUrl(trimmed).url
+  }
+  if (/^[a-z]+:/i.test(trimmed)) {
+    throw new Error("included indexes must use HTTPS")
+  }
+  return resolvePackUrl(indexUrl, trimmed)
 }
 
 /** Cryptographic digest used to pin every fetched file of a source. */

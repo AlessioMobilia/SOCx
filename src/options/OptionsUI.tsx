@@ -22,6 +22,7 @@ import {
 } from "../utility/iocTypes"
 import { servicesConfig } from "../utility/servicesConfig"
 import QueryPackSettings from "./QueryPackSettings"
+import ShortcutSettings from "./ShortcutSettings"
 
 interface OptionsUIProps {
   isDarkMode: boolean
@@ -623,6 +624,8 @@ const OptionsUI: React.FC<OptionsUIProps> = ({
           onMenuToggle={onQueryMenuToggle}
           onPaletteScopeChange={onQueryPaletteScopeChange}
         />
+
+        <ShortcutSettings />
       </div>
     </div>
   )

@@ -9,6 +9,7 @@ import {
   resolveBooleanPreference
 } from "../utility/query/paletteBridge"
 import { refreshAllSources } from "../utility/query/registry"
+import { commandPage, QUERY_COMMAND } from "../utility/shortcuts"
 import { handleMenuClick } from "./menu-handler"
 import { getContextMenuApi, setupContextMenus } from "./menus"
 import { setupQueryMenus } from "./query-menus"
@@ -120,12 +121,18 @@ contextMenuApi.onClicked.addListener((info, tab) => {
   }
 })
 
-// Keyboard shortcut. The combination itself is remapped by the user from the
-// browser shortcuts page; the extension can only declare a default.
+// Keyboard shortcuts. Only the palette ships with a suggested combination; the
+// others stay unbound until the analyst assigns one from the browser shortcuts
+// page, which is also the only place a combination can be changed.
 if (chrome.commands?.onCommand) {
   chrome.commands.onCommand.addListener((command) => {
-    if (command === "open-query-palette") {
+    if (command === QUERY_COMMAND) {
       void openPaletteInActiveTab()
+      return
+    }
+    const page = commandPage(command)
+    if (page) {
+      void chrome.tabs.create({ url: chrome.runtime.getURL(page) })
     }
   })
 }

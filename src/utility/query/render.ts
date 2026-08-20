@@ -207,6 +207,93 @@ export const renderBody = (body: string, context: RenderContext): string =>
     return renderPlaceholder(parts[0], parts.slice(1), context)
   })
 
+// --------------------------------------------------------- merging the types
+//
+// A template is written once and rendered once per indicator type, because an
+// IP and a hash live in different columns. Analysts usually want the opposite:
+// one query that covers the whole selection, with each type compared against
+// its own field. That is possible whenever the body carries a single
+// `{{field}} … {{iocs}}` comparison — the only part that changes per type — so
+// the comparison is rendered once per type and the copies are joined with the
+// dialect's OR. Everything else in the body is rendered exactly once.
+
+export type PredicateSpan = { start: number; end: number }
+
+type PlaceholderToken = { name: string; start: number; end: number }
+
+const scanPlaceholders = (body: string): PlaceholderToken[] => {
+  const tokens: PlaceholderToken[] = []
+  const pattern = new RegExp(PLACEHOLDER.source, "g")
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(body)) !== null) {
+    tokens.push({
+      name: match[1].split("|")[0].trim(),
+      start: match.index,
+      end: match.index + match[0].length
+    })
+  }
+  return tokens
+}
+
+/**
+ * The stretch of the body that has to be repeated per type, or `null` when the
+ * template is not shaped in a way that can be merged safely. Deliberately
+ * strict: one comparison, on one line, with nothing but an operator inside it,
+ * and no table placeholder anywhere — a template SOCx cannot read confidently
+ * is rendered the old way rather than guessed at.
+ */
+export const findPredicateSpan = (body: string): PredicateSpan | null => {
+  const tokens = scanPlaceholders(body)
+  const fields = tokens.filter((token) => token.name === "field")
+  const lists = tokens.filter(
+    (token) => token.name === "iocs" || token.name === "ioc"
+  )
+  if (fields.length !== 1 || lists.length !== 1) return null
+  if (tokens.some((token) => token.name === "table")) return null
+
+  const field = fields[0]
+  const list = lists[0]
+  if (list.start < field.end) return null
+  if (body.slice(field.end, list.start).includes("\n")) return null
+  const inside = tokens.filter(
+    (token) => token.start > field.start && token.start < list.start
+  )
+  if (inside.some((token) => token.name !== "op")) return null
+
+  // A comparison that opened brackets has to keep them: `in~ ({{iocs}})`.
+  const opened = body.slice(field.start, list.end)
+  let missing =
+    (opened.match(/\(/g) ?? []).length - (opened.match(/\)/g) ?? []).length
+  let end = list.end
+  while (missing > 0) {
+    const next = body.indexOf(")", end)
+    if (next < 0 || body.slice(end, next).trim() !== "") return null
+    end = next + 1
+    missing -= 1
+  }
+  return { start: field.start, end }
+}
+
+export const MERGE_REFUSALS = {
+  singleType:
+    "only one indicator type is covered, so there is nothing to merge",
+  shape:
+    "this template does not compare one field to one list, so its types cannot share a query",
+  tables: "the indicator types are read from different tables"
+} as const
+
+/** Why a merge is impossible, or `null` when it can go ahead. */
+export const explainMergeRefusal = (
+  body: string,
+  bindings: (TypeBinding | undefined)[]
+): string | null => {
+  if (bindings.length < 2) return MERGE_REFUSALS.singleType
+  if (!findPredicateSpan(body)) return MERGE_REFUSALS.shape
+  const tables = new Set(bindings.map((binding) => binding?.table ?? ""))
+  if (tables.size > 1) return MERGE_REFUSALS.tables
+  return null
+}
+
 // ------------------------------------------------------------------ chunking
 
 export const chunkValues = (values: string[], maxItems: number): string[][] => {
@@ -228,8 +315,10 @@ export type RenderedQuery = {
   templateName: string
   packId: string
   dialectId: string
-  /** Absent for indicator free templates. */
+  /** Absent for indicator free templates and for merged ones. */
   type?: BindableIocType
+  /** Every type the query covers, in the order they are compared. */
+  types?: BindableIocType[]
   chunk: number
   chunks: number
   count: number
@@ -244,6 +333,8 @@ export type RenderOutcome = {
   /** Indicator types no binding of this template covers. */
   uncoveredTypes: BindableIocType[]
   errors: string[]
+  /** Set when a merge was asked for and could not be done. */
+  mergeRefusal?: string
 }
 
 const PRIVATE_IPV4 =
@@ -261,13 +352,16 @@ export const renderTemplate = ({
   pack,
   dialects,
   indicators,
-  variables = {}
+  variables = {},
+  mergeTypes = false
 }: {
   template: QueryTemplate
   pack: QueryPack
   dialects: Map<string, QueryDialect>
   indicators: RenderedIndicator[]
   variables?: Record<string, string>
+  /** Produce one query covering every type instead of one query per type. */
+  mergeTypes?: boolean
 }): RenderOutcome => {
   const dialectId = template.dialect ?? pack.dialect
   const dialect = dialects.get(dialectId)
@@ -292,7 +386,10 @@ export const renderTemplate = ({
     binding: TypeBinding | undefined,
     type: BindableIocType | undefined,
     chunk: number,
-    chunks: number
+    chunks: number,
+    /** Ready made body, used when the per-type comparisons were merged. */
+    body = template.body,
+    types?: BindableIocType[]
   ): RenderedQuery => {
     const context: RenderContext = {
       dialect,
@@ -302,7 +399,7 @@ export const renderTemplate = ({
       chunk,
       chunks
     }
-    const text = renderBody(template.body, context)
+    const text = renderBody(body, context)
     const openUrl = template.open
       ? renderBody(template.open, { ...context, query: text })
       : undefined
@@ -313,6 +410,7 @@ export const renderTemplate = ({
       packId: pack.id,
       dialectId,
       type,
+      types,
       chunk,
       chunks,
       count: values.length,
@@ -352,26 +450,107 @@ export const renderTemplate = ({
   const queries: RenderedQuery[] = []
   const maxItems = template.maxItems ?? dialect.maxItems ?? 100
 
-  for (const [type, values] of grouped) {
-    const chunks = chunkValues(values, maxItems)
-    chunks.forEach((chunkValuesList, index) => {
-      queries.push(
-        buildQuery(
-          chunkValuesList,
-          byType[type],
-          type,
-          index + 1,
-          chunks.length
-        )
+  if (mergeTypes && grouped.size > 0) {
+    const types = [...grouped.keys()]
+    const refusal = explainMergeRefusal(
+      template.body,
+      types.map((type) => byType[type])
+    )
+    if (!refusal) {
+      const span = findPredicateSpan(template.body)!
+      const separator = ` ${dialect.operators?.or ?? "OR"} `
+      // A sentinel keeps the merged comparisons out of the second pass, so a
+      // value that happens to contain braces is never read as a placeholder.
+      const SENTINEL = " socx-merged "
+      const outerBody =
+        template.body.slice(0, span.start) +
+        SENTINEL +
+        template.body.slice(span.end)
+      const comparison = template.body.slice(span.start, span.end)
+
+      // Chunking spans the whole selection, so one query stays one query for as
+      // long as the platform allows it.
+      const pairs = types.flatMap((type) =>
+        (grouped.get(type) ?? []).map((value) => ({ type, value }))
       )
-    })
+      const chunks: { type: BindableIocType; value: string }[][] = []
+      for (
+        let index = 0;
+        index < pairs.length;
+        index += Math.max(1, maxItems)
+      ) {
+        chunks.push(pairs.slice(index, index + Math.max(1, maxItems)))
+      }
+
+      chunks.forEach((pairsInChunk, index) => {
+        const perType = new Map<BindableIocType, string[]>()
+        for (const pair of pairsInChunk) {
+          perType.set(pair.type, [
+            ...(perType.get(pair.type) ?? []),
+            pair.value
+          ])
+        }
+        const merged = [...perType.entries()]
+          .map(([type, values]) =>
+            renderBody(comparison, {
+              dialect,
+              binding: byType[type],
+              values,
+              variables: resolvedVariables,
+              chunk: index + 1,
+              chunks: chunks.length
+            })
+          )
+          .join(separator)
+
+        const query = buildQuery(
+          pairsInChunk.map((pair) => pair.value),
+          byType[types[0]],
+          undefined,
+          index + 1,
+          chunks.length,
+          outerBody,
+          [...perType.keys()]
+        )
+        query.text = query.text.split(SENTINEL).join(merged)
+        query.openUrl = query.openUrl?.split(SENTINEL).join(merged)
+        query.overLength = query.text.length > maxLength
+        queries.push(query)
+      })
+
+      return { queries, uncoveredTypes: [...uncovered], errors: [] }
+    }
+
+    // Merging was asked for and refused: fall back to one query per type and
+    // say why, rather than silently producing something else.
+    if (refusal !== MERGE_REFUSALS.singleType) {
+      return {
+        ...renderPerType(),
+        mergeRefusal: refusal
+      }
+    }
   }
 
-  return {
-    queries,
-    uncoveredTypes: [...uncovered],
-    errors: []
+  function renderPerType(): RenderOutcome {
+    const perType: RenderedQuery[] = []
+    for (const [type, values] of grouped) {
+      const chunks = chunkValues(values, maxItems)
+      chunks.forEach((chunkValuesList, index) => {
+        perType.push(
+          buildQuery(
+            chunkValuesList,
+            byType[type],
+            type,
+            index + 1,
+            chunks.length
+          )
+        )
+      })
+    }
+    return { queries: perType, uncoveredTypes: [...uncovered], errors: [] }
   }
+
+  return renderPerType()
 }
 
 /**

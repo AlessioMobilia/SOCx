@@ -1,7 +1,7 @@
 {
   "name": "so-cx",
   "displayName": "SOCx",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=20"
@@ -102,6 +102,21 @@
           "mac": "Command+Shift+K"
         },
         "description": "Open the SOCx query palette"
+      },
+      "open-bulk-check": {
+        "description": "Open the SOCx bulk IOC check"
+      },
+      "open-query-workspace": {
+        "description": "Open the SOCx query workspace"
+      },
+      "open-query-builder": {
+        "description": "Open the SOCx rule builder"
+      },
+      "open-subnet-extractor": {
+        "description": "Open the SOCx subnet extractor"
+      },
+      "open-subnet-check": {
+        "description": "Open the SOCx subnet abuse check"
       }
     },
     "browser_specific_settings": {

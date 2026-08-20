@@ -3,12 +3,11 @@ import {
   ArrowTopRightOnSquareIcon,
   ArrowUpTrayIcon,
   CheckCircleIcon,
-  CommandLineIcon,
   MagnifyingGlassIcon,
   PlusCircleIcon,
   TrashIcon
 } from "@heroicons/react/24/outline"
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 
 import { sendToBackground } from "@plasmohq/messaging"
 
@@ -19,7 +18,7 @@ import {
   type PackSource
 } from "../utility/query/packSources"
 import { readUserLibrary, writeUserLibrary } from "../utility/query/registry"
-import { QUERY_COMMAND, shortcutSettingsUrl } from "../utility/query/shortcut"
+import { bundledDialectMap } from "../utility/query/render"
 import { importUserPackText } from "../utility/query/userImport"
 
 const cardClass =
@@ -55,6 +54,104 @@ const STATUS_TONE: Record<string, string> = {
   never: "text-socx-muted dark:text-socx-muted-dark"
 }
 
+const KIND_TABS: { id: PackKind; title: string; helper: string }[] = [
+  {
+    id: "ioc",
+    title: "IOC queries",
+    helper:
+      "Templates that turn a list of indicators into the query your platform expects."
+  },
+  {
+    id: "standard",
+    title: "Hunting queries",
+    helper:
+      "Playbooks that need no indicator: run them as they are, on a schedule or during a hunt."
+  }
+]
+
+type Technology = { id: string; label: string; vendors: string[] }
+
+/**
+ * Which technologies a source imports. Nothing selected means everything, which
+ * is both the default and what a team with a single catalogue wants; picking a
+ * few keeps a Defender-only SOC from downloading twenty other pack files.
+ */
+const TechnologyPicker: React.FC<{
+  technologies: Technology[]
+  selected: string[]
+  disabled?: boolean
+  onChange: (dialects: string[]) => void
+}> = ({ technologies, selected, disabled, onChange }) => {
+  const chosen = new Set(selected)
+  const summary =
+    chosen.size === 0
+      ? "All technologies"
+      : `${chosen.size} selected · ${[...chosen]
+          .map((id) => id.toUpperCase())
+          .slice(0, 4)
+          .join(", ")}${chosen.size > 4 ? "…" : ""}`
+
+  return (
+    <details className="rounded-lg border border-socx-border-light px-3 py-2 dark:border-socx-border-dark">
+      <summary className="cursor-pointer text-[11px] font-semibold text-socx-muted dark:text-socx-muted-dark">
+        Technologies: {summary}
+      </summary>
+      <div className="mt-2 space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={disabled || chosen.size === 0}
+            onClick={() => onChange([])}>
+            Import every technology
+          </button>
+        </div>
+        <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+          {technologies.map((technology) => {
+            const active = chosen.has(technology.id)
+            return (
+              <label
+                key={technology.id}
+                title={technology.vendors.join(", ")}
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border px-2 py-1.5 text-[11px] transition ${
+                  active
+                    ? "border-socx-accent bg-socx-accent/10"
+                    : "border-socx-border-light hover:border-socx-accent dark:border-socx-border-dark"
+                }`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-socx-accent"
+                  checked={active}
+                  disabled={disabled}
+                  onChange={() =>
+                    onChange(
+                      active
+                        ? selected.filter((id) => id !== technology.id)
+                        : [...selected, technology.id]
+                    )
+                  }
+                />
+                <span className="min-w-0">
+                  <span className="block font-semibold uppercase">
+                    {technology.id}
+                  </span>
+                  <span className="block truncate text-socx-muted dark:text-socx-muted-dark">
+                    {technology.label}
+                  </span>
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <p className="text-[11px] text-socx-muted dark:text-socx-muted-dark">
+          Packs written in an unselected language are never downloaded. Changing
+          the selection refreshes this source.
+        </p>
+      </div>
+    </details>
+  )
+}
+
 const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
   paletteEnabled,
   menuEnabled,
@@ -66,13 +163,25 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
   const [sources, setSources] = useState<PackSource[]>([])
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({})
   const [busy, setBusy] = useState(false)
+  const [activeKind, setActiveKind] = useState<PackKind>("ioc")
   const [newUrl, setNewUrl] = useState("")
   const [newLabel, setNewLabel] = useState("")
   const [newToken, setNewToken] = useState("")
-  const [newKind, setNewKind] = useState<PackKind>("ioc")
+  const [newDialects, setNewDialects] = useState<string[]>([])
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
-  const [shortcut, setShortcut] = useState("")
+
+  const technologies = useMemo<Technology[]>(
+    () =>
+      [...bundledDialectMap().values()]
+        .map((dialect) => ({
+          id: dialect.id,
+          label: dialect.label,
+          vendors: dialect.vendors ?? []
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    []
+  )
 
   const call = useCallback(async (body: unknown) => {
     setBusy(true)
@@ -100,10 +209,6 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
 
   useEffect(() => {
     void call({ action: "list" })
-    chrome.commands.getAll((commands) => {
-      const command = commands.find((entry) => entry.name === QUERY_COMMAND)
-      setShortcut(command?.shortcut ?? "Not assigned")
-    })
   }, [call])
 
   const rewrite = toRawPackUrl(newUrl)
@@ -114,15 +219,17 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
       action: "add",
       source: {
         url: newUrl.trim(),
-        kind: newKind,
+        kind: activeKind,
         enabled: true,
         label: newLabel.trim() || undefined,
-        token: newToken.trim() || undefined
+        token: newToken.trim() || undefined,
+        dialects: newDialects.length > 0 ? newDialects : undefined
       }
     })
     setNewUrl("")
     setNewLabel("")
     setNewToken("")
+    setNewDialects([])
   }
 
   const handleFileImport = async (file?: File) => {
@@ -138,24 +245,6 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
     setNotice(
       `${result.imported} custom quer${result.imported === 1 ? "y" : "ies"} imported.`
     )
-  }
-
-  const openShortcutSettings = () => {
-    const manifest = chrome.runtime.getManifest() as chrome.runtime.Manifest & {
-      browser_specific_settings?: { gecko?: unknown }
-    }
-    void chrome.tabs
-      .create({
-        url: shortcutSettingsUrl(
-          Boolean(manifest.browser_specific_settings?.gecko),
-          navigator.userAgent
-        )
-      })
-      .catch(() =>
-        setError(
-          "The browser blocked its shortcuts page. Open the extension shortcut manager manually."
-        )
-      )
   }
 
   const renderList = (kind: PackKind) => {
@@ -176,7 +265,7 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
           return (
             <div
               key={source.id}
-              className="space-y-1 rounded-xl border border-socx-border-light px-3 py-2 dark:border-socx-border-dark">
+              className="space-y-2 rounded-xl border border-socx-border-light px-3 py-2 dark:border-socx-border-dark">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">
@@ -239,6 +328,20 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
                   </button>
                 </div>
               </div>
+
+              <TechnologyPicker
+                technologies={technologies}
+                selected={source.dialects ?? []}
+                disabled={busy}
+                onChange={(dialects) =>
+                  call({
+                    action: "update",
+                    id: source.id,
+                    patch: { dialects }
+                  })
+                }
+              />
+
               <p
                 className={`text-[11px] ${STATUS_TONE[status] ?? STATUS_TONE.never}`}>
                 {status === "ok" &&
@@ -260,6 +363,9 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
       </div>
     )
   }
+
+  const activeTab =
+    KIND_TABS.find((tab) => tab.id === activeKind) ?? KIND_TABS[0]
 
   return (
     <section className={`${cardClass} space-y-5`}>
@@ -316,25 +422,6 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
             Community packs
           </a>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-xl border border-socx-border-light bg-white/80 px-4 py-3 dark:border-socx-border-dark dark:bg-socx-panel/50 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <CommandLineIcon className="h-4 w-4" />
-            Query shortcut: {shortcut || "Loading…"}
-          </p>
-          <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-            Browsers only allow shortcut reassignment from their native
-            extension shortcuts page.
-          </p>
-        </div>
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={openShortcutSettings}>
-          Customize shortcut
-        </button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -404,67 +491,101 @@ const QueryPackSettings: React.FC<QueryPackSettingsProps> = ({
         </select>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-sm font-semibold">Indicator packs</p>
-          {renderList("ioc")}
+      {/* The two libraries are configured independently, so they get a tab each
+          rather than two columns competing for the same attention. */}
+      <div className="space-y-3">
+        <div
+          role="tablist"
+          aria-label="Query pack libraries"
+          className="flex flex-wrap gap-2">
+          {KIND_TABS.map((tab) => {
+            const count = sources.filter(
+              (source) => source.kind === tab.id
+            ).length
+            const active = tab.id === activeKind
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveKind(tab.id)}
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  active
+                    ? "border-socx-accent bg-socx-accent/15 text-socx-ink dark:text-white"
+                    : "border-socx-border-light text-socx-muted hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:text-socx-muted-dark"
+                }`}>
+                {tab.title}
+                <span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] tabular-nums dark:bg-white/10">
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
-        <div className="space-y-2">
-          <p className="text-sm font-semibold">Standard query packs</p>
-          {renderList("standard")}
-        </div>
-      </div>
 
-      <div className="space-y-2 rounded-xl border border-socx-border-light p-4 dark:border-socx-border-dark">
-        <p className="text-sm font-semibold">Add custom queries from a link</p>
-        <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-          A GitHub or GitLab link, a gist, or an internal HTTPS server. Links
-          copied from the browser address bar are rewritten to their raw form
-          automatically.
-        </p>
-        <div className="grid gap-2 md:grid-cols-4">
-          <input
-            className={`${inputClass} md:col-span-2`}
-            placeholder="https://github.com/org/repo/blob/main/index.json"
-            value={newUrl}
-            onChange={(event) => setNewUrl(event.target.value)}
-          />
-          <input
-            className={inputClass}
-            placeholder="Label (optional)"
-            value={newLabel}
-            onChange={(event) => setNewLabel(event.target.value)}
-          />
-          <select
-            className={inputClass}
-            value={newKind}
-            onChange={(event) => setNewKind(event.target.value as PackKind)}>
-            <option value="ioc">Indicator pack</option>
-            <option value="standard">Standard queries</option>
-          </select>
-          <input
-            className={`${inputClass} md:col-span-3`}
-            placeholder="Access token for a private repository (optional)"
-            type="password"
-            value={newToken}
-            onChange={(event) => setNewToken(event.target.value)}
-          />
-          <button
-            type="button"
-            disabled={busy || !newUrl.trim()}
-            onClick={handleAdd}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-2 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong disabled:cursor-not-allowed disabled:opacity-50">
-            <PlusCircleIcon className="h-4 w-4" />
-            Add source
-          </button>
-        </div>
-        {rewrite.rewritten && (
-          <p className="text-[11px] text-socx-muted dark:text-socx-muted-dark">
-            {rewrite.reason}: <span className="break-all">{rewrite.url}</span>
+        <div role="tabpanel" className="space-y-3">
+          <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+            {activeTab.helper}
           </p>
-        )}
-        {error && <p className="text-xs text-socx-danger">{error}</p>}
-        {notice && <p className="text-xs text-emerald-600">{notice}</p>}
+          {renderList(activeKind)}
+
+          <div className="space-y-2 rounded-xl border border-socx-border-light p-4 dark:border-socx-border-dark">
+            <p className="text-sm font-semibold">
+              Add {activeTab.title.toLowerCase()} from a link
+            </p>
+            <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
+              A GitHub or GitLab link, a gist, or an internal HTTPS server. The
+              file may be a single pack, a catalogue index, or an index that
+              only links to other index files — SOCx follows them all. Links
+              copied from the browser address bar are rewritten to their raw
+              form automatically.
+            </p>
+            <div className="grid gap-2 md:grid-cols-3">
+              <input
+                className={`${inputClass} md:col-span-2`}
+                placeholder="https://github.com/org/repo/blob/main/index.json"
+                value={newUrl}
+                onChange={(event) => setNewUrl(event.target.value)}
+              />
+              <input
+                className={inputClass}
+                placeholder="Label (optional)"
+                value={newLabel}
+                onChange={(event) => setNewLabel(event.target.value)}
+              />
+              <input
+                className={`${inputClass} md:col-span-2`}
+                placeholder="Access token for a private repository (optional)"
+                type="password"
+                value={newToken}
+                onChange={(event) => setNewToken(event.target.value)}
+              />
+              <button
+                type="button"
+                disabled={busy || !newUrl.trim()}
+                onClick={handleAdd}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-socx-accent px-4 py-2 text-sm font-semibold text-socx-ink transition hover:bg-socx-accent-strong disabled:cursor-not-allowed disabled:opacity-50">
+                <PlusCircleIcon className="h-4 w-4" />
+                Add source
+              </button>
+            </div>
+            <TechnologyPicker
+              technologies={technologies}
+              selected={newDialects}
+              disabled={busy}
+              onChange={setNewDialects}
+            />
+            {rewrite.rewritten && (
+              <p className="text-[11px] text-socx-muted dark:text-socx-muted-dark">
+                {rewrite.reason}:{" "}
+                <span className="break-all">{rewrite.url}</span>
+              </p>
+            )}
+            {error && <p className="text-xs text-socx-danger">{error}</p>}
+            {notice && <p className="text-xs text-emerald-600">{notice}</p>}
+          </div>
+        </div>
       </div>
     </section>
   )

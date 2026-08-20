@@ -10,13 +10,16 @@ import {
 import { buildGroupTree, flattenGroupTree } from "./groups"
 import { validatePackIndex, validateQueryPack } from "./packSchema"
 import {
+  dialectSelectionTag,
   hashPackContent,
   isAllowedPackSourceUrl,
+  isSelectedDialect,
   looksLikeHtmlResponse,
+  resolveIncludeUrl,
   resolvePackUrl,
   toRawPackUrl
 } from "./packSources"
-import { applyIndexVerification } from "./registry"
+import { applyIndexMetadata, applyIndexVerification } from "./registry"
 
 const knownDialects = new Set(["kql", "spl"])
 
@@ -188,6 +191,93 @@ describe("validatePackIndex", () => {
       ]
     })
     expect(result.ok).toBe(true)
+  })
+})
+
+describe("catalogues split across files", () => {
+  it("accepts an index that only links to other indexes", () => {
+    const result = validatePackIndex({
+      schema: "socx.packindex/v1",
+      includes: ["customers/acme.json", "https://intranet.example/hunting.json"]
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.includes).toHaveLength(2)
+    expect(result.value.packs).toEqual([])
+  })
+
+  it("refuses an include that leaves HTTPS or climbs out of the tree", () => {
+    expect(
+      validatePackIndex({
+        schema: "socx.packindex/v1",
+        includes: ["http://intranet.example/packs.json"]
+      }).ok
+    ).toBe(false)
+    expect(
+      validatePackIndex({
+        schema: "socx.packindex/v1",
+        includes: ["../../etc/passwd.json"]
+      }).ok
+    ).toBe(false)
+  })
+
+  it("resolves includes against the index that named them", () => {
+    expect(
+      resolveIncludeUrl("https://example.test/a/index.json", "b/other.json")
+    ).toBe("https://example.test/a/b/other.json")
+    expect(
+      resolveIncludeUrl(
+        "https://example.test/a/index.json",
+        "https://other.test/index.json"
+      )
+    ).toBe("https://other.test/index.json")
+    expect(() =>
+      resolveIncludeUrl("https://example.test/index.json", "ftp://x/y.json")
+    ).toThrow()
+  })
+
+  it("carries the facets and labels declared by the index onto the pack", () => {
+    const parsed = validateQueryPack(validPack, { knownDialects })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    const pack = applyIndexMetadata(
+      {
+        id: parsed.value.id,
+        kind: parsed.value.kind,
+        name: parsed.value.name,
+        dialect: parsed.value.dialect,
+        path: "packs/demo.json",
+        labels: { customer: ["ACME"] }
+      },
+      validPack,
+      parsed.value,
+      [[{ id: "customer", label: "Customer" }]]
+    )
+    expect(pack.labels?.customer).toEqual(["ACME"])
+    expect(pack.facets?.[0]).toEqual({ id: "customer", label: "Customer" })
+  })
+})
+
+describe("technology selection", () => {
+  it("imports everything when nothing is selected", () => {
+    expect(isSelectedDialect({}, "kql")).toBe(true)
+    expect(isSelectedDialect({ dialects: [] }, "kql")).toBe(true)
+  })
+
+  it("keeps only the selected languages", () => {
+    expect(isSelectedDialect({ dialects: ["kql", "spl"] }, "kql")).toBe(true)
+    expect(isSelectedDialect({ dialects: ["kql", "spl"] }, "aql")).toBe(false)
+  })
+
+  it("defers the decision when the index does not name the language", () => {
+    expect(isSelectedDialect({ dialects: ["kql"] }, "unknown")).toBe(true)
+    expect(isSelectedDialect({ dialects: ["kql"] }, undefined)).toBe(true)
+  })
+
+  it("fingerprints the selection so a change re-pins the source", () => {
+    expect(dialectSelectionTag({ dialects: ["spl", "kql"] })).toBe("kql,spl")
+    expect(dialectSelectionTag({})).toBe("all")
   })
 })
 

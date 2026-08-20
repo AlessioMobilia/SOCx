@@ -6,9 +6,12 @@ import {
   bundledDialectMap,
   chunkValues,
   escapeValue,
+  findPredicateSpan,
+  MERGE_REFUSALS,
   renderSelection,
   renderTemplate,
-  toBindableType
+  toBindableType,
+  type RenderedIndicator
 } from "./render"
 
 const dialects = bundledDialectMap()
@@ -363,5 +366,163 @@ describe("chunkValues", () => {
   it("never returns an empty chunk", () => {
     expect(chunkValues([], 10)).toEqual([])
     expect(chunkValues(["a", "b", "c"], 2)).toEqual([["a", "b"], ["c"]])
+  })
+})
+
+describe("merging the indicator types into one query", () => {
+  const merge = (pack: QueryPack, indicators: RenderedIndicator[]) =>
+    renderTemplate({
+      template: pack.templates[0],
+      pack,
+      dialects,
+      indicators,
+      mergeTypes: true
+    })
+
+  it("compares every type against its own field in a single query", () => {
+    const outcome = merge(buildPack(), [
+      { value: "8.8.8.8", type: "IP" },
+      { value: "1.1.1.1", type: "IP" },
+      { value: "evil.example", type: "Domain" }
+    ])
+
+    expect(outcome.queries).toHaveLength(1)
+    const [query] = outcome.queries
+    expect(query.text).toBe(
+      'DeviceNetworkEvents\n| where Timestamp > ago(7d)\n| where RemoteIP in~ ("8.8.8.8", "1.1.1.1") or RemoteUrl has_any ("evil.example")'
+    )
+    expect(query.types).toEqual(["IP", "Domain"])
+    expect(query.count).toBe(3)
+    expect(query.type).toBeUndefined()
+  })
+
+  it("renders everything outside the comparison exactly once", () => {
+    const outcome = merge(buildPack(), [
+      { value: "8.8.8.8", type: "IP" },
+      { value: "evil.example", type: "Domain" }
+    ])
+    const occurrences = outcome.queries[0].text.split("DeviceNetworkEvents")
+    expect(occurrences).toHaveLength(2)
+  })
+
+  it("still produces one query per type when asked not to merge", () => {
+    const outcome = renderTemplate({
+      template: buildPack().templates[0],
+      pack: buildPack(),
+      dialects,
+      indicators: [
+        { value: "8.8.8.8", type: "IP" },
+        { value: "evil.example", type: "Domain" }
+      ]
+    })
+    expect(outcome.queries).toHaveLength(2)
+  })
+
+  it("chunks the whole selection instead of each type", () => {
+    const pack = buildPack({
+      templates: [
+        {
+          id: "network",
+          name: "Network",
+          maxItems: 2,
+          byType: {
+            IP: { field: "RemoteIP", op: "in~" },
+            Domain: { field: "RemoteUrl", op: "has_any" }
+          },
+          body: "| where {{field}} {{op}} ({{iocs}})"
+        }
+      ]
+    })
+    const outcome = merge(pack, [
+      { value: "8.8.8.8", type: "IP" },
+      { value: "1.1.1.1", type: "IP" },
+      { value: "evil.example", type: "Domain" }
+    ])
+
+    expect(outcome.queries).toHaveLength(2)
+    expect(outcome.queries[0].text).toBe(
+      '| where RemoteIP in~ ("8.8.8.8", "1.1.1.1")'
+    )
+    expect(outcome.queries[1].text).toBe(
+      '| where RemoteUrl has_any ("evil.example")'
+    )
+    expect(outcome.queries.map((query) => query.chunk)).toEqual([1, 2])
+  })
+
+  it("refuses to merge types read from different tables", () => {
+    const pack = buildPack({
+      templates: [
+        {
+          id: "mixed",
+          name: "Mixed",
+          byType: {
+            IP: { table: "DeviceNetworkEvents", field: "RemoteIP", op: "in~" },
+            SHA256: { table: "DeviceFileEvents", field: "SHA256", op: "in~" }
+          },
+          body: "| where {{field}} {{op}} ({{iocs}})"
+        }
+      ]
+    })
+    const outcome = merge(pack, [
+      { value: "8.8.8.8", type: "IP" },
+      { value: "a".repeat(64), type: "SHA256" }
+    ])
+
+    expect(outcome.queries).toHaveLength(2)
+    expect(outcome.mergeRefusal).toBe(MERGE_REFUSALS.tables)
+  })
+
+  it("refuses a body it cannot read as one comparison", () => {
+    const pack = buildPack({
+      templates: [
+        {
+          id: "two-fields",
+          name: "Two fields",
+          byType: {
+            IP: { field: "RemoteIP", op: "in~" },
+            Domain: { field: "RemoteUrl", op: "has_any" }
+          },
+          body: "| where {{field}} {{op}} ({{iocs}})\n| project {{field}}"
+        }
+      ]
+    })
+    const outcome = merge(pack, [
+      { value: "8.8.8.8", type: "IP" },
+      { value: "evil.example", type: "Domain" }
+    ])
+
+    expect(outcome.queries).toHaveLength(2)
+    expect(outcome.mergeRefusal).toBe(MERGE_REFUSALS.shape)
+  })
+
+  it("says nothing when a single type leaves nothing to merge", () => {
+    const outcome = merge(buildPack(), [{ value: "8.8.8.8", type: "IP" }])
+    expect(outcome.queries).toHaveLength(1)
+    expect(outcome.mergeRefusal).toBeUndefined()
+    expect(outcome.queries[0].type).toBe("IP")
+  })
+})
+
+describe("findPredicateSpan", () => {
+  it("takes the comparison and the brackets that belong to it", () => {
+    const body = "T\n| where {{field}} {{op}} ({{iocs}})\n| take 10"
+    const span = findPredicateSpan(body)!
+    expect(body.slice(span.start, span.end)).toBe("{{field}} {{op}} ({{iocs}})")
+  })
+
+  it("handles a comparison without brackets", () => {
+    const body = "{{field}}:{{iocs|or-terms}}"
+    const span = findPredicateSpan(body)!
+    expect(body.slice(span.start, span.end)).toBe("{{field}}:{{iocs|or-terms}}")
+  })
+
+  it("refuses a body whose table changes with the type", () => {
+    expect(
+      findPredicateSpan("{{table}}\n| where {{field}} {{op}} ({{iocs}})")
+    ).toBeNull()
+  })
+
+  it("refuses a comparison split across lines", () => {
+    expect(findPredicateSpan("{{field}} {{op}} (\n{{iocs}}\n)")).toBeNull()
   })
 })

@@ -46,7 +46,8 @@ lock and is also used by the publication workflow.
 - `src/tabs`: bulk and subnet tools opened as extension tabs.
 - `src/utility`: IOC parsing, API clients, exports, storage, and UI helpers.
 - `src/utility/query`: untrusted pack validation, source pinning, dialects,
-  rendering, grouping, palette insertion, and the personal rule builder.
+  rendering, grouping, faceted filtering (`paletteFilters.ts`), starred queries
+  (`favorites.ts`), palette insertion, and the personal rule builder.
 - `scripts/validate-builds.mjs`: validates target manifests and referenced files.
 - `scripts/publish-chrome.mjs`: Chrome Web Store V2 publisher with temporary V1
   compatibility.
@@ -265,7 +266,17 @@ Run this matrix on all three browsers before a release:
     explicit mismatch is rejected. In Query packs settings, import a JSON pack,
     add a link and open the browser shortcut manager. In Rule builder, create an
     IOC template with variables and per-type bindings, preview it, export it,
-    import it again, and confirm the variables survive the round trip.
+    import it again, and confirm the variables survive the round trip. Filter
+    the palette by favorites, kind, language, category and a repository declared
+    facet, and confirm a starred query survives a pack refresh and a browser
+    restart. Search for a field name that only appears inside a query body, and
+    for two space separated terms. Point a source at an index whose `includes`
+    reference other index files and confirm every pack is imported once, that a
+    duplicate pack id is refused, and that restricting the source to a couple of
+    technologies re-imports it with the other languages left out. With the Query
+    workspace tab left open in the background, change the technologies, enable
+    or disable a source and save a personal template: the tab has to pick each
+    change up on its own, without being reloaded.
 13. Trigger Magic IOC with grouping enabled and disabled. On Chrome/Edge,
     confirm background tabs are adjacent, grouped, labelled and colour-stable;
     on Firefox confirm they open without grouping. Configure more than five

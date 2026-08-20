@@ -146,9 +146,47 @@ PowerShell.
 - **Standard packs** need no indicator: encoded PowerShell, Office spawning a
   shell, password spraying, inbox forwarding rules, cleared event logs.
 
-They are configured from separate source lists — several URLs each — and both
-land in the same palette, tagged by kind. A pack declares its own **groups and
-subgroups**, which drive the palette sections and the context menu submenus.
+They are configured from separate source lists — several URLs each, on their own
+tab in the settings — and both land in the same palette, tagged by kind. A pack
+declares its own **groups and subgroups**, which drive the palette sections and
+the context menu submenus.
+
+Each source can be restricted to the **technologies you actually run**: pick
+`KQL` and `SPL` and the packs written in the other twenty languages are never
+downloaded. The catalogue index names the language of every file, so the
+selection is applied before the download, not after it.
+
+### Organising a large catalogue
+
+A source URL may point at a single pack, at a catalogue index, or at an index
+that only **links to other index files** — so a SOC can publish one link to its
+analysts and still keep queries split per platform, per team or per customer.
+Included files are followed recursively (HTTPS only, capped in depth and file
+count) and every file of the tree is part of the pinned content hash.
+
+Beyond groups, a repository can declare **its own filter dimensions**: a pack or
+an index adds `facets` (for example `customer`, `tenant`, `squad`) and tags its
+templates — or whole pack files, from the index — with `labels`. Every declared
+dimension becomes a filter in the palette and in the query workspace, which is
+how an MSSP filters its catalogue down to one customer.
+
+```jsonc
+// index.json — a catalogue of catalogues
+{
+  "schema": "socx.packindex/v1",
+  "facets": [{ "id": "customer", "label": "Customer" }],
+  "includes": ["customers/acme/index.json", "customers/globex/index.json"],
+  "packs": [
+    {
+      "id": "acme-defender",
+      "kind": "ioc",
+      "dialect": "kql",
+      "path": "packs/acme-defender.json",
+      "labels": { "customer": ["ACME"] }
+    }
+  ]
+}
+```
 
 ### Adding your own queries
 
@@ -166,16 +204,30 @@ branch when you want reproducibility.
 
 The in-page palette never appears on its own. It opens only when you ask for it:
 
-- the keyboard shortcut (`Ctrl+Shift+K` by default); Query packs settings show
-  the current binding and link to the browser page where it can be reassigned;
+- the keyboard shortcut (`Ctrl+Shift+K` by default); the **Keyboard shortcuts**
+  section of the settings lists every SOCx window that can be opened from the
+  keyboard — palette, Bulk IOC check, Query workspace, Rule builder, Subnet
+  extractor, Subnet abuse check — shows the binding of each and links to the
+  browser page where they are assigned. Only the palette has a default: the
+  others start disabled so nothing is taken from the console you are on;
 - the **Insert query** submenu inside editable fields or selected text.
+
+The palette is not a long list to scroll: a filter bar narrows it down by
+**favorites**, by **kind** (IOC or hunting), by **query language**, by
+**category**, and by any custom dimension the repository declared. Search runs
+over everything — name, description, group, tags, labels — *and over the query
+itself*, so `DeviceNetworkEvents`, `src_ip` or `T1059` find the templates that
+actually contain them; space separated terms all have to match. Star a query
+with `Alt+F` or the ☆ next to its name and it is pinned to the top of the list
+under **★ Favorites**, on every console, until you unstar it.
 
 When no console is open, use **Query workspace** from the SOCx popup or from the
 persistent `SOCx › Open query workspace…` page context menu. It accepts a mixed
-IOC list, searches and filters every enabled IOC and standard template, exposes
-template variables, shows uncovered IOC types and chunk warnings, and copies
-the generated query. IOC-only context actions remain hidden until text is
-selected, so an empty page menu stays compact.
+IOC list, offers the same filters, favorites and deep search over every enabled
+IOC and hunting template, lists them 25 to a page inside a scrolling column,
+exposes template variables, shows uncovered IOC types and chunk warnings, and
+copies the generated query. IOC-only context actions
+remain hidden until text is selected, so an empty page menu stays compact.
 
 Pick a template, fill in its variables, and the query is written **into the
 search bar you were standing in** rather than opened in a new tab, so the
@@ -183,10 +235,22 @@ console keeps your session, filters and time picker. Insertion goes through the
 one path React, CodeMirror and Monaco all recognise, and falls back to the
 clipboard with a message when a field refuses it.
 
+The palette carries its own **indicator field**, at the top of the preview
+column: it opens prefilled with whatever was found, shows what was recognised
+("3 indicators · 2 IP · 1 Domain"), and can be typed into or pasted over at any
+time — the query below it re-renders as you edit.
+
 Indicators come from your current selection, or from the Bulk Check workspace
-when there is none. Each template maps every indicator type to its own field, so
-a mixed list produces one query per type; long lists are split into chunks and
-labelled, and quoting and escaping are decided by the dialect, never by the pack.
+when there is none. Each template maps every indicator type to its own field,
+and by default SOCx merges them into **one query**: IPs are compared against the
+IP column, domains against the URL column, hashes against the hash column, all
+joined by the dialect's `or`. A **Single query / One per type** switch next to
+the indicator list changes it, and the choice is remembered. A template SOCx
+cannot merge safely — types read from different tables, or a body that is not
+one field-to-list comparison — falls back to one query per type and says why.
+Long lists are split into chunks and labelled, and quoting and escaping are
+decided by the dialect, never by the pack. Hunting queries read no indicator, so
+the indicator list disappears when one is selected.
 
 ### The rule builder
 
@@ -220,8 +284,9 @@ Format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.1.0 release notes](docs/RELEASE_NOTES_1.1.0.md) for the new
-flows, safety model, fixes, and validation scope.
+See the [SOCx 1.2.0 release notes](docs/RELEASE_NOTES_1.2.0.md) for the newest
+flows, and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query pack
+foundations, safety model and validation scope.
 
 SOCx uses Node.js 22.13+ and pnpm 11.19.0. Install dependencies with the
 version pinned in `package.json`:

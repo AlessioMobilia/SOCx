@@ -112,6 +112,44 @@ const handler: PlasmoMessaging.MessageHandler<
       source.id === body.id ? { ...source, ...body.patch } : source
     )
     await writePackSources(sources)
+
+    // Narrowing or widening the technology selection changes what the source
+    // actually holds, so it is re-imported straight away — and the new content
+    // is accepted, because the analyst is the one who asked for the change.
+    const target = sources.find((source) => source.id === body.id)
+    if (target && "dialects" in body.patch) {
+      const outcome = await fetchSource(target, { acceptChange: true })
+      sources = sources.map((entry) =>
+        entry.id === target.id
+          ? {
+              ...entry,
+              lastFetched: Date.now(),
+              lastStatus: outcome.status === "ok" ? "ok" : "error",
+              pinnedHash:
+                outcome.status === "ok" ? outcome.hash : entry.pinnedHash,
+              packCount:
+                outcome.status === "ok"
+                  ? outcome.packs?.length
+                  : entry.packCount
+            }
+          : entry
+      )
+      await writePackSources(sources)
+      res.send({
+        sources,
+        outcomes: [
+          {
+            sourceId: target.id,
+            status: outcome.status,
+            message: outcome.message,
+            packCount: outcome.packs?.length,
+            hash: outcome.hash
+          }
+        ]
+      })
+      return
+    }
+
     res.send({ sources })
     return
   }

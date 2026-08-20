@@ -12,18 +12,26 @@ import {
 } from "./builder"
 import { buildGroupTree, type GroupNode } from "./groups"
 import {
+  mergeLabels,
+  PACK_INDEX_SCHEMA,
   validatePackIndex,
   validateQueryPack,
+  type PackIndex,
+  type PackIndexEntry,
   type PackKind,
   type QueryDialect,
+  type QueryFacet,
   type QueryPack
 } from "./packSchema"
 import {
   DEFAULT_PACK_SOURCES,
+  dialectSelectionTag,
   hashPackContent,
   isAllowedPackSourceUrl,
+  isSelectedDialect,
   looksLikeHtmlResponse,
   QUERY_PACK_SOURCES_KEY,
+  resolveIncludeUrl,
   resolvePackUrl,
   toRawPackUrl,
   type PackSource
@@ -162,10 +170,65 @@ const fetchText = async (
   }
 }
 
+/** Guard rails for a catalogue that links to other catalogues. */
+export const MAX_INDEX_DEPTH = 4
+export const MAX_INDEX_FILES = 60
+
+type IndexWalk = {
+  source: PackSource
+  /** Everything fetched, in fetch order: this is what the pin hashes. */
+  contentParts: string[]
+  visited: Set<string>
+  packs: QueryPack[]
+  packIds: Set<string>
+  files: number
+}
+
 /**
- * Downloads one source. A source URL may point either at an index or at a
- * single pack file; both are accepted so a team can host one file without
- * building a catalogue.
+ * Facets declared by an index apply to every pack it lists, so a SOC can name
+ * its dimensions once — `customer`, `tenant`, `squad` — instead of repeating
+ * them in every file. A pack's own declaration wins on the label.
+ */
+export const mergeFacets = (
+  ...lists: (QueryFacet[] | undefined)[]
+): QueryFacet[] | undefined => {
+  const merged: QueryFacet[] = []
+  const seen = new Set<string>()
+  for (const list of lists) {
+    for (const facet of list ?? []) {
+      if (seen.has(facet.id)) continue
+      seen.add(facet.id)
+      merged.push(facet)
+    }
+  }
+  return merged.length > 0 ? merged : undefined
+}
+
+/**
+ * Applies what the catalogue knows about a file to the pack it holds: the
+ * verification flag, the facet dimensions, and the labels the index attached to
+ * that entry — which is how one file per customer gets tagged without touching
+ * the pack itself.
+ */
+export const applyIndexMetadata = (
+  entry: PackIndexEntry,
+  rawPack: unknown,
+  pack: QueryPack,
+  indexFacets: (QueryFacet[] | undefined)[]
+): QueryPack => {
+  const verified = applyIndexVerification(entry, rawPack, pack)
+  return {
+    ...verified,
+    facets: mergeFacets(verified.facets, ...indexFacets),
+    labels: mergeLabels(entry.labels, verified.labels)
+  }
+}
+
+/**
+ * Downloads one source. A source URL may point at a single pack file, at an
+ * index, or at an index that only links to other index files; all three are
+ * accepted so a team can host one file, or split a large catalogue across as
+ * many files as it likes.
  */
 export const fetchSource = async (
   source: PackSource,
@@ -173,6 +236,126 @@ export const fetchSource = async (
 ): Promise<FetchOutcome> => {
   const { url } = toRawPackUrl(source.url)
   const knownDialects = new Set(bundledDialectMap().keys())
+
+  const walkIndex = async (
+    indexUrl: string,
+    index: PackIndex,
+    inheritedFacets: (QueryFacet[] | undefined)[],
+    depth: number,
+    walk: IndexWalk
+  ): Promise<void> => {
+    const facetChain = [index.facets, ...inheritedFacets]
+
+    for (const entry of index.packs) {
+      if (entry.kind !== walk.source.kind) continue
+      // The index names the language of every file, so an unselected technology
+      // is never downloaded in the first place.
+      if (!isSelectedDialect(walk.source, entry.dialect)) continue
+      if (walk.files >= MAX_INDEX_FILES) {
+        throw new Error(
+          `catalogue is larger than ${MAX_INDEX_FILES} files; split it into separate sources`
+        )
+      }
+      const packUrl = resolvePackUrl(indexUrl, entry.path)
+      if (walk.visited.has(packUrl)) continue
+      walk.visited.add(packUrl)
+      walk.files += 1
+
+      const packBody = await fetchText(packUrl, walk.source.token)
+      if (looksLikeHtmlResponse(packBody.body, packBody.contentType)) {
+        throw new Error(`${entry.id} returned HTML instead of JSON`)
+      }
+      const rawPack = JSON.parse(packBody.body)
+      const pack = validateQueryPack(rawPack, { knownDialects })
+      if (!pack.ok) {
+        throw new Error(
+          `${entry.id}: ${pack.errors[0]?.message ?? "invalid pack"}`
+        )
+      }
+      if (pack.value.id !== entry.id || pack.value.kind !== entry.kind) {
+        throw new Error(`${entry.id}: index metadata does not match the pack`)
+      }
+      if (
+        typeof entry.templates === "number" &&
+        entry.templates !== pack.value.templates.length
+      ) {
+        throw new Error(`${entry.id}: template count does not match the index`)
+      }
+      // Checked again on the file itself: an index may omit the dialect, a pack
+      // never does.
+      if (!isSelectedDialect(walk.source, pack.value.dialect)) continue
+      // Ids are namespaced per source, not per file, so two files of the same
+      // catalogue claiming one id would make their templates indistinguishable.
+      if (walk.packIds.has(pack.value.id)) {
+        throw new Error(
+          `${entry.id}: this catalogue declares the pack id twice`
+        )
+      }
+      walk.packIds.add(pack.value.id)
+      walk.contentParts.push(`pack:${packUrl}\n${packBody.body}`)
+      walk.packs.push(
+        applyIndexMetadata(entry, rawPack, pack.value, facetChain)
+      )
+    }
+
+    if ((index.includes ?? []).length === 0) return
+    if (depth >= MAX_INDEX_DEPTH) {
+      throw new Error(
+        `included indexes are nested deeper than ${MAX_INDEX_DEPTH} levels`
+      )
+    }
+
+    for (const reference of index.includes ?? []) {
+      if (walk.files >= MAX_INDEX_FILES) {
+        throw new Error(
+          `catalogue is larger than ${MAX_INDEX_FILES} files; split it into separate sources`
+        )
+      }
+      const includedUrl = resolveIncludeUrl(indexUrl, reference)
+      // A diamond in the include graph is a mistake, not a failure.
+      if (walk.visited.has(includedUrl)) continue
+      walk.visited.add(includedUrl)
+      walk.files += 1
+
+      const included = await fetchText(includedUrl, walk.source.token)
+      if (looksLikeHtmlResponse(included.body, included.contentType)) {
+        throw new Error(`${reference} returned HTML instead of JSON`)
+      }
+      walk.contentParts.push(`index:${includedUrl}\n${included.body}`)
+      const parsedInclude = JSON.parse(included.body)
+
+      // An include may name another index or, for convenience, a pack file.
+      if (parsedInclude?.schema === PACK_INDEX_SCHEMA) {
+        const nested = validatePackIndex(parsedInclude)
+        if (!nested.ok) {
+          throw new Error(
+            `${reference}: ${nested.errors[0]?.message ?? "invalid index"}`
+          )
+        }
+        await walkIndex(includedUrl, nested.value, facetChain, depth + 1, walk)
+        continue
+      }
+
+      const pack = validateQueryPack(parsedInclude, { knownDialects })
+      if (!pack.ok) {
+        throw new Error(
+          `${reference}: ${pack.errors[0]?.message ?? "invalid pack or index"}`
+        )
+      }
+      if (pack.value.kind !== walk.source.kind) continue
+      if (!isSelectedDialect(walk.source, pack.value.dialect)) continue
+      if (walk.packIds.has(pack.value.id)) {
+        throw new Error(
+          `${reference}: this catalogue declares the pack id twice`
+        )
+      }
+      walk.packIds.add(pack.value.id)
+      walk.packs.push({
+        ...pack.value,
+        facets: mergeFacets(pack.value.facets, ...facetChain)
+      })
+    }
+  }
 
   try {
     const { body, contentType } = await fetchText(url, source.token)
@@ -190,7 +373,7 @@ export const fetchSource = async (
     const packs: QueryPack[] = []
     const contentParts = [`source:${url}\n${body}`]
 
-    if (parsed?.schema === "socx.packindex/v1") {
+    if (parsed?.schema === PACK_INDEX_SCHEMA) {
       const index = validatePackIndex(parsed)
       if (!index.ok) {
         return {
@@ -200,50 +383,25 @@ export const fetchSource = async (
         }
       }
 
-      for (const entry of index.value.packs) {
-        if (entry.kind !== source.kind) continue
-        try {
-          const packUrl = resolvePackUrl(url, entry.path)
-          const packBody = await fetchText(packUrl, source.token)
-          if (looksLikeHtmlResponse(packBody.body, packBody.contentType)) {
-            throw new Error(`${entry.id} returned HTML instead of JSON`)
-          }
-          const rawPack = JSON.parse(packBody.body)
-          const pack = validateQueryPack(rawPack, {
-            knownDialects
-          })
-          if (!pack.ok) {
-            throw new Error(
-              `${entry.id}: ${pack.errors[0]?.message ?? "invalid pack"}`
-            )
-          }
-          if (pack.value.id !== entry.id || pack.value.kind !== entry.kind) {
-            throw new Error(
-              `${entry.id}: index metadata does not match the pack`
-            )
-          }
-          if (
-            typeof entry.templates === "number" &&
-            entry.templates !== pack.value.templates.length
-          ) {
-            throw new Error(
-              `${entry.id}: template count does not match the index`
-            )
-          }
-          const indexedPack = applyIndexVerification(entry, rawPack, pack.value)
-          contentParts.push(`pack:${packUrl}\n${packBody.body}`)
-          packs.push(indexedPack)
-        } catch (error) {
-          // Keep serving the previously accepted cache instead of adopting a
-          // catalogue that is silently missing one of its declared packs.
-          return {
-            sourceId: source.id,
-            status: "error",
-            message:
-              error instanceof Error
-                ? error.message
-                : `Unable to load ${entry.id}`
-          }
+      const walk: IndexWalk = {
+        source,
+        contentParts,
+        visited: new Set([url]),
+        packs,
+        packIds: new Set<string>(),
+        files: 1
+      }
+
+      try {
+        await walkIndex(url, index.value, [], 0, walk)
+      } catch (error) {
+        // Keep serving the previously accepted cache instead of adopting a
+        // catalogue that is silently missing one of its declared packs.
+        return {
+          sourceId: source.id,
+          status: "error",
+          message:
+            error instanceof Error ? error.message : "Unable to load the index"
         }
       }
     } else {
@@ -262,6 +420,13 @@ export const fetchSource = async (
           message: `This file holds ${pack.value.kind} queries; add it to the other list.`
         }
       }
+      if (!isSelectedDialect(source, pack.value.dialect)) {
+        return {
+          sourceId: source.id,
+          status: "error",
+          message: `This file holds ${pack.value.dialect} queries, which this source is set not to import.`
+        }
+      }
       packs.push(pack.value)
     }
 
@@ -273,6 +438,9 @@ export const fetchSource = async (
       }
     }
 
+    // The selection is part of what was imported, so narrowing or widening it
+    // re-pins the source instead of silently reusing the old fingerprint.
+    contentParts.push(`dialects:${dialectSelectionTag(source)}`)
     const hash = await hashPackContent(contentParts.join("\n\n"))
     if (
       source.pinnedHash &&
@@ -387,15 +555,17 @@ export const loadLibrary = async (
     readPackSources()
   ])
 
-  const enabled = new Set(
-    sources.filter((source) => source.enabled).map((source) => source.id)
-  )
-
+  const bySourceId = new Map(sources.map((source) => [source.id, source]))
   const remotePacks: QueryPack[] = []
   for (const cached of Object.values(cache)) {
-    if (!enabled.has(cached.sourceId)) continue
+    const source = bySourceId.get(cached.sourceId)
+    if (!source || !source.enabled) continue
     remotePacks.push(
-      ...cached.packs.map((pack) => ({ ...pack, sourceId: cached.sourceId }))
+      ...cached.packs
+        // Narrowing the technology selection takes effect at once, without
+        // waiting for the next refresh to prune the cache.
+        .filter((pack) => isSelectedDialect(source, pack.dialect))
+        .map((pack) => ({ ...pack, sourceId: cached.sourceId }))
     )
   }
 

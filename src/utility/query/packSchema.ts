@@ -89,12 +89,29 @@ export type TypeBinding = {
   note?: string
 }
 
+/**
+ * A custom dimension a repository can slice its catalogue by — a customer, a
+ * tenant, a business unit, a detection maturity level. Packs declare the
+ * dimension, templates (or whole pack files, from the index) carry the values,
+ * and the palette turns each declared dimension into its own filter.
+ */
+export type QueryFacet = {
+  id: string
+  label: string
+  description?: string
+  order?: number
+}
+
+/** Facet id to the values an entry carries for it. */
+export type FacetLabels = Record<string, string[]>
+
 export type QueryTemplate = {
   id: string
   name: string
   description?: string
   group?: string
   tags?: string[]
+  labels?: FacetLabels
   dialect?: string
   requiresIocs: boolean
   byType?: Partial<Record<BindableIocType, TypeBinding>>
@@ -142,6 +159,10 @@ export type QueryPack = {
     description?: string
   }[]
   groups?: QueryGroup[]
+  /** Custom filter dimensions this pack contributes to the palette. */
+  facets?: QueryFacet[]
+  /** Values applied to every template of the pack. */
+  labels?: FacetLabels
   templates: QueryTemplate[]
   /** Runtime-only namespace; never read from or written to a pack file. */
   sourceId?: string
@@ -155,6 +176,8 @@ export type PackIndexEntry = {
   path: string
   templates?: number
   verified?: boolean
+  /** Facet values applied to the whole file, e.g. `{ customer: ["acme"] }`. */
+  labels?: FacetLabels
 }
 
 export type PackIndex = {
@@ -164,6 +187,13 @@ export type PackIndex = {
   homepage?: string
   version?: string
   dialects?: string
+  /** Custom filter dimensions declared once for every pack of the catalogue. */
+  facets?: QueryFacet[]
+  /**
+   * Other index files this one pulls in, so a catalogue can be split across as
+   * many files as the team needs — one per customer, per platform, per squad.
+   */
+  includes?: string[]
   packs: PackIndexEntry[]
 }
 
@@ -190,6 +220,8 @@ export type ValidationResult<T> =
     }
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
+/** Ceiling on how many files one index may pull in, per file. */
+export const MAX_INDEX_INCLUDES = 50
 const GROUP_PATH_PATTERN =
   /^[a-z0-9][a-z0-9-]{0,63}(\/[a-z0-9][a-z0-9-]{0,63})?$/
 const PLACEHOLDER_PATTERN = /\{\{([^}]+)\}\}/g
@@ -272,6 +304,73 @@ const parseGroups = (value: unknown): QueryGroup[] | undefined => {
     })
   }
   return groups
+}
+
+/** Facet ids share the pack id grammar: lowercase, dash separated, short. */
+export const MAX_FACETS = 12
+const MAX_FACET_VALUES = 40
+
+const parseFacets = (value: unknown): QueryFacet[] | undefined => {
+  if (!Array.isArray(value)) return undefined
+  const facets: QueryFacet[] = []
+  const seen = new Set<string>()
+  for (const raw of value) {
+    if (!isRecord(raw)) continue
+    const id = asString(raw.id, 64)
+    const label = asString(raw.label, 80)
+    if (!id || !ID_PATTERN.test(id) || !label || seen.has(id)) continue
+    seen.add(id)
+    facets.push({
+      id,
+      label,
+      description: asString(raw.description, 500),
+      order: typeof raw.order === "number" ? raw.order : undefined
+    })
+    if (facets.length >= MAX_FACETS) break
+  }
+  return facets.length > 0 ? facets : undefined
+}
+
+/**
+ * Labels are free text chosen by the repository (customer names, tenants), so
+ * only the facet id is constrained; values are trimmed and length capped.
+ */
+export const parseLabels = (value: unknown): FacetLabels | undefined => {
+  if (!isRecord(value)) return undefined
+  const labels: FacetLabels = {}
+  for (const [facetId, raw] of Object.entries(value)) {
+    if (!ID_PATTERN.test(facetId)) continue
+    const candidates =
+      typeof raw === "string"
+        ? [raw]
+        : (asStringArray(raw, MAX_FACET_VALUES, 80) ?? [])
+    const values: string[] = []
+    for (const candidate of candidates) {
+      const trimmed = candidate.trim()
+      if (trimmed && trimmed.length <= 80 && !values.includes(trimmed)) {
+        values.push(trimmed)
+      }
+    }
+    if (values.length > 0) labels[facetId] = values
+  }
+  return Object.keys(labels).length > 0 ? labels : undefined
+}
+
+/** Union of the pack wide labels and the template's own. */
+export const mergeLabels = (
+  ...sources: (FacetLabels | undefined)[]
+): FacetLabels | undefined => {
+  const merged: FacetLabels = {}
+  for (const source of sources) {
+    for (const [facetId, values] of Object.entries(source ?? {})) {
+      const current = merged[facetId] ?? []
+      for (const value of values) {
+        if (!current.includes(value)) current.push(value)
+      }
+      merged[facetId] = current
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined
 }
 
 const parseByType = (
@@ -514,6 +613,7 @@ export const validateQueryPack = (
         description: asString(raw.description, 2_000),
         group,
         tags: asStringArray(raw.tags),
+        labels: parseLabels(raw.labels),
         dialect: templateDialect,
         requiresIocs,
         byType,
@@ -576,6 +676,8 @@ export const validateQueryPack = (
       targets,
       variables: variables.length > 0 ? variables : undefined,
       groups,
+      facets: parseFacets(input.facets),
+      labels: parseLabels(input.labels),
       templates
     }
   }
@@ -601,10 +703,43 @@ export const validatePackIndex = (
     })
   }
 
+  // An index may carry packs, other indexes, or both: a catalogue split across
+  // several files often has a root that only points at its parts.
+  const includes: string[] = []
+  if (Array.isArray(input.includes)) {
+    input.includes.slice(0, MAX_INDEX_INCLUDES).forEach((raw, index) => {
+      const reference = asString(raw, 500)?.trim()
+      if (!reference) {
+        warnings.push({
+          path: `$.includes[${index}]`,
+          message: "entry skipped: not a string"
+        })
+        return
+      }
+      if (reference.includes("..")) {
+        errors.push({
+          path: `$.includes[${index}]`,
+          message: `unsafe index path "${reference}"`
+        })
+        return
+      }
+      if (/^[a-z]+:/i.test(reference) && !/^https:\/\//i.test(reference)) {
+        errors.push({
+          path: `$.includes[${index}]`,
+          message: "an included index must be a relative path or an HTTPS URL"
+        })
+        return
+      }
+      if (!includes.includes(reference)) includes.push(reference)
+    })
+  }
+
   const packs: PackIndexEntry[] = []
   const seenEntryIds = new Set<string>()
   if (!Array.isArray(input.packs)) {
-    errors.push({ path: "$.packs", message: "index has no pack list" })
+    if (includes.length === 0) {
+      errors.push({ path: "$.packs", message: "index has no pack list" })
+    }
   } else {
     input.packs.forEach((raw, index) => {
       if (!isRecord(raw)) return
@@ -654,7 +789,8 @@ export const validatePackIndex = (
         path: entryPath,
         templates:
           typeof raw.templates === "number" ? raw.templates : undefined,
-        verified: raw.verified === true
+        verified: raw.verified === true,
+        labels: parseLabels(raw.labels)
       })
     })
   }
@@ -674,6 +810,8 @@ export const validatePackIndex = (
       homepage: asString(input.homepage, 500),
       version: asString(input.version, 40),
       dialects: asString(input.dialects, 500),
+      facets: parseFacets(input.facets),
+      ...(includes.length > 0 ? { includes } : {}),
       packs
     }
   }
