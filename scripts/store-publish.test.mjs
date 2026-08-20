@@ -163,6 +163,45 @@ describe("store publishers", () => {
     ).rejects.toThrow("invalid_grant: Token has been expired or revoked")
   })
 
+  it("explains a Chrome publication refusal without blaming the package", async () => {
+    const archive = await temporaryArchive()
+    const responses = [
+      jsonResponse({ access_token: "token" }),
+      jsonResponse({ submittedItemRevisionStatus: { state: "PUBLISHED" } }),
+      jsonResponse({ uploadState: "SUCCEEDED" }),
+      jsonResponse(
+        {
+          error: {
+            message:
+              "Your submission does not meet the requirements to be published in the store."
+          }
+        },
+        400
+      )
+    ]
+
+    const failure = await publishChromeExtension({
+      credentials: {
+        extId: "extension",
+        publisherId: "publisher",
+        clientId: "client",
+        clientSecret: "secret",
+        refreshToken: "refresh"
+      },
+      filePath: archive,
+      fetchImpl: async () => responses.shift(),
+      log: () => {}
+    }).catch((error) => error)
+
+    expect(failure.message).toContain("does not meet the requirements")
+    // The package is fine: say so, and point at the one place that can fix it.
+    expect(failure.message).toContain("saved as a draft")
+    expect(failure.message).toContain(
+      "https://chrome.google.com/webstore/devconsole/publisher/extension/edit"
+    )
+    expect(failure.message).toContain("Privacy practices")
+  })
+
   it("uses the current web-ext submission flow with reviewer source", () => {
     const args = buildFirefoxPublishArguments({
       sourceDirectory: "build/firefox-prod",

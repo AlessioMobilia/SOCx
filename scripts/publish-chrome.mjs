@@ -38,6 +38,12 @@ const checkedJson = async (action, response) => {
   return body
 }
 
+/** Where a human has to go when the store refuses to publish. */
+const dashboardUrl = ({ publisherId, extId }) =>
+  publisherId
+    ? `https://chrome.google.com/webstore/devconsole/${publisherId}/${extId}/edit`
+    : "https://chrome.google.com/webstore/devconsole"
+
 const getAccessToken = async (credentials, fetchImpl) => {
   const response = await fetchImpl(TOKEN_ENDPOINT, {
     method: "POST",
@@ -165,17 +171,31 @@ const publishWithV2 = async ({
     )
   }
 
-  const publication = await checkedJson(
-    "Chrome V2 publication",
-    await fetchImpl(`${itemUrl}:publish`, {
-      method: "POST",
-      headers: { ...authHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        publishType: "DEFAULT_PUBLISH",
-        blockOnWarnings: false
+  // The upload has already succeeded at this point: the new package is sitting
+  // on the item as a draft. A refusal here is about the listing, not the
+  // package — most often a permission added since the published version and
+  // still without a justification, or a data-usage certification to renew — so
+  // the error says where to go and what is already done.
+  let publication
+  try {
+    publication = await checkedJson(
+      "Chrome V2 publication",
+      await fetchImpl(`${itemUrl}:publish`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publishType: "DEFAULT_PUBLISH",
+          blockOnWarnings: false
+        })
       })
-    })
-  )
+    )
+  } catch (error) {
+    throw new Error(
+      `${error.message}\n` +
+        `The ${credentials.extId} package uploaded successfully and is saved as a draft; only publication was refused.\n` +
+        `Resolve the item requirements at ${dashboardUrl(credentials)} — check Privacy practices for a permission justification or a data usage certification — then publish from there, or re-run the workflow with Chrome as the only enabled store.`
+    )
+  }
   if (!publication.state) {
     throw new Error("Chrome V2 publication returned no submission state")
   }
