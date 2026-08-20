@@ -1,7 +1,16 @@
+import {
+  buildVisualCandidate,
+  captureVisualSelection,
+  readRenderedElementText,
+  visualSelectionText,
+  type VisualSelectionSnapshot
+} from "./visualFormatting"
+
 export type SmartFormatKind =
   | "json"
   | "semantic-table"
   | "semantic-key-value"
+  | "visual-key-value"
   | "delimited-table"
   | "cef"
   | "logfmt"
@@ -138,6 +147,9 @@ const removeNoise = (container: HTMLElement): void => {
 }
 
 const readElementText = (element: HTMLElement): string => {
+  if (element.isConnected) {
+    return cleanText(readRenderedElementText(element))
+  }
   const clone = element.cloneNode(true) as HTMLElement
   removeNoise(clone)
   return cleanText(clone.textContent)
@@ -249,7 +261,7 @@ const readRow = (
   const indexed = placeRowCells(row).map(({ cell, index, span }) => ({
     index,
     span,
-    text: cleanText(cell.textContent)
+    text: readElementText(cell)
   }))
   const width = Math.max(...indexed.map((cell) => cell.index + cell.span))
   const values = Array.from({ length: width }, () => "")
@@ -274,7 +286,7 @@ const readRows = (
       )
       const values = Array.from({ length: width }, () => "")
       placements.forEach(({ cell, index }) => {
-        values[index] = cleanText(cell.textContent)
+        values[index] = readElementText(cell)
       })
       const cells = directCells(rows[rowIndex])
       return values.some(Boolean)
@@ -344,7 +356,7 @@ const extractSemanticMatrices = (
     )
     const values = Array.from({ length: width }, () => "")
     orphanCells.forEach((cell, index) => {
-      values[getCellIndex(cell, index)] = cleanText(cell.textContent)
+      values[getCellIndex(cell, index)] = readElementText(cell)
     })
     matrices.push({
       rows: [values],
@@ -574,7 +586,10 @@ const extractSemanticPairs = (
   container.querySelectorAll("dt").forEach((term) => {
     const value = term.nextElementSibling
     if (!value?.matches("dd")) return
-    addPair(term.textContent, value.textContent)
+    addPair(
+      readElementText(term as HTMLElement),
+      readElementText(value as HTMLElement)
+    )
   })
 
   container.querySelectorAll<HTMLElement>("label").forEach((label) => {
@@ -693,7 +708,7 @@ const extractSemanticPairs = (
     .querySelectorAll<HTMLElement>("[role='gridcell'], [role='cell']")
     .forEach((cell) => {
       const segments = Array.from(cell.children)
-        .map((child) => cleanText(child.textContent))
+        .map((child) => readElementText(child as HTMLElement))
         .filter(Boolean)
       if (segments.length < 2 || !isLikelyLabel(segments[0])) return
       const value = segments.slice(1).join(" ")
@@ -701,10 +716,10 @@ const extractSemanticPairs = (
     })
 
   container.querySelectorAll<HTMLElement>("strong").forEach((label) => {
-    const keyText = cleanText(label.textContent)
+    const keyText = readElementText(label)
     if (!/[:：]\s*$/.test(keyText) || !isLikelyLabel(keyText)) return
     const value = label.nextElementSibling
-    if (value) addPair(keyText, value.textContent)
+    if (value) addPair(keyText, readElementText(value as HTMLElement))
   })
 
   return unique(
@@ -1054,14 +1069,33 @@ const formatMarkedSelection = (
   }
 
   const normalizedKey = normalizeLabel(key).toLowerCase()
-  const pair = extractSemanticPairs(candidate).find(
-    ([label]) => normalizeLabel(label).toLowerCase() === normalizedKey
-  )
-  if (!pair) return null
+  const matchingElements = [
+    ...(candidate.matches(`[${attribute}]`) ? [candidate] : []),
+    ...Array.from(candidate.querySelectorAll<HTMLElement>(`[${attribute}]`))
+  ].filter((element) => element.getAttribute(attribute) === key)
+  const value = matchingElements
+    .map((element) => {
+      const text = readRenderedElementText(element)
+      const marker = `${element.className} ${element.getAttribute("data-test") ?? ""}`
+      let score = 0
+      if (/\bf-v\b|\bvalue\b/i.test(marker)) score += 5
+      if (element.hasAttribute("context-data-value")) score += 5
+      if (element.children.length === 0) score += 2
+      if (text.length <= 512) score += 1
+      return { text, score }
+    })
+    .filter(
+      ({ text }) => text && normalizeLabel(text).toLowerCase() !== normalizedKey
+    )
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.text.length - right.text.length
+    )[0]?.text
+  if (!value) return null
   return {
     kind: "semantic-key-value",
     score: 99,
-    text: formatKeyValues([pair])
+    text: formatKeyValues([[key, value]])
   }
 }
 
@@ -1254,25 +1288,248 @@ const findAtomicSelectionContainer = (
     : null
 }
 
+export type SmartSelectionSnapshot = {
+  text: string
+  visual: VisualSelectionSnapshot | null
+  markedResult: SmartFormatResult | null
+  tableResult: SmartFormatResult | null
+  contextualResult: SmartFormatResult | null
+  fallbackResult: SmartFormatResult | null
+}
+
+const isExplicitContextLabel = (
+  element: HTMLElement,
+  text: string
+): boolean => {
+  if (element.matches("label, dt, [data-field-label]")) return true
+  if (/[:：]\s*$/.test(text)) return true
+  const marker = `${element.id} ${element.className} ${element.getAttribute("data-testid") ?? ""}`
+  return /(?:^|[-_\s])(label|field-name|key|term)(?:$|[-_\s])/i.test(marker)
+}
+
+const contextualLabelForSelection = (
+  selection: Selection,
+  visual: VisualSelectionSnapshot
+): string | null => {
+  if (selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  const start = elementFromNode(range.startContainer)
+  const end = elementFromNode(range.endContainer)
+  if (!(start instanceof HTMLElement) || !(end instanceof HTMLElement)) {
+    return null
+  }
+
+  const document = start.ownerDocument
+  const selectedRects = visual.tokens
+    .map((token) => token.rect)
+    .filter((rect): rect is NonNullable<typeof rect> => !!rect)
+  const selectedBounds = selectedRects.length
+    ? {
+        top: Math.min(...selectedRects.map((rect) => rect.top)),
+        right: Math.max(...selectedRects.map((rect) => rect.right)),
+        bottom: Math.max(...selectedRects.map((rect) => rect.bottom)),
+        left: Math.min(...selectedRects.map((rect) => rect.left))
+      }
+    : null
+  const isNearby = (candidate: HTMLElement): boolean => {
+    if (!selectedBounds) return false
+    const rect = candidate.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return false
+    const verticalOverlap = Math.max(
+      0,
+      Math.min(rect.bottom, selectedBounds.bottom) -
+        Math.max(rect.top, selectedBounds.top)
+    )
+    const horizontalOverlap = Math.max(
+      0,
+      Math.min(rect.right, selectedBounds.right) -
+        Math.max(rect.left, selectedBounds.left)
+    )
+    const sameRow = verticalOverlap > 0 && rect.left <= selectedBounds.left + 4
+    const above =
+      rect.bottom <= selectedBounds.top + 2 &&
+      selectedBounds.top - rect.bottom <= 96 &&
+      (horizontalOverlap > 0 || Math.abs(rect.left - selectedBounds.left) <= 16)
+    return sameRow || above
+  }
+  const labelledElement = start.closest<HTMLElement>("[aria-labelledby]")
+  if (labelledElement?.contains(end)) {
+    const labels = (labelledElement.getAttribute("aria-labelledby") ?? "")
+      .split(/\s+/)
+      .map((id) => document.getElementById(id))
+      .filter(
+        (element): element is HTMLElement => element instanceof HTMLElement
+      )
+      .map(readRenderedElementText)
+      .filter((text) => isLikelyLabel(text))
+    if (labels.length > 0) return labels.join(" ")
+  }
+
+  const describedValue = start.closest<HTMLElement>("[id]")
+  if (describedValue?.contains(end)) {
+    const id = describedValue.id
+    const label = Array.from(
+      document.querySelectorAll<HTMLLabelElement>("label")
+    ).find((candidate) => candidate.htmlFor === id)
+    const labelText = label ? readRenderedElementText(label) : ""
+    if (labelText && isLikelyLabel(labelText)) return labelText
+  }
+
+  const description = start.closest<HTMLElement>("dd")
+  if (description?.contains(end)) {
+    const term = description.previousElementSibling
+    if (term instanceof HTMLElement && term.matches("dt")) {
+      const text = readRenderedElementText(term)
+      if (isLikelyLabel(text)) return text
+    }
+  }
+
+  let container: HTMLElement | null = start
+  for (let depth = 0; container && depth < 5; depth += 1) {
+    if (!container.contains(end)) {
+      container = container.parentElement
+      continue
+    }
+
+    const labels = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        "label, dt, [data-field-label], [class*='field-label'], [class~='label']"
+      )
+    ).filter(
+      (candidate) =>
+        !candidate.contains(start) &&
+        !candidate.contains(end) &&
+        isNearby(candidate)
+    )
+    if (labels.length === 1) {
+      const text = readRenderedElementText(labels[0])
+      if (text && isLikelyLabel(text)) return text
+    }
+
+    const previous = container.previousElementSibling
+    if (previous instanceof HTMLElement) {
+      const text = readRenderedElementText(previous)
+      if (
+        text &&
+        isLikelyLabel(text) &&
+        isExplicitContextLabel(previous, text) &&
+        isNearby(previous)
+      ) {
+        return text
+      }
+    }
+    container = container.parentElement
+  }
+
+  return null
+}
+
+const formatContextualSelection = (
+  selection: Selection,
+  visual: VisualSelectionSnapshot | null
+): SmartFormatResult | null => {
+  if (!visual?.geometryAvailable || visual.tokens.length === 0) return null
+  const key = contextualLabelForSelection(selection, visual)
+  const value = visualSelectionText(visual)
+  if (
+    !key ||
+    !value ||
+    normalizeLabel(key).toLowerCase() === value.toLowerCase()
+  ) {
+    return null
+  }
+  return {
+    kind: "visual-key-value",
+    score: 96,
+    text: formatKeyValues([[key, value]])
+  }
+}
+
+export const captureSmartSelection = (
+  selection: Selection
+): SmartSelectionSnapshot | null => {
+  if (!selection || selection.rangeCount === 0) return null
+  const visual = captureVisualSelection(selection)
+  const markedResult = formatMarkedSelection(selection)
+  const tableResult = formatSelectedTable(selection)
+  const contextualResult = formatContextualSelection(selection, visual)
+  const contextualHeaders = readContextualHeaders(selection)
+  const atomicContainer = findAtomicSelectionContainer(selection)
+  let fallbackResult: SmartFormatResult | null = null
+  if (!visual?.geometryAvailable && atomicContainer) {
+    fallbackResult = formatSmartContainer(atomicContainer, contextualHeaders)
+  }
+
+  if (!visual?.geometryAvailable && !fallbackResult) {
+    const range = selection.getRangeAt(0)
+    const wrapper = range.startContainer.ownerDocument.createElement("div")
+    wrapper.appendChild(range.cloneContents())
+    fallbackResult = formatSmartContainer(wrapper, contextualHeaders)
+  }
+
+  return {
+    text: selection.toString(),
+    visual,
+    markedResult,
+    tableResult,
+    contextualResult,
+    fallbackResult
+  }
+}
+
+const safeTextCandidate = (text: string): SmartFormatResult | null => {
+  const value = cleanTextPreservingLines(text)
+  if (!value) return null
+  const candidates: SmartFormatResult[] = []
+  const json = tryJson(value)
+  if (json) candidates.push({ kind: "json", score: 100, text: json })
+  const delimited = extractDelimitedCandidate(value)
+  if (delimited) candidates.push(delimited)
+  const structured = extractTextCandidate(value)
+  if (structured) candidates.push(structured)
+  return (
+    candidates.sort(
+      (left, right) =>
+        right.score - left.score || right.text.length - left.text.length
+    )[0] ?? null
+  )
+}
+
+export const formatSmartSelectionSnapshot = (
+  snapshot: SmartSelectionSnapshot
+): SmartFormatResult | null => {
+  // Explicit product fields and real tables have semantics that geometry alone
+  // cannot improve, and are captured before the page can mutate the selection.
+  if (snapshot.markedResult) return snapshot.markedResult
+  if (snapshot.tableResult) return snapshot.tableResult
+
+  if (snapshot.visual) {
+    const visualCandidate = buildVisualCandidate(snapshot.visual)
+    if (visualCandidate) {
+      return {
+        kind: "visual-key-value",
+        score: visualCandidate.score,
+        text: formatKeyValues(visualCandidate.pairs)
+      }
+    }
+
+    if (snapshot.contextualResult) return snapshot.contextualResult
+
+    if (snapshot.visual.geometryAvailable) {
+      // Once rendered geometry is available, never fall back to ancestor DOM
+      // content: it may contain tooltips, hidden panels or internal state.
+      return safeTextCandidate(visualSelectionText(snapshot.visual))
+    }
+  }
+
+  // Headless DOMs and older engines do not expose useful text rectangles.
+  // Preserve the semantic parser as a compatibility fallback in that case.
+  return snapshot.fallbackResult
+}
+
 export const formatSmartSelection = (
   selection: Selection
 ): SmartFormatResult | null => {
-  if (!selection || selection.rangeCount === 0) return null
-  const markedResult = formatMarkedSelection(selection)
-  if (markedResult) return markedResult
-  const tableResult = formatSelectedTable(selection)
-  if (tableResult) return tableResult
-  const contextualHeaders = readContextualHeaders(selection)
-  const atomicContainer = findAtomicSelectionContainer(selection)
-  if (atomicContainer) {
-    const contextualResult = formatSmartContainer(
-      atomicContainer,
-      contextualHeaders
-    )
-    if (contextualResult) return contextualResult
-  }
-  const range = selection.getRangeAt(0)
-  const wrapper = range.startContainer.ownerDocument.createElement("div")
-  wrapper.appendChild(range.cloneContents())
-  return formatSmartContainer(wrapper, contextualHeaders)
+  const snapshot = captureSmartSelection(selection)
+  return snapshot ? formatSmartSelectionSnapshot(snapshot) : null
 }

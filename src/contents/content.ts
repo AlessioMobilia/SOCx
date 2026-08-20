@@ -17,6 +17,10 @@ import {
 } from "../utility/query/paletteBridge"
 import { openQueryPalette } from "../utility/query/paletteController"
 import { servicesConfig } from "../utility/servicesConfig"
+import {
+  captureSmartSelection,
+  type SmartSelectionSnapshot
+} from "../utility/smartFormatting"
 import { copySmartFormattedText } from "../utility/smartFormattingClipboard"
 import { createTooltip } from "../utility/tooltipFactory"
 import {
@@ -70,6 +74,13 @@ if (!(window as any)._formatScriptInitialized) {
   let buttonGroup: HTMLDivElement | null = null
   let lastSelectionSignature: string | null = null
   let lastValidSelection: Selection | null = null
+  let lastValidSelectionSnapshot: SmartSelectionSnapshot | null = null
+  let lastSnapshotBoundary: {
+    startContainer: Node
+    startOffset: number
+    endContainer: Node
+    endOffset: number
+  } | null = null
   let repositionScheduled = false
   let lastInteractionRect: DOMRect | null = null
   let lastPointerRect: DOMRect | null = null
@@ -88,6 +99,32 @@ if (!(window as any)._formatScriptInitialized) {
 
   const shouldSkipDueToButtonInteraction = () =>
     now() - lastButtonInteractionAt < BUTTON_INTERACTION_SUSPEND_MS
+
+  const rememberDomSelection = (selection: Selection) => {
+    lastValidSelection = selection
+    if (selection.rangeCount === 0) return
+    const range = selection.getRangeAt(0)
+    const unchanged =
+      lastSnapshotBoundary?.startContainer === range.startContainer &&
+      lastSnapshotBoundary.startOffset === range.startOffset &&
+      lastSnapshotBoundary.endContainer === range.endContainer &&
+      lastSnapshotBoundary.endOffset === range.endOffset
+    if (unchanged && lastValidSelectionSnapshot) return
+
+    lastValidSelectionSnapshot = captureSmartSelection(selection)
+    lastSnapshotBoundary = {
+      startContainer: range.startContainer,
+      startOffset: range.startOffset,
+      endContainer: range.endContainer,
+      endOffset: range.endOffset
+    }
+  }
+
+  const forgetDomSelection = () => {
+    lastValidSelection = null
+    lastValidSelectionSnapshot = null
+    lastSnapshotBoundary = null
+  }
 
   const debouncedMouseSelection = debounce(
     (event?: MouseEvent) => handleSelection(event),
@@ -169,12 +206,12 @@ if (!(window as any)._formatScriptInitialized) {
     const hasDomSelection = hasUsableSelection(selection)
     const hasInputSelection = Boolean(getInputSelection(getDeepActiveElement()))
     if (!hasDomSelection && !hasInputSelection) {
-      lastValidSelection = null
+      forgetDomSelection()
       clearSelectionUI()
       return
     }
     if (hasDomSelection) {
-      lastValidSelection = selection
+      rememberDomSelection(selection!)
     }
     deferredSelectionEvaluation()
   }
@@ -692,12 +729,12 @@ if (!(window as any)._formatScriptInitialized) {
     const rawText = rawSelection?.toString() ?? inputSelection?.text ?? ""
     const selectedText = asciiSafe(rawText).trim()
     if (!selectedText) {
-      lastValidSelection = null
+      forgetDomSelection()
       clearSelectionUI()
       return
     }
 
-    lastValidSelection = selection
+    if (selection) rememberDomSelection(selection)
 
     if (selectedText.length > MAX_SELECTION_LENGTH) {
       clearSelectionUI()
@@ -1010,7 +1047,7 @@ if (!(window as any)._formatScriptInitialized) {
       return true // Keep channel open for async response
     } else if (message?.name === "format-selection") {
       const formattedText = lastValidSelection
-        ? formatSelectedText(lastValidSelection)
+        ? formatSelectedText(lastValidSelection, lastValidSelectionSnapshot)
         : ""
       copySmartFormattedText(formattedText).then(sendResponse)
       return true

@@ -1,11 +1,46 @@
 import { describe, expect, it } from "vitest"
 
-import { formatSmartContainer, formatSmartSelection } from "./smartFormatting"
+import {
+  captureSmartSelection,
+  formatSmartContainer,
+  formatSmartSelection,
+  formatSmartSelectionSnapshot
+} from "./smartFormatting"
 
 const fromHtml = (html: string): HTMLElement => {
   const container = document.createElement("div")
   container.innerHTML = html
   return container
+}
+
+const setRect = (
+  element: HTMLElement,
+  left: number,
+  top: number,
+  width: number,
+  height: number = 18
+) => {
+  element.getBoundingClientRect = () =>
+    ({
+      x: left,
+      y: top,
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      width,
+      height,
+      toJSON: () => ({})
+    }) as DOMRect
+}
+
+const selectContents = (element: Element): Selection => {
+  const range = document.createRange()
+  range.selectNodeContents(element)
+  const selection = window.getSelection()!
+  selection.removeAllRanges()
+  selection.addRange(range)
+  return selection
 }
 
 describe("smart formatting", () => {
@@ -98,7 +133,9 @@ describe("smart formatting", () => {
 
   it("detects TSV tables without discarding delimiters", () => {
     const result = formatSmartContainer(
-      fromHtml("<pre>Device\tProcess\tSeverity\nhost-23\tWINWORD.EXE\tHigh</pre>")
+      fromHtml(
+        "<pre>Device\tProcess\tSeverity\nhost-23\tWINWORD.EXE\tHigh</pre>"
+      )
     )
 
     expect(result?.kind).toBe("delimited-table")
@@ -147,5 +184,121 @@ describe("smart formatting", () => {
     const result = formatSmartSelection(selection)
     expect(result?.text).toContain("| Device | Severity |")
     expect(result?.text).toContain("| host-23 | High |")
+  })
+
+  it("formats stacked visual fields from an immutable snapshot", () => {
+    document.body.innerHTML = `
+      <div id="visual-root">
+        <div id="host-label" class="field-label">Host</div>
+        <div id="host-value">pc-01</div>
+        <div id="user-label" class="field-label">User</div>
+        <div id="user-value">alice</div>
+      </div>
+    `
+    setRect(document.getElementById("host-label")!, 100, 100, 70)
+    setRect(document.getElementById("host-value")!, 100, 124, 90)
+    setRect(document.getElementById("user-label")!, 100, 165, 70)
+    setRect(document.getElementById("user-value")!, 100, 189, 90)
+    const root = document.getElementById("visual-root")!
+    const snapshot = captureSmartSelection(selectContents(root))!
+
+    document.getElementById("host-value")!.textContent = "mutated-host"
+    root.insertAdjacentHTML(
+      "beforeend",
+      '<div role="tooltip">Late tooltip</div>'
+    )
+
+    const result = formatSmartSelectionSnapshot(snapshot)
+    expect(result?.kind).toBe("visual-key-value")
+    expect(result?.text).toBe("Host: pc-01\nUser: alice")
+  })
+
+  it("does not prefer internal raw state over rendered selected fields", () => {
+    document.body.innerHTML = `
+      <div id="raw-root" data-raw='{"origin":"widget","html":"<div class=tooltip>Help</div>"}'>
+        <strong id="raw-label">Host</strong>
+        <span id="raw-value">pc-01</span>
+      </div>
+    `
+    setRect(document.getElementById("raw-label")!, 100, 100, 60)
+    setRect(document.getElementById("raw-value")!, 240, 100, 80)
+    const snapshot = captureSmartSelection(
+      selectContents(document.getElementById("raw-root")!)
+    )!
+
+    const result = formatSmartSelectionSnapshot(snapshot)
+    expect(result?.kind).toBe("visual-key-value")
+    expect(result?.text).toBe("Host: pc-01")
+    expect(result?.text).not.toContain("origin")
+    expect(result?.text).not.toContain("tooltip")
+  })
+
+  it("uses an explicit label above a value selected on its own", () => {
+    document.body.innerHTML = `
+      <div>
+        <div class="field-label">Host</div>
+        <div id="only-value">pc-01</div>
+      </div>
+    `
+    setRect(document.querySelector(".field-label")!, 100, 100, 70)
+    setRect(document.getElementById("only-value")!, 100, 126, 90)
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("only-value")!)
+    )
+    expect(result?.kind).toBe("visual-key-value")
+    expect(result?.text).toBe("Host: pc-01")
+  })
+
+  it("uses aria-labelledby without copying the surrounding widget", () => {
+    document.body.innerHTML = `
+      <div>
+        <span id="host-name">Host</span>
+        <div id="aria-value" aria-labelledby="host-name">pc-01</div>
+        <div role="tooltip">Internal help</div>
+      </div>
+    `
+    setRect(document.getElementById("aria-value")!, 100, 126, 90)
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("aria-value")!)
+    )
+    expect(result?.text).toBe("Host: pc-01")
+    expect(result?.text).not.toContain("Internal help")
+  })
+
+  it("does not use an unrelated preceding heading as contextual metadata", () => {
+    document.body.innerHTML = `
+      <article>
+        <strong>Investigation summary</strong>
+        <p id="summary-value">The user opened a suspicious attachment.</p>
+      </article>
+    `
+    setRect(document.getElementById("summary-value")!, 100, 126, 420)
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("summary-value")!)
+    )
+    expect(result).toBeNull()
+  })
+
+  it("excludes CSS-hidden tooltip text from selected table cells", () => {
+    document.head.innerHTML = "<style>.css-hidden { display: none; }</style>"
+    document.body.innerHTML = `
+      <table>
+        <thead><tr><th>Field</th><th>Value</th></tr></thead>
+        <tbody><tr><td id="field">Host</td><td id="value">pc-01<span class="css-hidden">Internal help</span></td></tr></tbody>
+      </table>
+    `
+    const range = document.createRange()
+    range.setStart(document.getElementById("field")!.firstChild!, 0)
+    range.setEnd(document.getElementById("value")!.firstChild!, 5)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const result = formatSmartSelection(selection)
+    expect(result?.text).toContain("pc-01")
+    expect(result?.text).not.toContain("Internal help")
   })
 })

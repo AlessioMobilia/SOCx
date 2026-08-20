@@ -13,8 +13,13 @@ import {
   getNvdCve,
   getVirusTotalSignatureFields
 } from "./intelFormatting"
-import { formatSmartSelection } from "./smartFormatting"
+import {
+  formatSmartSelection,
+  formatSmartSelectionSnapshot,
+  type SmartSelectionSnapshot
+} from "./smartFormatting"
 import { showToast } from "./toast"
+import { visualSelectionText } from "./visualFormatting"
 
 export { showToast } from "./toast"
 
@@ -1968,10 +1973,23 @@ export const formatAndCopySelection = async (
   }
 }
 
-export function formatSelectedText(lastValidSelection: Selection): string {
-  const smartResult = formatSmartSelection(lastValidSelection)
+export function formatSelectedText(
+  lastValidSelection: Selection,
+  snapshot?: SmartSelectionSnapshot | null
+): string {
+  const smartResult = snapshot
+    ? formatSmartSelectionSnapshot(snapshot)
+    : formatSmartSelection(lastValidSelection)
   if (smartResult && smartResult.score >= 72) {
     return smartResult.text
+  }
+
+  if (snapshot) {
+    return (
+      (snapshot.visual
+        ? visualSelectionText(snapshot.visual)
+        : snapshot.text) ?? ""
+    ).trim()
   }
 
   return formatSelectedTextLegacy(lastValidSelection)
