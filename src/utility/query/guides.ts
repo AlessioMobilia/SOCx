@@ -2,6 +2,8 @@
 // Keep this catalogue aligned with dialects.json: the audit test intentionally
 // fails when a dialect is added without a guide.
 
+import { QUERY_GUIDE_COMMANDS, type QueryGuideCommand } from "./guideCommands"
+
 export type QueryGuideItem = {
   term: string
   description: string
@@ -13,11 +15,15 @@ export type QueryLanguageGuide = {
   documentationUrl: string
   documentationLabel: string
   fields: QueryGuideItem[]
-  commands: QueryGuideItem[]
+  commands: QueryGuideCommand[]
   caution?: string
 }
 
-export const QUERY_LANGUAGE_GUIDES: QueryLanguageGuide[] = [
+type QueryLanguageGuideSeed = Omit<QueryLanguageGuide, "commands"> & {
+  commands: QueryGuideItem[]
+}
+
+const QUERY_LANGUAGE_GUIDE_SEEDS: QueryLanguageGuideSeed[] = [
   {
     dialectId: "kql",
     summary:
@@ -1160,6 +1166,15 @@ export const QUERY_LANGUAGE_GUIDES: QueryLanguageGuide[] = [
   }
 ]
 
+export const QUERY_LANGUAGE_GUIDES: QueryLanguageGuide[] =
+  QUERY_LANGUAGE_GUIDE_SEEDS.map((guide) => {
+    const commands = QUERY_GUIDE_COMMANDS[guide.dialectId]
+    if (!commands) {
+      throw new Error(`Missing command guide for dialect: ${guide.dialectId}`)
+    }
+    return { ...guide, commands }
+  })
+
 const normalize = (value: string): string => value.trim().toLocaleLowerCase()
 
 export const guideSearchText = (guide: QueryLanguageGuide): string =>
@@ -1170,7 +1185,13 @@ export const guideSearchText = (guide: QueryLanguageGuide): string =>
       guide.documentationLabel,
       guide.caution ?? "",
       ...guide.fields.flatMap((item) => [item.term, item.description]),
-      ...guide.commands.flatMap((item) => [item.term, item.description])
+      ...guide.commands.flatMap((item) => [
+        item.term,
+        item.description,
+        item.syntax,
+        item.example,
+        ...item.options
+      ])
     ].join(" ")
   )
 

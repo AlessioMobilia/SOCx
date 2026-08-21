@@ -16,9 +16,24 @@ describe("query language guides", () => {
     for (const guide of QUERY_LANGUAGE_GUIDES) {
       expect(guide.summary.length).toBeGreaterThan(20)
       expect(guide.fields.length).toBeGreaterThanOrEqual(3)
-      expect(guide.commands.length).toBeGreaterThanOrEqual(4)
+      expect(guide.commands.length).toBeGreaterThanOrEqual(8)
+      expect(new Set(guide.commands.map((command) => command.term)).size).toBe(
+        guide.commands.length
+      )
+      for (const command of guide.commands) {
+        expect(command.description.length).toBeGreaterThan(20)
+        expect(command.syntax.length).toBeGreaterThan(0)
+        expect(command.options.length).toBeGreaterThanOrEqual(2)
+        expect(command.example.length).toBeGreaterThan(0)
+      }
       expect(new URL(guide.documentationUrl).protocol).toBe("https:")
     }
+    expect(
+      QUERY_LANGUAGE_GUIDES.reduce(
+        (count, guide) => count + guide.commands.length,
+        0
+      )
+    ).toBeGreaterThanOrEqual(180)
   })
 
   it("searches commands and associated product names", () => {
@@ -30,6 +45,24 @@ describe("query language guides", () => {
         () => ""
       ).map((guide) => guide.dialectId)
     ).toContain("spl")
+
+    expect(
+      filterQueryLanguageGuides(
+        QUERY_LANGUAGE_GUIDES,
+        "all",
+        "null placement",
+        () => ""
+      ).map((guide) => guide.dialectId)
+    ).toContain("kql")
+
+    expect(
+      filterQueryLanguageGuides(
+        QUERY_LANGUAGE_GUIDES,
+        "esql",
+        "related.ip",
+        () => ""
+      ).map((guide) => guide.dialectId)
+    ).toEqual(["esql"])
 
     expect(
       filterQueryLanguageGuides(

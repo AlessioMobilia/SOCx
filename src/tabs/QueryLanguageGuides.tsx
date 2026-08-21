@@ -51,8 +51,7 @@ const QueryLanguageGuides = ({ dialects }: QueryLanguageGuidesProps) => {
           <h2 className="font-semibold">Query language mini guides</h2>
           <p className="mt-1 text-xs text-socx-muted dark:text-socx-muted-dark">
             Commands, key fields and official documentation for all{" "}
-            {QUERY_LANGUAGE_GUIDES.length} supported languages. Closed until you
-            need it.
+            {QUERY_LANGUAGE_GUIDES.length} supported languages.
           </p>
         </div>
         <span className="inline-flex shrink-0 items-center gap-2 text-xs font-semibold text-socx-muted dark:text-socx-muted-dark">
@@ -114,7 +113,9 @@ const QueryLanguageGuides = ({ dialects }: QueryLanguageGuidesProps) => {
               return (
                 <details
                   key={guide.dialectId}
-                  className="group/guide self-start rounded-xl border border-socx-border-light bg-socx-cloud-soft/45 dark:border-socx-border-dark dark:bg-socx-panel/35">
+                  className={`group/guide self-start rounded-xl border border-socx-border-light bg-socx-cloud-soft/45 dark:border-socx-border-dark dark:bg-socx-panel/35 ${
+                    visibleGuides.length === 1 ? "xl:col-span-2" : ""
+                  }`}>
                   <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-xl px-4 py-3 marker:hidden hover:bg-socx-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-socx-accent [&::-webkit-details-marker]:hidden">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -135,7 +136,7 @@ const QueryLanguageGuides = ({ dialects }: QueryLanguageGuidesProps) => {
                   <div className="space-y-4 border-t border-socx-border-light px-4 py-4 text-xs dark:border-socx-border-dark">
                     <p className="text-sm leading-relaxed">{guide.summary}</p>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
                       <div>
                         <h4 className="mb-2 font-semibold">Main fields</h4>
                         <dl className="space-y-2">
@@ -153,21 +154,76 @@ const QueryLanguageGuides = ({ dialects }: QueryLanguageGuidesProps) => {
                       </div>
 
                       <div>
-                        <h4 className="mb-2 font-semibold">
-                          Commands and operators
-                        </h4>
-                        <dl className="space-y-2">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h4 className="font-semibold">
+                            Commands and operators
+                          </h4>
+                          <span className="rounded-full bg-socx-accent/10 px-2 py-0.5 text-[10px] font-semibold text-socx-muted dark:text-socx-muted-dark">
+                            {guide.commands.length}
+                          </span>
+                        </div>
+                        <p className="mb-2 text-[11px] text-socx-muted dark:text-socx-muted-dark">
+                          Select a command to see syntax, options and a short
+                          example.
+                        </p>
+                        <div className="space-y-2">
                           {guide.commands.map((command) => (
-                            <div key={command.term}>
-                              <dt className="font-mono font-semibold text-socx-ink dark:text-white">
-                                {command.term}
-                              </dt>
-                              <dd className="mt-0.5 leading-relaxed text-socx-muted dark:text-socx-muted-dark">
-                                {command.description}
-                              </dd>
-                            </div>
+                            <details
+                              key={command.term}
+                              className="group/command overflow-hidden rounded-lg border border-socx-border-light bg-white/70 dark:border-socx-border-dark dark:bg-socx-night-soft/50">
+                              <summary className="flex cursor-pointer list-none items-start justify-between gap-2 px-3 py-2.5 marker:hidden transition hover:bg-socx-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-socx-accent [&::-webkit-details-marker]:hidden">
+                                <span className="min-w-0">
+                                  <span className="block break-words font-mono font-semibold text-socx-ink dark:text-white">
+                                    {command.term}
+                                  </span>
+                                  <span className="mt-0.5 block leading-relaxed text-socx-muted dark:text-socx-muted-dark">
+                                    {command.description}
+                                  </span>
+                                </span>
+                                <ChevronDownIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-socx-muted transition group-open/command:rotate-180" />
+                              </summary>
+
+                              <div className="space-y-3 border-t border-socx-border-light bg-socx-cloud-soft/40 px-3 py-3 dark:border-socx-border-dark dark:bg-socx-panel/35">
+                                <div>
+                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-socx-muted dark:text-socx-muted-dark">
+                                    Syntax
+                                  </p>
+                                  <code className="block overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-socx-night px-2.5 py-2 font-mono text-[11px] leading-relaxed text-white">
+                                    {command.syntax}
+                                  </code>
+                                </div>
+
+                                <div>
+                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-socx-muted dark:text-socx-muted-dark">
+                                    Main options
+                                  </p>
+                                  <ul className="space-y-1 leading-relaxed text-socx-muted dark:text-socx-muted-dark">
+                                    {command.options.map((option) => (
+                                      <li
+                                        key={option}
+                                        className="flex items-start gap-1.5">
+                                        <span
+                                          aria-hidden="true"
+                                          className="mt-[0.45em] h-1 w-1 shrink-0 rounded-full bg-socx-accent"
+                                        />
+                                        <span>{option}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                <div>
+                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-socx-muted dark:text-socx-muted-dark">
+                                    Short example
+                                  </p>
+                                  <code className="block overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-socx-border-light bg-white px-2.5 py-2 font-mono text-[11px] leading-relaxed text-socx-ink dark:border-socx-border-dark dark:bg-socx-night-soft dark:text-white">
+                                    {command.example}
+                                  </code>
+                                </div>
+                              </div>
+                            </details>
                           ))}
-                        </dl>
+                        </div>
                       </div>
                     </div>
 

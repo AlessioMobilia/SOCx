@@ -264,7 +264,7 @@ const QueryWorkspace = () => {
 
   return (
     <main className="min-h-screen bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+      <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5">
         <header className={card}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -300,7 +300,7 @@ const QueryWorkspace = () => {
         {/* A fixed height rather than a minimum: with a floor, a catalogue of a
             few hundred templates stretches the row and the page ends up
             scrolling instead of the list inside it. */}
-        <div className="grid min-h-[32rem] gap-5 lg:h-[calc(100vh-13rem)] lg:grid-cols-[minmax(260px,0.75fr)_minmax(320px,1fr)_minmax(380px,1.35fr)]">
+        <div className="grid min-h-[32rem] gap-5 lg:h-[calc(100vh-13rem)] lg:grid-cols-[minmax(220px,0.65fr)_minmax(360px,1.2fr)_minmax(330px,1fr)]">
           <section
             className={`${card} flex min-h-0 flex-col gap-3 ${
               // A hunting playbook reads no indicator: the list stays in place,
@@ -609,7 +609,7 @@ const QueryWorkspace = () => {
                         </p>
                       )}
                       <div
-                        className={`flex items-start gap-2 rounded-xl border px-3 py-2 transition ${
+                        className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 transition ${
                           entry.key === selected?.key
                             ? "border-socx-accent bg-socx-accent/15"
                             : "border-socx-border-light hover:border-socx-accent dark:border-socx-border-dark"
@@ -618,19 +618,33 @@ const QueryWorkspace = () => {
                           type="button"
                           onClick={() => selectEntry(entry)}
                           className="min-w-0 flex-1 text-left">
-                          <p className="truncate text-sm font-semibold">
+                          <p className="break-words text-sm font-semibold leading-snug">
                             {entry.template.name}
                           </p>
                           {entry.template.description && (
-                            <p className="truncate text-[11px] text-socx-muted dark:text-socx-muted-dark">
+                            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-socx-muted dark:text-socx-muted-dark">
                               {entry.template.description}
                             </p>
                           )}
-                          <p className="truncate text-[11px] text-socx-muted dark:text-socx-muted-dark">
-                            {entry.path.join(" › ")} · {entry.pack.name} ·{" "}
-                            {dialectChipLabel(entryDialect(entry))}
-                            {labels.length > 0 && ` · ${labels.join(" · ")}`}
-                          </p>
+                          <span className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-socx-muted dark:text-socx-muted-dark">
+                            <span className="max-w-full break-words">
+                              {entry.path.join(" › ")}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span className="max-w-full break-words">
+                              {entry.pack.name}
+                            </span>
+                            <span className="rounded-full bg-socx-accent/10 px-1.5 py-0.5 font-semibold">
+                              {dialectChipLabel(entryDialect(entry))}
+                            </span>
+                            {labels.map((label, labelIndex) => (
+                              <span
+                                key={`${label}-${labelIndex}`}
+                                className="rounded-full border border-socx-border-light px-1.5 py-0.5 dark:border-socx-border-dark">
+                                {label}
+                              </span>
+                            ))}
+                          </span>
                         </button>
                         <button
                           type="button"
@@ -646,7 +660,7 @@ const QueryWorkspace = () => {
                               : "Add to favorites"
                           }
                           onClick={() => void toggleStar(entry.key)}
-                          className={`shrink-0 rounded-full px-1 text-base leading-none transition ${
+                          className={`shrink-0 rounded-full p-1.5 text-base leading-none transition ${
                             starred
                               ? "text-socx-accent"
                               : "text-socx-muted hover:text-socx-accent dark:text-socx-muted-dark"
