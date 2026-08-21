@@ -9,6 +9,7 @@ import {
   buildFacets,
   collectFacetDefinitions,
   dialectChipLabel,
+  entryPackKey,
   rankEntries,
   resolveEntryLabels,
   type PaletteFilterState
@@ -173,6 +174,22 @@ describe("built-in facets", () => {
     expect(outcome.entries.map((entry) => entry.template.id)).toEqual([
       "connections"
     ])
+  })
+
+  it("lists and filters the source packs independently from language", () => {
+    const splunkEntry = entries.find((entry) => entry.pack.name === "Splunk")!
+    const packKey = entryPackKey(splunkEntry)
+    const facets = buildFacets(entries, withFilters({ pack: packKey }))
+
+    expect(facets.packs.map((option) => option.label).sort()).toEqual([
+      "Defender",
+      "Splunk"
+    ])
+    expect(
+      applyPaletteFilters(entries, withFilters({ pack: packKey })).entries.map(
+        (entry) => entry.pack.name
+      )
+    ).toEqual(["Splunk"])
   })
 
   it("labels a dialect chip with its id", () => {

@@ -32,6 +32,8 @@ export type PaletteFilterState = {
   kind: "all" | PackKind
   /** Dialect id, or `all`. */
   dialect: string
+  /** Namespaced source/pack id, or `all`. */
+  pack: string
   /** Top level group label, or `all`. */
   group: string
   /** Custom facet id to the selected value; a missing key means "any". */
@@ -55,6 +57,7 @@ export type CustomFacet = {
 export type PaletteFacets = {
   kinds: FacetOption[]
   dialects: FacetOption[]
+  packs: FacetOption[]
   groups: FacetOption[]
   custom: CustomFacet[]
   /** How many of the currently visible queries are starred. */
@@ -66,6 +69,7 @@ export const ALL_FILTERS: PaletteFilterState = {
   favoritesOnly: false,
   kind: "all",
   dialect: "all",
+  pack: "all",
   group: "all",
   labels: {}
 }
@@ -222,6 +226,12 @@ export const entryDialect = (entry: FilterableEntry): string =>
 export const entryGroup = (entry: FilterableEntry): string =>
   entry.path[0]?.trim() || UNCATEGORISED_LABEL
 
+export const queryPackKey = (pack: QueryPack): string =>
+  `${pack.sourceId ?? "local"}::${pack.id}`
+
+export const entryPackKey = (entry: FilterableEntry): string =>
+  queryPackKey(entry.pack)
+
 /** Pack wide labels plus the template's own, which is how one file per customer works. */
 export const resolveEntryLabels = (entry: FilterableEntry): FacetLabels =>
   mergeLabels(entry.pack.labels, entry.template.labels) ?? {}
@@ -269,7 +279,7 @@ export const collectFacetDefinitions = (
 }
 
 type IgnorableFacet =
-  "kind" | "dialect" | "group" | "favorites" | `label:${string}`
+  "kind" | "dialect" | "pack" | "group" | "favorites" | `label:${string}`
 
 const matchesFacets = (
   entry: FilterableEntry,
@@ -288,6 +298,13 @@ const matchesFacets = (
     ignore !== "dialect" &&
     state.dialect !== "all" &&
     entryDialect(entry) !== state.dialect
+  ) {
+    return false
+  }
+  if (
+    ignore !== "pack" &&
+    state.pack !== "all" &&
+    entryPackKey(entry) !== state.pack
   ) {
     return false
   }
@@ -415,6 +432,9 @@ export const buildFacets = (
   favorites: string[] = [],
   dialectLabels?: Map<string, string>
 ): PaletteFacets => {
+  const packsByKey = new Map(
+    entries.map((entry) => [entryPackKey(entry), entry.pack] as const)
+  )
   const kinds = countBy(
     filterEntries(entries, state, favorites, "kind"),
     (entry) => entry.pack.kind
@@ -426,6 +446,10 @@ export const buildFacets = (
   const groups = countBy(
     filterEntries(entries, state, favorites, "group"),
     entryGroup
+  )
+  const packs = countBy(
+    filterEntries(entries, state, favorites, "pack"),
+    entryPackKey
   )
   const favoriteCount = filterEntries(
     entries,
@@ -472,6 +496,15 @@ export const buildFacets = (
       dialectChipLabel,
       (value) => dialectLabels?.get(value)
     ),
+    packs: toOptions(
+      countBy(entries, entryPackKey),
+      packs,
+      (value) => packsByKey.get(value)?.name ?? value,
+      (value) => {
+        const pack = packsByKey.get(value)
+        return pack?.vendor ? `${pack.name} · ${pack.vendor}` : pack?.name
+      }
+    ),
     groups: toOptions(countBy(entries, entryGroup), groups, (value) => value),
     custom,
     favorites: favoriteCount
@@ -482,6 +515,7 @@ export const hasActiveFilters = (state: PaletteFilterState): boolean =>
   state.favoritesOnly ||
   state.kind !== "all" ||
   state.dialect !== "all" ||
+  state.pack !== "all" ||
   state.group !== "all" ||
   state.search.trim().length > 0 ||
   Object.values(state.labels ?? {}).some((value) => value && value !== "all")

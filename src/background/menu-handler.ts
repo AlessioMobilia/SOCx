@@ -1,6 +1,5 @@
 import { Storage } from "@plasmohq/storage"
 
-import { OPEN_QUERY_PALETTE_MESSAGE } from "../utility/query/paletteBridge"
 import { servicesConfig } from "../utility/servicesConfig"
 import {
   copyToClipboard,
@@ -22,6 +21,7 @@ import {
   QUERY_MENU_OPEN_ALL,
   QUERY_MENU_PREFIX
 } from "./query-menus"
+import { openQueryPaletteFromMenu } from "./query-palette-menu"
 import { openQueryWorkspace } from "./query-workspace"
 
 const storage = new Storage({ area: "local" })
@@ -31,25 +31,11 @@ export async function handleMenuClick(info: any, tab: any) {
     const indicators = info.selectionText
       ? (extractIOCs(info.selectionText) ?? [])
       : []
-    if (typeof tab?.id !== "number") {
-      showNotification("Query palette", "Unavailable on this page.")
-      return
-    }
-    await new Promise<void>((resolve) => {
-      chrome.tabs.sendMessage(
-        tab.id,
-        {
-          name: OPEN_QUERY_PALETTE_MESSAGE,
-          body: { indicators }
-        },
-        () => {
-          const unavailable = Boolean(chrome.runtime.lastError)
-          if (unavailable) {
-            showNotification("Query palette", "Unavailable on this page.")
-          }
-          resolve()
-        }
-      )
+    await openQueryPaletteFromMenu(tab?.id, indicators, undefined, {
+      sendMessage: (tabId, message, callback) =>
+        chrome.tabs.sendMessage(tabId, message, callback),
+      getLastError: () => chrome.runtime.lastError,
+      openWorkspace: openQueryWorkspace
     })
     return
   }
@@ -65,22 +51,18 @@ export async function handleMenuClick(info: any, tab: any) {
       ? (extractIOCs(info.selectionText) ?? [])
       : []
 
-    if (typeof tab?.id === "number") {
-      chrome.tabs.sendMessage(
-        tab.id,
-        {
-          name: OPEN_QUERY_PALETTE_MESSAGE,
-          body: { templateKey: templateKey ?? undefined, indicators }
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            void openQueryWorkspace(indicators, templateKey ?? undefined)
-          }
-        }
-      )
-    } else {
-      await openQueryWorkspace(indicators, templateKey ?? undefined)
-    }
+    await openQueryPaletteFromMenu(
+      tab?.id,
+      indicators,
+      templateKey ?? undefined,
+      {
+        sendMessage: (tabId, message, callback) =>
+          chrome.tabs.sendMessage(tabId, message, callback),
+        getLastError: () => chrome.runtime.lastError,
+        openWorkspace: (values) =>
+          openQueryWorkspace(values, templateKey ?? undefined)
+      }
+    )
     return
   }
 

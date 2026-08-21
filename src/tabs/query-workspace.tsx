@@ -20,7 +20,6 @@ import { QUERY_PACK_CACHE_KEY } from "../utility/query/registry"
 import { bundledDialectMap } from "../utility/query/render"
 import { parseQueryWorkspaceHash } from "../utility/query/workspace"
 import { ensureIsDarkMode } from "../utility/theme"
-import QueryLanguageGuides from "./QueryLanguageGuides"
 
 type LibraryResponse = { packs?: QueryPack[]; indicators?: string[] }
 
@@ -200,8 +199,6 @@ const QueryWorkspace = () => {
             </p>
           )}
         </div>
-
-        <QueryLanguageGuides dialects={dialects} />
       </div>
     </main>
   )

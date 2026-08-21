@@ -11,8 +11,10 @@ import { showToast } from "../toast"
 import { toggleFavoriteKey } from "./favorites"
 import { flattenGroupTree, type GroupNode } from "./groups"
 import { insertQueryText, resolveTarget, type InsertMode } from "./insertText"
+import { createLanguageGuideView } from "./languageGuideView"
 import {
   templateVariables,
+  type QueryDialect,
   type QueryPack,
   type QueryTemplate
 } from "./packSchema"
@@ -22,6 +24,7 @@ import {
   buildFacets,
   dialectChipLabel,
   entryDialect,
+  entryPackKey,
   FAVORITES_LABEL,
   hasActiveFilters,
   KIND_LABELS,
@@ -60,12 +63,16 @@ export type PaletteRequest = {
   /** Keeps the current template alive if the library is remounted. */
   onSelectedKeyChange?: (key: string) => void
   platformLabel?: string
+  /** Pack selected automatically from the current SIEM/EDR URL. */
+  initialPackKey?: string
   /** Starred entry keys, most recently starred first. */
   favorites?: string[]
   /** Entry to open on, e.g. the template a context menu entry named. */
   initialKey?: string
   /** Dialect id to human label, used for the language chip tooltips. */
   dialectLabels?: Map<string, string>
+  /** Full dialect metadata used by the embedded language guide. */
+  dialects?: Map<string, QueryDialect>
   onToggleFavorite?: (key: string, favorites: string[]) => void
   onRender: (
     entry: PaletteEntry,
@@ -157,7 +164,8 @@ export const mountQueryView = (
   const warn = "#f59e0b"
 
   const overlay = document.createElement("div")
-  overlay.setAttribute(OVERLAY_ATTRIBUTE, embedded ? "workspace" : "true")
+  const overlayValue = embedded ? "workspace" : "true"
+  overlay.setAttribute(OVERLAY_ATTRIBUTE, overlayValue)
   setStyles(overlay, {
     all: "initial",
     position: embedded ? "relative" : "fixed",
@@ -179,6 +187,33 @@ export const mountQueryView = (
     isolation: "isolate"
   })
 
+  const scrollClass = "socx-query-scroll"
+  const scrollStyle = document.createElement("style")
+  scrollStyle.textContent = `
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass} {
+      scrollbar-width: thin !important;
+      scrollbar-color: ${strongLine} transparent !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar {
+      width: 8px !important;
+      height: 8px !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-thumb {
+      background: ${strongLine} !important;
+      border: 2px solid transparent !important;
+      border-radius: 999px !important;
+      background-clip: padding-box !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-thumb:hover {
+      background: ${accent} !important;
+      background-clip: padding-box !important;
+    }
+  `
+  overlay.appendChild(scrollStyle)
+
   const panel = document.createElement("div")
   panel.setAttribute("role", embedded ? "region" : "dialog")
   if (!embedded) panel.setAttribute("aria-modal", "true")
@@ -188,6 +223,7 @@ export const mountQueryView = (
   )
   setStyles(panel, {
     all: "initial",
+    position: "relative",
     display: "flex",
     "flex-direction": "column",
     width: embedded ? "100%" : "1180px",
@@ -228,12 +264,15 @@ export const mountQueryView = (
     makeText("span", text, {
       display: "inline-flex",
       "align-items": "center",
+      "max-width": "100%",
       padding: "2px 8px",
       "border-radius": "999px",
       "font-size": "10px",
       "font-weight": "700",
       "letter-spacing": "0.06em",
       "text-transform": "uppercase",
+      "word-break": "break-word",
+      "overflow-wrap": "anywhere",
       color: tone === "warn" ? warn : tone === "accent" ? ink : muted,
       "background-color":
         tone === "accent"
@@ -648,23 +687,38 @@ export const mountQueryView = (
   const body = document.createElement("div")
   setStyles(body, {
     all: "initial",
-    display: "flex",
+    display: "grid",
     flex: "1 1 auto",
+    width: "100%",
     "min-height": "0",
+    "min-width": "0",
+    overflow: "hidden",
     "font-family": font
   })
 
   const threePane = window.innerWidth >= (embedded ? 900 : 1100)
+  body.style.setProperty(
+    "grid-template-columns",
+    threePane
+      ? "minmax(210px, 24%) minmax(280px, 34%) minmax(0, 1fr)"
+      : "minmax(220px, 42%) minmax(0, 1fr)",
+    "important"
+  )
 
   const list = document.createElement("div")
   list.setAttribute("role", "listbox")
   list.setAttribute("aria-label", "Query results")
+  list.classList.add(scrollClass)
   setStyles(list, {
     all: "initial",
     display: "block",
-    width: threePane ? "34%" : "42%",
-    "min-width": threePane ? "280px" : "220px",
+    width: "100%",
+    "min-width": "0",
+    "max-width": "100%",
     "overflow-y": "auto",
+    "overflow-x": "hidden",
+    "scrollbar-width": "thin",
+    "scrollbar-color": `${strongLine} transparent`,
     padding: "6px 0 10px",
     "border-right": `1px solid ${line}`,
     "font-family": font
@@ -680,8 +734,10 @@ export const mountQueryView = (
     display: "flex",
     "flex-direction": "column",
     flex: "1 1 auto",
+    width: "100%",
     "min-width": "0",
     "min-height": "0",
+    overflow: "hidden",
     "font-family": font
   })
 
@@ -691,6 +747,10 @@ export const mountQueryView = (
     display: "flex",
     "flex-direction": "column",
     gap: "6px",
+    width: "100%",
+    "min-width": "0",
+    "max-width": "100%",
+    "box-sizing": "border-box",
     padding: "10px 16px",
     "border-bottom": `1px solid ${line}`,
     "font-family": font
@@ -762,6 +822,9 @@ export const mountQueryView = (
     display: "flex",
     "flex-direction": "column",
     flex: "1 1 auto",
+    width: "100%",
+    "max-width": "100%",
+    "box-sizing": "border-box",
     "min-width": "0",
     "min-height": "0",
     // The two children scroll on their own, so the query keeps its share of the
@@ -774,8 +837,9 @@ export const mountQueryView = (
 
   if (threePane) {
     setStyles(indicatorBox, {
-      width: "24%",
-      "min-width": "210px",
+      width: "100%",
+      "min-width": "0",
+      "max-width": "100%",
       "box-sizing": "border-box",
       "border-right": `1px solid ${line}`,
       "border-bottom": "0",
@@ -822,13 +886,49 @@ export const mountQueryView = (
   if (!embedded) actions.append(insertButton)
   footer.append(hint, actions)
 
-  panel.append(header, body, footer)
+  const guideView = createLanguageGuideView({
+    dialects: request.dialects,
+    theme: {
+      ink,
+      muted,
+      faint,
+      line,
+      strongLine,
+      fill,
+      accent,
+      accentSoft,
+      warn,
+      font,
+      mono,
+      scrollClass,
+      dark
+    }
+  })
+  guideView.element.addEventListener("toggle", () => {
+    body.style.setProperty(
+      "display",
+      guideView.element.open ? "none" : "grid",
+      "important"
+    )
+  })
+
+  panel.append(header, body, guideView.element, footer)
   overlay.appendChild(panel)
 
   // ------------------------------------------------------------------ state
   let favorites = [...(request.favorites ?? [])]
   let mergeTypes = request.mergeTypes !== false
-  let filters: PaletteFilterState = { ...ALL_FILTERS, labels: {} }
+  let filters: PaletteFilterState = {
+    ...ALL_FILTERS,
+    pack:
+      request.initialPackKey &&
+      request.entries.some(
+        (entry) => entryPackKey(entry) === request.initialPackKey
+      )
+        ? request.initialPackKey
+        : "all",
+    labels: {}
+  }
   let filtered = request.entries
   let favoriteCount = 0
   let activeIndex = 0
@@ -884,6 +984,7 @@ export const mountQueryView = (
     )
     const narrowFilterCount =
       Number(filters.dialect !== "all") +
+      Number(filters.pack !== "all") +
       Number(filters.group !== "all") +
       Object.values(filters.labels ?? {}).filter((value) => value !== "all")
         .length
@@ -992,6 +1093,24 @@ export const mountQueryView = (
 
     filterRow.appendChild(
       makeSelect({
+        ariaLabel: "Filter by query pack",
+        title: "Show queries from one source pack",
+        active: filters.pack !== "all",
+        value: filters.pack,
+        entries: [
+          { value: "all", label: "Pack: all" },
+          ...facets.packs.map((option) => ({
+            value: option.value,
+            label: `${option.label} (${option.count})`,
+            title: option.title
+          }))
+        ],
+        onChange: (value) => setFilters({ pack: value })
+      })
+    )
+
+    filterRow.appendChild(
+      makeSelect({
         ariaLabel: "Filter by category",
         title: "Narrow templates to one catalogue category",
         active: filters.group !== "all",
@@ -1079,6 +1198,7 @@ export const mountQueryView = (
     indicatorSummary.textContent = entry.template.requiresIocs
       ? (request.describeIndicators?.(indicators.value) ?? "")
       : "Not used by this hunting query"
+    guideView.syncDialect(entryDialect(entry))
 
     const variables = variablesByEntry.get(entry.key) ?? {}
     variablesByEntry.set(entry.key, variables)
@@ -1088,6 +1208,7 @@ export const mountQueryView = (
     // template with a long description and a handful of variables used to push
     // its own output out of sight.
     const meta = document.createElement("div")
+    meta.classList.add(scrollClass)
     setStyles(meta, {
       all: "initial",
       display: "flex",
@@ -1097,9 +1218,13 @@ export const mountQueryView = (
       "min-height": "0",
       "max-height": "45%",
       "overflow-y": "auto",
+      "overflow-x": "hidden",
+      "scrollbar-width": "thin",
+      "scrollbar-color": `${strongLine} transparent`,
       "font-family": font
     })
     const queryBox = document.createElement("div")
+    queryBox.classList.add(scrollClass)
     setStyles(queryBox, {
       all: "initial",
       display: "flex",
@@ -1111,6 +1236,9 @@ export const mountQueryView = (
       // keep the split comfortable when the column is tall.
       "min-height": "120px",
       "overflow-y": "auto",
+      "overflow-x": "hidden",
+      "scrollbar-width": "thin",
+      "scrollbar-color": `${strongLine} transparent`,
       "font-family": font
     })
     preview.append(meta, queryBox)
@@ -1133,6 +1261,9 @@ export const mountQueryView = (
         "font-size": "15px",
         "font-weight": "700",
         flex: "1 1 auto",
+        "min-width": "0",
+        "word-break": "break-word",
+        "overflow-wrap": "anywhere",
         color: ink
       }),
       star
@@ -1177,6 +1308,8 @@ export const mountQueryView = (
     meta.appendChild(
       makeText("p", `${entry.path.join(" › ")} · ${entry.pack.name}`, {
         "font-size": "11px",
+        "word-break": "break-word",
+        "overflow-wrap": "anywhere",
         color: muted
       })
     )
@@ -1360,11 +1493,15 @@ export const mountQueryView = (
       queryBox.appendChild(
         makeText("pre", query.text, {
           display: "block",
+          width: "100%",
+          "max-width": "100%",
+          "box-sizing": "border-box",
           "font-family": mono,
           "font-size": "12px",
           "line-height": "1.5",
           "white-space": "pre-wrap",
           "word-break": "break-word",
+          "overflow-wrap": "anywhere",
           padding: "10px 12px",
           "border-radius": "12px",
           color: ink,

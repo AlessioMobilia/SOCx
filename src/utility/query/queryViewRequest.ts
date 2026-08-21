@@ -39,6 +39,7 @@ type SharedQueryViewOptions = Pick<
   | "initialKey"
   | "favorites"
   | "platformLabel"
+  | "initialPackKey"
   | "mergeTypes"
   | "onMergeTypesChange"
   | "onIndicatorTextChange"
@@ -55,6 +56,7 @@ export const createQueryViewRequest = (
   const { dialects, ...requestOptions } = options
   return {
     ...requestOptions,
+    dialects,
     dialectLabels: new Map(
       [...dialects.entries()].map(([id, dialect]) => [id, dialect.label])
     ),

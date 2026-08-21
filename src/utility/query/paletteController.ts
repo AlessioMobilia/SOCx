@@ -9,6 +9,7 @@ import { readFavorites, writeFavorites } from "./favorites"
 import { buildGroupTree } from "./groups"
 import type { PackKind, QueryPack } from "./packSchema"
 import { entriesFromTree, openPalette } from "./palette"
+import { entryPackKey } from "./paletteFilters"
 import { readMergeTypes, writeMergeTypes } from "./paletteSettings"
 import { createQueryViewRequest } from "./queryViewRequest"
 import { bundledDialectMap } from "./render"
@@ -23,6 +24,7 @@ export type OpenPaletteOptions = {
 type LibraryResponse = {
   packs?: QueryPack[]
   platformLabel?: string
+  platformPackKey?: string
   indicators?: string[]
   matched?: boolean
   paletteEnabled?: boolean
@@ -36,7 +38,7 @@ export const collectSelectionIndicators = (): string[] => {
 
 export const openQueryPalette = async (
   options: OpenPaletteOptions = {}
-): Promise<void> => {
+): Promise<boolean> => {
   let response: LibraryResponse | undefined
   try {
     response = await sendToBackground<unknown, LibraryResponse>({
@@ -54,7 +56,7 @@ export const openQueryPalette = async (
 
   if (response?.paletteEnabled === false) {
     showToast("The query palette is disabled in SOCx settings.", "info")
-    return
+    return false
   }
 
   const packs = response?.packs ?? []
@@ -63,14 +65,14 @@ export const openQueryPalette = async (
       "No query pack available for this page. Add or refresh a source in SOCx settings.",
       "warning"
     )
-    return
+    return false
   }
 
   const tree = buildGroupTree(packs)
   const entries = entriesFromTree(tree)
   if (entries.length === 0) {
     showToast("The enabled query packs contain no template.", "warning")
-    return
+    return false
   }
 
   // Indicators come from the current selection first, then from whatever the
@@ -97,6 +99,12 @@ export const openQueryPalette = async (
       entries: ordered,
       dialects,
       platformLabel: response?.platformLabel,
+      initialPackKey: options.templateKey
+        ? entryPackKey(
+            ordered.find((entry) => entry.key === options.templateKey) ??
+              ordered[0]
+          )
+        : response?.platformPackKey,
       indicatorHint: values,
       initialKey: options.templateKey,
       favorites,
@@ -111,4 +119,5 @@ export const openQueryPalette = async (
       }
     })
   )
+  return true
 }

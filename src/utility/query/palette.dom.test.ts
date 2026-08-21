@@ -9,6 +9,7 @@ import {
   mountQueryView,
   openPalette
 } from "./palette"
+import { entryPackKey } from "./paletteFilters"
 import { bundledDialectMap } from "./render"
 
 const knownDialects = new Set(bundledDialectMap().keys())
@@ -303,6 +304,44 @@ describe("query palette", () => {
     select.dispatchEvent(new Event("change", { bubbles: true }))
     expect(rows()).toHaveLength(1)
     expect(rows()[0]).toContain("Proxy hits")
+  })
+
+  it("starts from the pack recognized for the current platform", () => {
+    const splunkEntry = entries.find((entry) => entry.pack.name === "Splunk")!
+    open({ initialPackKey: entryPackKey(splunkEntry) })
+
+    const select = document.querySelector(
+      'select[aria-label="Filter by query pack"]'
+    ) as HTMLSelectElement
+    expect(select.value).toBe(entryPackKey(splunkEntry))
+    expect(rows()).toHaveLength(2)
+    expect(rows().every((row) => /Proxy hits|VPN sessions/.test(row))).toBe(
+      true
+    )
+  })
+
+  it("keeps the language guide inside the shared palette", async () => {
+    open({ dialects: bundledDialectMap() })
+    const guide = document.querySelector(
+      'details[data-socx-language-guide="true"]'
+    ) as HTMLDetailsElement
+    expect(guide).toBeTruthy()
+    expect(guide.closest('[role="dialog"]')).toBeTruthy()
+    expect(guide.open).toBe(false)
+
+    guide.open = true
+    guide.dispatchEvent(new Event("toggle"))
+    await Promise.resolve()
+
+    expect(
+      guide.querySelector('input[aria-label="Search query language guides"]')
+    ).toBeTruthy()
+    expect(guide.textContent).toContain("Main fields")
+    expect(guide.textContent).toContain("Commands and operators")
+    const officialLink = guide.querySelector(
+      'a[target="_blank"]'
+    ) as HTMLAnchorElement
+    expect(officialLink?.rel).toContain("noreferrer")
   })
 
   it("stars a query, reports it, and lists it first", () => {
