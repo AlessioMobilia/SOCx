@@ -297,10 +297,12 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.3.1 release notes](docs/RELEASE_NOTES_1.3.1.md) for the newest
-fixes, the [1.3.0 notes](docs/RELEASE_NOTES_1.3.0.md) for HTTP repositories and
-the pack format reference, the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
-catalogue work, and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query
+See the [SOCx 1.4.0 release notes](docs/RELEASE_NOTES_1.4.0.md) for visual smart
+formatting, partial JSON recovery and the formatting shortcut; the [1.3.1
+notes](docs/RELEASE_NOTES_1.3.1.md) for query rendering fixes; the [1.3.0
+notes](docs/RELEASE_NOTES_1.3.0.md) for HTTP repositories and the pack format
+reference; the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
+catalogue work; and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query
 pack foundations, safety model and validation scope.
 
 SOCx uses Node.js 22.13+ and pnpm 11.19.0. Install dependencies with the
