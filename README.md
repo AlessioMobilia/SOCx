@@ -233,17 +233,24 @@ IOC and hunting template, lists them 25 to a page inside a scrolling column,
 exposes template variables, shows uncovered IOC types and chunk warnings, and
 copies the generated query. The template catalogue receives the largest share
 of the three-column layout and wraps names, descriptions and metadata instead
-of hiding them in a narrow row. Every filter and template variable explains
-itself on hover or keyboard focus, and Boolean template variables use the same
-switch pattern as the rest of the workspace.
+of hiding them in a narrow row. Secondary filters stay in a collapsed **More
+filters** panel so the scrolling template list keeps most of the available
+height. Every filter and template variable explains itself on hover or keyboard
+focus; these tooltips render above the workspace panels instead of being clipped
+by them. Boolean template variables use the same switch pattern as the rest of
+the workspace.
 
 Below the workspace is a collapsed **Query language mini guides** reference. It
 covers every bundled dialect — including regex and PowerShell — and can be
 filtered by language/product or searched by command, syntax, option, example
 and field. Each language card explains its main fields; every command opens to
-show concise syntax, its main options and a short example. Each guide also links
-to the relevant official documentation in a new tab. IOC-only context actions
-remain hidden until text is selected, so an empty page menu stays compact.
+show concise syntax, its main options and a short example. Field cards can also
+include practical notes and a query fragment; the Splunk guide distinguishes
+default, internal and CIM fields and covers statistical functions, `stats`,
+`eventstats`, `streamstats`, `tstats`, `chart`, `bin` and frequency commands.
+Each guide also links to the relevant official documentation in a new tab.
+IOC-only context actions remain hidden until text is selected, so an empty page
+menu stays compact.
 
 Pick a template, fill in its variables, and the query is written **into the
 search bar you were standing in** rather than opened in a new tab, so the

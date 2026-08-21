@@ -50,7 +50,8 @@ lock and is also used by the publication workflow.
   (`favorites.ts`), language mini-guide metadata (`guides.ts`) and expandable
   command details (`guideCommands.ts`), palette insertion, and the personal
   rule builder. `guides.test.ts` enforces one guide and one detailed command set
-  for every dialect declared in `dialects.json`.
+  for every dialect declared in `dialects.json`; it also audits the richer
+  Splunk field and statistical-command reference.
 - `scripts/validate-builds.mjs`: validates target manifests and referenced files.
 - `scripts/publish-chrome.mjs`: Chrome Web Store V2 publisher with temporary V1
   compatibility.
