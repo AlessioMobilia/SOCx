@@ -99,14 +99,13 @@
     "commands": {
       "open-query-palette": {
         "suggested_key": {
-          "default": "Alt+Shift+Q",
-          "mac": "Command+Shift+K"
+          "default": "Ctrl+Shift+Comma"
         },
         "description": "Open the SOCx query palette"
       },
       "smart-format-selection": {
         "suggested_key": {
-          "default": "Alt+Shift+F"
+          "default": "Ctrl+Shift+Period"
         },
         "description": "Smart-format and copy the current selection"
       },

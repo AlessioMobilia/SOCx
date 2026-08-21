@@ -3,6 +3,17 @@ import React, { useEffect, useState } from "react"
 
 import { openShortcutManager, SHORTCUT_COMMANDS } from "../utility/shortcuts"
 
+type FirefoxCommandsApi = {
+  getAll: () => Promise<chrome.commands.Command[]>
+  openShortcutSettings?: () => Promise<void>
+}
+
+const firefoxCommands = (
+  globalThis as typeof globalThis & {
+    browser?: { commands?: FirefoxCommandsApi }
+  }
+).browser?.commands
+
 const cardClass =
   "rounded-socx-lg border border-socx-border-light bg-white/90 p-6 shadow-sm dark:border-socx-border-dark dark:bg-socx-night-soft/80"
 const labelClass =
@@ -22,6 +33,29 @@ const ShortcutSettings: React.FC = () => {
   const [error, setError] = useState("")
 
   const readBindings = () => {
+    const applyBindings = (commands: chrome.commands.Command[]) => {
+      const next: Record<string, string> = {}
+      for (const command of commands) {
+        if (command.name) next[command.name] = command.shortcut ?? ""
+      }
+      setBindings(next)
+      setError("")
+    }
+
+    if (firefoxCommands) {
+      void firefoxCommands
+        .getAll()
+        .then(applyBindings)
+        .catch((readError) => {
+          setError(
+            readError instanceof Error
+              ? readError.message
+              : "Unable to read keyboard shortcuts."
+          )
+        })
+      return
+    }
+
     try {
       chrome.commands.getAll((commands) => {
         const readError = chrome.runtime.lastError
@@ -29,11 +63,7 @@ const ShortcutSettings: React.FC = () => {
           setError(readError.message ?? "Unable to read keyboard shortcuts.")
           return
         }
-        const next: Record<string, string> = {}
-        for (const command of commands) {
-          if (command.name) next[command.name] = command.shortcut ?? ""
-        }
-        setBindings(next)
+        applyBindings(commands)
       })
     } catch (readError) {
       console.error("Unable to read the keyboard shortcuts:", readError)
@@ -54,19 +84,12 @@ const ShortcutSettings: React.FC = () => {
     const manifest = chrome.runtime.getManifest() as chrome.runtime.Manifest & {
       browser_specific_settings?: { gecko?: unknown }
     }
-    const firefoxCommands = chrome.commands as typeof chrome.commands & {
-      openShortcutSettings?: (callback: () => void) => void
-    }
     setError("")
     try {
       await openShortcutManager(
         {
-          openFirefoxSettings: firefoxCommands.openShortcutSettings
-            ? (callback) =>
-                firefoxCommands.openShortcutSettings?.call(
-                  firefoxCommands,
-                  callback
-                )
+          openFirefoxSettings: firefoxCommands?.openShortcutSettings
+            ? () => firefoxCommands.openShortcutSettings!()
             : undefined,
           openTab: (url, callback) => {
             chrome.tabs.create({ url }, () => callback())

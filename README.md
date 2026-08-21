@@ -209,11 +209,11 @@ branch when you want reproducibility.
 
 The in-page palette never appears on its own. It opens only when you ask for it:
 
-- the keyboard shortcut (`Alt+Shift+Q` by default); the **Keyboard shortcuts**
+- the keyboard shortcut (`Ctrl+Shift+Comma` by default); the **Keyboard shortcuts**
   section of the settings lists every SOCx action available from the keyboard,
   shows its current binding and links to the browser page where combinations
   are reassigned. The query palette and **Smart format selection**
-  (`Alt+Shift+F`) have defaults; workspace commands start disabled so nothing
+  (`Ctrl+Shift+Period`) have defaults; workspace commands start disabled so nothing
   else is taken from the console you are on;
 - the **Insert query** submenu inside editable fields or selected text.
 

@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   commandPage,
+  DEFAULT_QUERY_SHORTCUT,
+  DEFAULT_SMART_FORMAT_SHORTCUT,
+  firefoxDefaultShortcutUpdates,
   openShortcutManager,
   QUERY_COMMAND,
   SHORTCUT_COMMANDS,
@@ -37,9 +40,11 @@ describe("shortcut catalogue", () => {
       .filter(([, command]) => command.suggested_key)
       .map(([id]) => id)
     expect(withDefaults).toEqual([QUERY_COMMAND, SMART_FORMAT_COMMAND])
-    expect(declared[QUERY_COMMAND].suggested_key?.default).toBe("Alt+Shift+Q")
+    expect(declared[QUERY_COMMAND].suggested_key?.default).toBe(
+      DEFAULT_QUERY_SHORTCUT
+    )
     expect(declared[SMART_FORMAT_COMMAND].suggested_key?.default).toBe(
-      "Alt+Shift+F"
+      DEFAULT_SMART_FORMAT_SHORTCUT
     )
   })
 
@@ -70,7 +75,7 @@ describe("shortcut catalogue", () => {
   })
 
   it("uses Firefox's dedicated shortcut manager API", async () => {
-    const openFirefoxSettings = vi.fn((callback: () => void) => callback())
+    const openFirefoxSettings = vi.fn(async () => undefined)
     const openTab = vi.fn()
 
     await openShortcutManager(
@@ -80,7 +85,42 @@ describe("shortcut catalogue", () => {
     )
 
     expect(openFirefoxSettings).toHaveBeenCalledOnce()
+    expect(openFirefoxSettings).toHaveBeenCalledWith()
     expect(openTab).not.toHaveBeenCalled()
+  })
+
+  it("migrates only Firefox shortcuts matching previously shipped defaults", () => {
+    expect(
+      firefoxDefaultShortcutUpdates([
+        { name: QUERY_COMMAND, shortcut: "Ctrl+Shift+K" },
+        { name: SMART_FORMAT_COMMAND, shortcut: "Alt + Shift + F" },
+        { name: "open-bulk-check", shortcut: "Ctrl+Shift+B" }
+      ])
+    ).toEqual([
+      { name: QUERY_COMMAND, shortcut: DEFAULT_QUERY_SHORTCUT },
+      {
+        name: SMART_FORMAT_COMMAND,
+        shortcut: DEFAULT_SMART_FORMAT_SHORTCUT
+      }
+    ])
+  })
+
+  it("preserves custom and disabled Firefox shortcuts", () => {
+    expect(
+      firefoxDefaultShortcutUpdates([
+        { name: QUERY_COMMAND, shortcut: "Ctrl+Shift+7" },
+        { name: SMART_FORMAT_COMMAND, shortcut: "" },
+        { name: "open-bulk-check" }
+      ])
+    ).toEqual([])
+  })
+
+  it("also migrates the interim Firefox query shortcut from 1.4.1", () => {
+    expect(
+      firefoxDefaultShortcutUpdates([
+        { name: QUERY_COMMAND, shortcut: "Alt+Shift+Q" }
+      ])
+    ).toEqual([{ name: QUERY_COMMAND, shortcut: DEFAULT_QUERY_SHORTCUT }])
   })
 
   it("opens Chromium's shortcut page in a tab", async () => {

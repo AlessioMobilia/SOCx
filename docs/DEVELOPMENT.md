@@ -306,10 +306,13 @@ Run this matrix on all three browsers before a release:
    must remain readable on light/dark host pages, stay above SOCx overlays, and
    fit narrow popup viewports without inheriting host-page button styles. With
    the selection still active, press the default smart-format shortcut
-   (`Alt+Shift+F`), then reassign it from Options and verify the new combination.
+   (`Ctrl+Shift+Period`), then reassign it from Options and verify the new
+   combination.
    On Firefox, also verify that **Customize shortcuts** opens Manage Extension
-   Shortcuts with SOCx highlighted and that `Alt+Shift+Q` opens the query palette;
-   `Ctrl+Shift+K` is reserved by Firefox for its Web Console.
+   Shortcuts with SOCx highlighted and that `Ctrl+Shift+Comma` opens the query
+   palette; `Ctrl+Shift+K` is reserved by Firefox for its Web Console. When
+   upgrading from 1.4.1 or earlier, verify that only the old SOCx defaults are
+   migrated and that disabled or customized bindings remain unchanged.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
    list. An IP-only list must preselect AbuseIPDB without VirusTotal; mixed lists
    must still select the providers needed by their other IOC types. Confirm errors

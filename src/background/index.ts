@@ -12,6 +12,7 @@ import {
 import { refreshAllSources } from "../utility/query/registry"
 import {
   commandPage,
+  firefoxDefaultShortcutUpdates,
   QUERY_COMMAND,
   SMART_FORMAT_COMMAND
 } from "../utility/shortcuts"
@@ -26,7 +27,17 @@ type ChromiumExtensionApi = typeof chrome & {
   }
 }
 
+type FirefoxCommandsApi = {
+  getAll: () => Promise<chrome.commands.Command[]>
+  update: (details: { name: string; shortcut: string }) => Promise<void>
+}
+
 const extensionApi = chrome as ChromiumExtensionApi
+const firefoxCommands = (
+  globalThis as typeof globalThis & {
+    browser?: { commands?: FirefoxCommandsApi }
+  }
+).browser?.commands
 const contextMenuApi = getContextMenuApi()
 const manifest = chrome.runtime.getManifest() as chrome.runtime.Manifest & {
   browser_specific_settings?: { gecko?: { id?: string } }
@@ -69,6 +80,18 @@ const scheduleContextMenuSetup = (reason: string): Promise<void> => {
     })
 
   return contextMenuSetup
+}
+
+const migrateFirefoxDefaultShortcuts = async (): Promise<void> => {
+  if (!firefoxCommands) return
+  const commands = await firefoxCommands.getAll()
+  for (const update of firefoxDefaultShortcutUpdates(commands)) {
+    try {
+      await firefoxCommands.update(update)
+    } catch (error) {
+      console.warn(`Unable to migrate shortcut ${update.name}:`, error)
+    }
+  }
 }
 
 /** Opens the palette in the active tab, falling back to the SOCx query page. */
@@ -126,7 +149,7 @@ if (isFirefox) {
 }
 
 // Eseguito al primo avvio o aggiornamento dell'estensione
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   try {
     if (!isFirefox && extensionApi.sidePanel?.setOptions) {
       await extensionApi.sidePanel.setOptions({ enabled: true })
@@ -136,6 +159,18 @@ chrome.runtime.onInstalled.addListener(async () => {
     // are respected: an upstream change is reported, never silently adopted.
     await refreshAllSources()
     await scheduleContextMenuSetup("extension install/update")
+
+    // Firefox retains the effective shortcuts across extension updates. Only
+    // replace combinations shipped as SOCx defaults through 1.4.1; custom and
+    // disabled commands remain untouched.
+    if (
+      isFirefox &&
+      details.reason === "update" &&
+      details.previousVersion &&
+      /^1\.(?:[0-3](?:\.|$)|4\.[01](?:\.|$))/.test(details.previousVersion)
+    ) {
+      await migrateFirefoxDefaultShortcuts()
+    }
   } catch (e) {
     console.error("Error during onInstalled setup:", e)
   }
