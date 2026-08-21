@@ -47,9 +47,10 @@ lock and is also used by the publication workflow.
 - `src/utility`: IOC parsing, API clients, exports, storage, and UI helpers.
 - `src/utility/query`: untrusted pack validation, source pinning, dialects,
   rendering, grouping, faceted filtering (`paletteFilters.ts`), starred queries
-  (`favorites.ts`), language mini-guide data (`guides.ts`), palette insertion,
-  and the personal rule builder. `guides.test.ts` enforces one guide for every
-  dialect declared in `dialects.json`.
+  (`favorites.ts`), language mini-guide metadata (`guides.ts`) and expandable
+  command details (`guideCommands.ts`), palette insertion, and the personal
+  rule builder. `guides.test.ts` enforces one guide and one detailed command set
+  for every dialect declared in `dialects.json`.
 - `scripts/validate-builds.mjs`: validates target manifests and referenced files.
 - `scripts/publish-chrome.mjs`: Chrome Web Store V2 publisher with temporary V1
   compatibility.
