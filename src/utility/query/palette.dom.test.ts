@@ -253,6 +253,11 @@ describe("query palette", () => {
     expect(rows()).toHaveLength(entries.length)
     expect(host.textContent).toContain("embedded query")
     expect(host.querySelector("details")?.open).toBe(false)
+    expect(
+      [...host.querySelectorAll("[data-socx-query-section]")].map((section) =>
+        section.getAttribute("data-socx-query-section")
+      )
+    ).toEqual(["indicators", "templates", "preview"])
 
     const field = indicatorField()
     field.value = "1.1.1.1"

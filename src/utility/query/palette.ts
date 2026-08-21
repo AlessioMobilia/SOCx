@@ -150,17 +150,22 @@ export const mountQueryView = (
     "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
   const mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 
-  // The SOCx palette: one accent, two neutrals, and translucency for
-  // everything in between, so the overlay reads the same on a light and on a
-  // dark console.
-  const ink = dark ? "#f4f7ff" : "#111322"
-  const muted = dark ? "rgba(244,247,255,0.62)" : "rgba(17,19,34,0.58)"
-  const faint = dark ? "rgba(244,247,255,0.45)" : "rgba(17,19,34,0.45)"
-  const line = dark ? "rgba(255,255,255,0.10)" : "rgba(17,19,34,0.09)"
-  const strongLine = dark ? "rgba(255,255,255,0.20)" : "rgba(17,19,34,0.16)"
-  const fill = dark ? "rgba(255,255,255,0.06)" : "rgba(17,19,34,0.04)"
+  // Resolved Tailwind design tokens. The overlay cannot consume the app
+  // stylesheet because it lives inside third-party pages, so keeping the
+  // palette on these values makes its shared renderer visually identical to
+  // native SOCx pages such as Bulk Check.
+  const ink = dark ? "#ffffff" : "#111322"
+  const muted = dark ? "#9da7bf" : "#6b7280"
+  const faint = dark ? "rgba(157,167,191,0.72)" : "rgba(107,114,128,0.72)"
+  const line = dark ? "#1f273a" : "#e4e8f4"
+  const strongLine = dark ? "#36415a" : "#cfd6e6"
+  const scrollThumb = dark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.20)"
+  const canvas = dark ? "#050912" : "#f5f6fb"
+  const surface = dark ? "rgba(12,20,36,0.88)" : "rgba(255,255,255,0.90)"
+  const control = dark ? "rgba(22,31,50,0.60)" : "rgba(255,255,255,0.95)"
+  const fill = dark ? "rgba(22,31,50,0.65)" : "rgba(238,241,247,0.70)"
   const accent = "#f5c242"
-  const accentSoft = dark ? "rgba(245,194,66,0.18)" : "rgba(245,194,66,0.22)"
+  const accentSoft = "rgba(245,194,66,0.12)"
   const warn = "#f59e0b"
 
   const overlay = document.createElement("div")
@@ -192,24 +197,21 @@ export const mountQueryView = (
   scrollStyle.textContent = `
     [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass} {
       scrollbar-width: thin !important;
-      scrollbar-color: ${strongLine} transparent !important;
+      scrollbar-color: ${scrollThumb} transparent !important;
     }
     [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar {
-      width: 8px !important;
-      height: 8px !important;
+      width: 6px !important;
+      height: 6px !important;
     }
     [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-track {
       background: transparent !important;
     }
     [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-thumb {
-      background: ${strongLine} !important;
-      border: 2px solid transparent !important;
+      background: ${scrollThumb} !important;
       border-radius: 999px !important;
-      background-clip: padding-box !important;
     }
     [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-thumb:hover {
       background: ${accent} !important;
-      background-clip: padding-box !important;
     }
   `
   overlay.appendChild(scrollStyle)
@@ -226,20 +228,19 @@ export const mountQueryView = (
     position: "relative",
     display: "flex",
     "flex-direction": "column",
+    gap: "12px",
     width: embedded ? "100%" : "1180px",
     height: embedded ? "100%" : "auto",
     "max-width": embedded ? "none" : "calc(100vw - 32px)",
     "max-height": embedded ? "none" : "90vh",
     "box-sizing": "border-box",
     color: ink,
-    "background-color": dark
-      ? "rgba(13, 21, 36, 0.99)"
-      : "rgba(255, 255, 255, 0.99)",
-    border: `1px solid ${strongLine}`,
-    "border-top": `3px solid ${accent}`,
-    "border-radius": embedded ? "14px" : "16px",
+    padding: embedded ? "0" : "12px",
+    "background-color": embedded ? "transparent" : canvas,
+    border: embedded ? "0" : `1px solid ${line}`,
+    "border-radius": "16px",
     "box-shadow": embedded
-      ? "0 8px 24px rgba(15,23,42,0.08)"
+      ? "none"
       : dark
         ? "0 32px 64px rgba(0,0,0,0.62)"
         : "0 32px 64px rgba(15,23,42,0.26)",
@@ -508,8 +509,11 @@ export const mountQueryView = (
     display: "flex",
     "flex-direction": "column",
     gap: embedded ? "8px" : "10px",
-    padding: embedded ? "9px 12px" : "12px 14px 10px",
-    "border-bottom": `1px solid ${line}`,
+    padding: embedded ? "10px 12px" : "12px 14px",
+    "box-sizing": "border-box",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
@@ -525,9 +529,9 @@ export const mountQueryView = (
     makeText("span", "SOCx", {
       "font-size": "10px",
       "font-weight": "800",
-      "letter-spacing": "0.28em",
+      "letter-spacing": "0.4em",
       "text-transform": "uppercase",
-      color: accent
+      color: muted
     }),
     makeText("span", embedded ? "Query workspace" : "Query palette", {
       "font-size": "11px",
@@ -581,8 +585,8 @@ export const mountQueryView = (
     "align-items": "center",
     gap: "8px",
     padding: "8px 10px",
-    "border-radius": "12px",
-    "background-color": fill,
+    "border-radius": "16px",
+    "background-color": control,
     border: `1px solid ${line}`,
     "font-family": font
   })
@@ -642,8 +646,9 @@ export const mountQueryView = (
   setStyles(filterDetails, {
     all: "initial",
     display: "block",
-    "border-radius": "10px",
+    "border-radius": "12px",
     border: `1px solid ${line}`,
+    "background-color": control,
     "font-family": font,
     overflow: "hidden"
   })
@@ -692,6 +697,7 @@ export const mountQueryView = (
     width: "100%",
     "min-height": "0",
     "min-width": "0",
+    gap: "12px",
     overflow: "hidden",
     "font-family": font
   })
@@ -703,6 +709,47 @@ export const mountQueryView = (
       ? "minmax(210px, 24%) minmax(280px, 34%) minmax(0, 1fr)"
       : "minmax(220px, 42%) minmax(0, 1fr)",
     "important"
+  )
+
+  const listColumn = document.createElement("section")
+  listColumn.setAttribute("data-socx-query-section", "templates")
+  setStyles(listColumn, {
+    all: "initial",
+    display: "flex",
+    "flex-direction": "column",
+    width: "100%",
+    "min-width": "0",
+    "min-height": "0",
+    "box-sizing": "border-box",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
+    overflow: "hidden",
+    "font-family": font
+  })
+
+  const listHeader = document.createElement("div")
+  setStyles(listHeader, {
+    all: "initial",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "space-between",
+    gap: "8px",
+    padding: "11px 14px 8px",
+    "font-family": font
+  })
+  const listCounter = makeText("span", "", {
+    "font-size": "10px",
+    "font-variant-numeric": "tabular-nums",
+    color: faint
+  })
+  listHeader.append(
+    makeText("span", "Query templates", {
+      "font-size": "12px",
+      "font-weight": "700",
+      color: ink
+    }),
+    listCounter
   )
 
   const list = document.createElement("div")
@@ -718,11 +765,12 @@ export const mountQueryView = (
     "overflow-y": "auto",
     "overflow-x": "hidden",
     "scrollbar-width": "thin",
-    "scrollbar-color": `${strongLine} transparent`,
-    padding: "6px 0 10px",
-    "border-right": `1px solid ${line}`,
+    "scrollbar-color": `${scrollThumb} transparent`,
+    flex: "1 1 auto",
+    padding: "0 6px 10px",
     "font-family": font
   })
+  listColumn.append(listHeader, list)
 
   // The right hand column: the indicator list on top, always visible and always
   // editable, and the template detail below it. The analyst must be able to see
@@ -737,11 +785,13 @@ export const mountQueryView = (
     width: "100%",
     "min-width": "0",
     "min-height": "0",
+    gap: "12px",
     overflow: "hidden",
     "font-family": font
   })
 
   const indicatorBox = document.createElement("div")
+  indicatorBox.setAttribute("data-socx-query-section", "indicators")
   setStyles(indicatorBox, {
     all: "initial",
     display: "flex",
@@ -751,8 +801,10 @@ export const mountQueryView = (
     "min-width": "0",
     "max-width": "100%",
     "box-sizing": "border-box",
-    padding: "10px 16px",
-    "border-bottom": `1px solid ${line}`,
+    padding: "12px 14px",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
@@ -807,7 +859,7 @@ export const mountQueryView = (
     "line-height": "1.45",
     "max-height": "22vh",
     color: ink,
-    "background-color": fill,
+    "background-color": control,
     border: `1px solid ${line}`,
     "border-radius": "10px",
     padding: "8px 10px",
@@ -817,6 +869,7 @@ export const mountQueryView = (
   indicatorBox.append(indicatorHeader, indicators)
 
   const preview = document.createElement("div")
+  preview.setAttribute("data-socx-query-section", "preview")
   setStyles(preview, {
     all: "initial",
     display: "flex",
@@ -832,6 +885,9 @@ export const mountQueryView = (
     overflow: "hidden",
     padding: "14px 16px",
     gap: "8px",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
@@ -841,8 +897,6 @@ export const mountQueryView = (
       "min-width": "0",
       "max-width": "100%",
       "box-sizing": "border-box",
-      "border-right": `1px solid ${line}`,
-      "border-bottom": "0",
       padding: "14px"
     })
     setStyles(indicators, {
@@ -851,10 +905,10 @@ export const mountQueryView = (
       "max-height": "none",
       resize: "none"
     })
-    body.append(indicatorBox, list, preview)
+    body.append(indicatorBox, listColumn, preview)
   } else {
     previewColumn.append(indicatorBox, preview)
-    body.append(list, previewColumn)
+    body.append(listColumn, previewColumn)
   }
 
   // ----------------------------------------------------------------- footer
@@ -866,7 +920,10 @@ export const mountQueryView = (
     "justify-content": "space-between",
     gap: "8px",
     padding: "10px 14px",
-    "border-top": `1px solid ${line}`,
+    "box-sizing": "border-box",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
@@ -894,7 +951,10 @@ export const mountQueryView = (
       faint,
       line,
       strongLine,
+      scrollThumb,
       fill,
+      surface,
+      control,
       accent,
       accentSoft,
       warn,
@@ -1220,7 +1280,7 @@ export const mountQueryView = (
       "overflow-y": "auto",
       "overflow-x": "hidden",
       "scrollbar-width": "thin",
-      "scrollbar-color": `${strongLine} transparent`,
+      "scrollbar-color": `${scrollThumb} transparent`,
       "font-family": font
     })
     const queryBox = document.createElement("div")
@@ -1238,10 +1298,20 @@ export const mountQueryView = (
       "overflow-y": "auto",
       "overflow-x": "hidden",
       "scrollbar-width": "thin",
-      "scrollbar-color": `${strongLine} transparent`,
+      "scrollbar-color": `${scrollThumb} transparent`,
       "font-family": font
     })
     preview.append(meta, queryBox)
+
+    meta.appendChild(
+      makeText("p", "Query preview", {
+        "font-size": "10px",
+        "font-weight": "700",
+        "letter-spacing": "0.2em",
+        "text-transform": "uppercase",
+        color: muted
+      })
+    )
 
     const titleLine = document.createElement("div")
     setStyles(titleLine, {
@@ -1527,6 +1597,7 @@ export const mountQueryView = (
   function renderList() {
     list.textContent = ""
     counter.textContent = `${filtered.length} of ${request.entries.length}`
+    listCounter.textContent = `${filtered.length} of ${request.entries.length}`
 
     if (filtered.length === 0) {
       list.appendChild(
@@ -1562,14 +1633,14 @@ export const mountQueryView = (
         gap: "6px",
         margin: "1px 6px",
         padding: "6px 8px",
-        "border-radius": "9px",
+        "box-sizing": "border-box",
+        "border-radius": "12px",
         "font-family": font,
         "font-size": "13px",
         cursor: "pointer",
         color: ink,
         "background-color": index === activeIndex ? accentSoft : "transparent",
-        "box-shadow":
-          index === activeIndex ? `inset 2px 0 0 0 ${accent}` : "none"
+        border: `1px solid ${index === activeIndex ? accent : "transparent"}`
       })
 
       const isFavorite = favorites.includes(entry.key)
@@ -1583,6 +1654,7 @@ export const mountQueryView = (
         star.style.setProperty("opacity", "1", "important")
         if (index !== activeIndex) {
           item.style.setProperty("background-color", fill, "important")
+          item.style.setProperty("border-color", line, "important")
         }
       })
       item.addEventListener("mouseleave", () => {
@@ -1591,6 +1663,7 @@ export const mountQueryView = (
         }
         if (index !== activeIndex) {
           item.style.setProperty("background-color", "transparent", "important")
+          item.style.setProperty("border-color", "transparent", "important")
         }
       })
       star.addEventListener("click", (event) => {

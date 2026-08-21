@@ -148,9 +148,9 @@ const QueryWorkspace = () => {
   return (
     <main className="min-h-screen bg-socx-cloud px-4 py-3 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
       <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-3 rounded-socx-lg border border-socx-border-light bg-white/90 px-4 py-2.5 shadow-sm dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+        <header className="flex flex-wrap items-center justify-between gap-3 rounded-socx-lg border border-socx-border-light bg-white/90 px-4 py-2.5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
           <div className="flex min-w-0 items-center gap-3">
-            <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.28em] text-socx-accent-muted">
+            <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
               SOCx
             </p>
             <span className="h-5 w-px bg-socx-border-light dark:bg-socx-border-dark" />

@@ -11,7 +11,10 @@ export type LanguageGuideTheme = {
   faint: string
   line: string
   strongLine: string
+  scrollThumb: string
   fill: string
+  surface: string
+  control: string
   accent: string
   accentSoft: string
   warn: string
@@ -50,7 +53,10 @@ export const createLanguageGuideView = (
     faint,
     line,
     strongLine,
+    scrollThumb,
     fill,
+    surface,
+    control,
     accent,
     accentSoft,
     warn,
@@ -91,8 +97,8 @@ export const createLanguageGuideView = (
     "max-width": "100%",
     "box-sizing": "border-box",
     border: `1px solid ${line}`,
-    "border-radius": "12px",
-    "background-color": fill,
+    "border-radius": "16px",
+    "background-color": surface,
     "font-family": font,
     overflow: "hidden"
   })
@@ -155,7 +161,7 @@ export const createLanguageGuideView = (
     "overflow-y": "auto",
     "overflow-x": "hidden",
     "scrollbar-width": "thin",
-    "scrollbar-color": `${strongLine} transparent`
+    "scrollbar-color": `${scrollThumb} transparent`
   })
 
   const controls = document.createElement("div")
@@ -196,11 +202,11 @@ export const createLanguageGuideView = (
     "min-width": "0",
     "box-sizing": "border-box",
     padding: "7px 9px",
-    "border-radius": "9px",
+    "border-radius": "12px",
     "font-family": font,
     "font-size": "11px",
     color: ink,
-    "background-color": dark ? "rgba(13,21,36,0.92)" : "rgba(255,255,255,0.9)",
+    "background-color": control,
     border: `1px solid ${line}`,
     outline: "none"
   }
@@ -286,11 +292,9 @@ export const createLanguageGuideView = (
       "min-width": "0",
       "max-width": "100%",
       "box-sizing": "border-box",
-      "border-radius": "11px",
+      "border-radius": "16px",
       border: `1px solid ${line}`,
-      "background-color": dark
-        ? "rgba(255,255,255,0.035)"
-        : "rgba(255,255,255,0.72)",
+      "background-color": control,
       "font-family": font,
       overflow: "hidden"
     })
@@ -409,7 +413,7 @@ export const createLanguageGuideView = (
         "flex-direction": "column",
         gap: "3px",
         padding: "8px",
-        "border-radius": "8px",
+        "border-radius": "12px",
         border: `1px solid ${line}`,
         "background-color": fill,
         "font-family": font
@@ -465,7 +469,7 @@ export const createLanguageGuideView = (
       setStyles(commandCard, {
         all: "initial",
         display: "block",
-        "border-radius": "8px",
+        "border-radius": "12px",
         border: `1px solid ${line}`,
         "background-color": fill,
         "font-family": font,
