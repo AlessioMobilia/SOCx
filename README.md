@@ -219,8 +219,10 @@ The in-page palette never appears on its own. It opens only when you ask for it:
   **Insert query** submenu inside editable fields or selected text.
 
 The palette is not a long list to scroll: a filter bar narrows it down by
-**favorites**, by **kind** (IOC or hunting), by **query language**, by
-**category**, and by any custom dimension the repository declared. Search runs
+**favorites**, by **kind** (IOC or hunting), by **query language**, by source
+**pack**, by **category**, and by any custom dimension the repository declared.
+When the current URL matches a known SIEM or EDR, its pack is selected
+automatically and remains visible as an active filter. Search runs
 over everything — name, description, group, tags, labels — _and over the query
 itself_, so `DeviceNetworkEvents`, `src_ip` or `T1059` find the templates that
 actually contain them; space separated terms all have to match. Star a query
@@ -231,9 +233,11 @@ The in-page palette and the dedicated Query workspace use the same query
 browser rather than maintaining two parallel interfaces. Both therefore show
 the same three-pane layout on wide screens, the same filters, source path,
 pack-verification state, tags, repository facets, ATT&CK ids, references,
-variables and rendered-query warnings. Language, category and custom facets sit
-inside the collapsed **More filters** disclosure; their native hover help is
-painted outside the panel and cannot be clipped by its scrolling columns.
+variables and rendered-query warnings. Language, pack, category and custom
+facets sit inside the collapsed **More filters** disclosure; their native hover
+help is painted outside the panel and cannot be clipped by its scrolling
+columns. Fixed grid tracks keep column widths stable while queries change, and
+the shared, themed scrollbars never introduce horizontal scrolling.
 
 When no console is open, use **Query workspace** from the SOCx popup or assign
 its optional browser shortcut. It accepts a mixed IOC list, offers the same
@@ -244,7 +248,7 @@ Its compact one-line banner gives nearly all of the tab height to that shared
 browser. Boolean variables use a consistent switch instead of a browser-native
 checkbox.
 
-Below the workspace is a collapsed **Query language mini guides** reference. It
+Inside the shared query browser is a collapsed **Query language mini guide**. It
 covers every bundled dialect — including regex and PowerShell — and can be
 filtered by language/product or searched by command, syntax, option, example
 and field. Each language card explains its main fields; every command opens to
@@ -254,7 +258,8 @@ default, internal and CIM fields and covers statistical functions, `stats`,
 `eventstats`, `streamstats`, `tstats`, `chart`, `bin` and frequency commands.
 Each guide also links to the relevant official documentation in a new tab.
 IOC-only context actions remain hidden until text is selected, so an empty page
-menu stays compact.
+menu stays compact. If a page blocks the palette content script, the context
+menu falls back to opening Query workspace with the same selected indicators.
 
 Pick a template, fill in its variables, and the query is written **into the
 search bar you were standing in** rather than opened in a new tab, so the
