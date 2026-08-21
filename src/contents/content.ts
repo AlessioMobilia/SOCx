@@ -1049,6 +1049,14 @@ if (!(window as any)._formatScriptInitialized) {
       const formattedText = lastValidSelection
         ? formatSelectedText(lastValidSelection, lastValidSelectionSnapshot)
         : ""
+      if (!formattedText.trim() && message?.silentWhenEmpty) {
+        sendResponse({
+          success: false,
+          formatted: "",
+          error: "No selection in this frame"
+        })
+        return
+      }
       copySmartFormattedText(formattedText).then(sendResponse)
       return true
     } else if (message?.type === SELECTION_BUTTONS_MESSAGE) {

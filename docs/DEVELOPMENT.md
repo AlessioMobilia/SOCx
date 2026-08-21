@@ -281,7 +281,9 @@ Run this matrix on all three browsers before a release:
    headings. Confirm the shared fallback and success/error feedback work from
    Bulk Check and both subnet tools. Toasts
    must remain readable on light/dark host pages, stay above SOCx overlays, and
-   fit narrow popup viewports without inheriting host-page button styles.
+   fit narrow popup viewports without inheriting host-page button styles. With
+   the selection still active, press the default smart-format shortcut
+   (`Alt+Shift+F`), then reassign it from Options and verify the new combination.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
    list. An IP-only list must preselect AbuseIPDB without VirusTotal; mixed lists
    must still select the providers needed by their other IOC types. Confirm errors

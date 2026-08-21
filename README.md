@@ -210,11 +210,11 @@ branch when you want reproducibility.
 The in-page palette never appears on its own. It opens only when you ask for it:
 
 - the keyboard shortcut (`Ctrl+Shift+K` by default); the **Keyboard shortcuts**
-  section of the settings lists every SOCx window that can be opened from the
-  keyboard — palette, Bulk IOC check, Query workspace, Rule builder, Subnet
-  extractor, Subnet abuse check — shows the binding of each and links to the
-  browser page where they are assigned. Only the palette has a default: the
-  others start disabled so nothing is taken from the console you are on;
+  section of the settings lists every SOCx action available from the keyboard,
+  shows its current binding and links to the browser page where combinations
+  are reassigned. The query palette and **Smart format selection**
+  (`Alt+Shift+F`) have defaults; workspace commands start disabled so nothing
+  else is taken from the console you are on;
 - the **Insert query** submenu inside editable fields or selected text.
 
 The palette is not a long list to scroll: a filter bar narrows it down by

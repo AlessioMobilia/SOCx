@@ -5,7 +5,8 @@ import {
   commandPage,
   QUERY_COMMAND,
   SHORTCUT_COMMANDS,
-  shortcutSettingsUrl
+  shortcutSettingsUrl,
+  SMART_FORMAT_COMMAND
 } from "./shortcuts"
 
 const manifestCommands = (): Record<
@@ -29,12 +30,12 @@ describe("shortcut catalogue", () => {
     }
   })
 
-  it("ships only the palette bound, so nothing is taken by surprise", () => {
+  it("ships defaults for the two in-page commands", () => {
     const declared = manifestCommands()
     const withDefaults = Object.entries(declared)
       .filter(([, command]) => command.suggested_key)
       .map(([id]) => id)
-    expect(withDefaults).toEqual([QUERY_COMMAND])
+    expect(withDefaults).toEqual([QUERY_COMMAND, SMART_FORMAT_COMMAND])
   })
 
   it("points every command at a page that exists", () => {
@@ -48,8 +49,9 @@ describe("shortcut catalogue", () => {
     }
   })
 
-  it("has no page for the palette, which opens in the current tab", () => {
+  it("has no page for commands that act in the current tab", () => {
     expect(commandPage(QUERY_COMMAND)).toBeUndefined()
+    expect(commandPage(SMART_FORMAT_COMMAND)).toBeUndefined()
   })
 
   it("routes each browser to its native shortcut manager", () => {

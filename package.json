@@ -104,6 +104,12 @@
         },
         "description": "Open the SOCx query palette"
       },
+      "smart-format-selection": {
+        "suggested_key": {
+          "default": "Alt+Shift+F"
+        },
+        "description": "Smart-format and copy the current selection"
+      },
       "open-bulk-check": {
         "description": "Open the SOCx bulk IOC check"
       },

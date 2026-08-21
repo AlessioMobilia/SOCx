@@ -9,7 +9,11 @@ import {
   resolveBooleanPreference
 } from "../utility/query/paletteBridge"
 import { refreshAllSources } from "../utility/query/registry"
-import { commandPage, QUERY_COMMAND } from "../utility/shortcuts"
+import {
+  commandPage,
+  QUERY_COMMAND,
+  SMART_FORMAT_COMMAND
+} from "../utility/shortcuts"
 import { handleMenuClick } from "./menu-handler"
 import { getContextMenuApi, setupContextMenus } from "./menus"
 import { setupQueryMenus } from "./query-menus"
@@ -86,6 +90,21 @@ const openPaletteInActiveTab = async (
   )
 }
 
+const formatSelectionInActiveTab = async (): Promise<void> => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (typeof tab?.id !== "number") return
+
+  chrome.tabs.sendMessage(
+    tab.id,
+    { name: "format-selection", silentWhenEmpty: true },
+    () => {
+      // Restricted browser pages do not host the content script. The command
+      // remains a no-op there instead of opening an unrelated extension page.
+      void chrome.runtime.lastError
+    }
+  )
+}
+
 // Firefox uses a persistent MV2 background page, where menus should also be
 // registered at top level. This repairs installs where onInstalled was missed.
 if (isFirefox) {
@@ -121,13 +140,17 @@ contextMenuApi.onClicked.addListener((info, tab) => {
   }
 })
 
-// Keyboard shortcuts. Only the palette ships with a suggested combination; the
-// others stay unbound until the analyst assigns one from the browser shortcuts
-// page, which is also the only place a combination can be changed.
+// Keyboard shortcuts are changed from the browser shortcuts page linked in
+// Options. In-page commands act on the active tab; workspace commands open a
+// dedicated extension page.
 if (chrome.commands?.onCommand) {
   chrome.commands.onCommand.addListener((command) => {
     if (command === QUERY_COMMAND) {
       void openPaletteInActiveTab()
+      return
+    }
+    if (command === SMART_FORMAT_COMMAND) {
+      void formatSelectionInActiveTab()
       return
     }
     const page = commandPage(command)

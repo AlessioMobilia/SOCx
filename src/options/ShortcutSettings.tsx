@@ -14,8 +14,8 @@ const buttonClass =
  * Keyboard shortcuts are owned by the browser: an extension may declare a
  * command and suggest a combination, but only the analyst can assign or change
  * one, from the browser's own shortcuts page. So this section reports what is
- * currently bound and routes there — everything except the palette ships
- * unbound on purpose, to avoid shadowing a shortcut of the console in use.
+ * currently bound and routes there. Workspace commands ship unbound to avoid
+ * shadowing shortcuts of the console in use.
  */
 const ShortcutSettings: React.FC = () => {
   const [bindings, setBindings] = useState<Record<string, string>>({})
@@ -59,10 +59,9 @@ const ShortcutSettings: React.FC = () => {
         <div>
           <p className={labelClass}>Keyboard shortcuts</p>
           <p className="mt-1 max-w-3xl text-sm text-socx-muted dark:text-socx-muted-dark">
-            Every SOCx window can be opened from the keyboard. Only the query
-            palette comes with a default combination; the others start disabled,
-            so nothing is taken away from the console you are working in until
-            you assign a key yourself.
+            In-page actions include defaults for the query palette and smart
+            formatting. Workspace commands start disabled. Every combination can
+            be reassigned from the browser shortcut manager.
           </p>
         </div>
         <button

@@ -1,13 +1,12 @@
 // The keyboard commands SOCx declares, in one place: the manifest names them,
 // the background acts on them, and the options page lists them.
 //
-// Only the palette ships with a suggested combination. Everything else is
-// declared without one, so it stays unbound until the analyst assigns a key in
-// the browser's own shortcuts page — a browser will not let an extension take
-// a combination on its own, and an unused default would silently shadow a
-// shortcut of the console the analyst is working in.
+// The palette and smart formatter ship with suggested combinations. Everything
+// else stays unbound until the analyst assigns a key in the browser's own
+// shortcuts page.
 
 export const QUERY_COMMAND = "open-query-palette"
+export const SMART_FORMAT_COMMAND = "smart-format-selection"
 
 export type ShortcutCommand = {
   id: string
@@ -22,6 +21,11 @@ export const SHORTCUT_COMMANDS: ShortcutCommand[] = [
     id: QUERY_COMMAND,
     label: "Query palette",
     helper: "Opens the in-page palette on the console you are working in."
+  },
+  {
+    id: SMART_FORMAT_COMMAND,
+    label: "Smart format selection",
+    helper: "Formats the current selection and copies it to the clipboard."
   },
   {
     id: "open-bulk-check",
