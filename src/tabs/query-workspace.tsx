@@ -1,10 +1,13 @@
 import {
+  AdjustmentsHorizontalIcon,
+  ChevronDownIcon,
   ClipboardDocumentListIcon,
   MagnifyingGlassIcon,
   PencilSquareIcon,
   QuestionMarkCircleIcon
 } from "@heroicons/react/24/outline"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 
 import { sendToBackground } from "@plasmohq/messaging"
 
@@ -60,21 +63,87 @@ type LibraryResponse = { packs?: QueryPack[]; indicators?: string[] }
 /** Templates listed per page: enough to scan, few enough to read. */
 const PAGE_SIZE = 25
 
-const InfoTooltip = ({ text, label }: { text: string; label: string }) => (
-  <span className="group/tip relative inline-flex shrink-0">
-    <button
-      type="button"
-      aria-label={label}
-      className="rounded-full text-socx-muted outline-none transition hover:text-socx-accent focus-visible:ring-2 focus-visible:ring-socx-accent dark:text-socx-muted-dark">
-      <QuestionMarkCircleIcon className="h-4 w-4" />
-    </button>
-    <span
-      role="tooltip"
-      className="pointer-events-none invisible absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-socx-border-light bg-white px-3 py-2 text-left text-[11px] font-normal leading-relaxed text-socx-ink opacity-0 shadow-lg transition group-hover/tip:visible group-hover/tip:opacity-100 group-focus-within/tip:visible group-focus-within/tip:opacity-100 dark:border-socx-border-dark dark:bg-socx-panel dark:text-white">
-      {text}
+type TooltipPosition = { left: number; top: number; above: boolean }
+
+const InfoTooltip = ({ text, label }: { text: string; label: string }) => {
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const tooltipId = React.useId()
+  const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState<TooltipPosition>({
+    left: 0,
+    top: 0,
+    above: false
+  })
+
+  const updatePosition = useCallback(() => {
+    const button = buttonRef.current
+    if (!button) return
+    const rect = button.getBoundingClientRect()
+    const tooltipWidth = 256
+    const viewportMargin = 12
+    const roomBelow = window.innerHeight - rect.bottom
+    const above = roomBelow < 150 && rect.top > roomBelow
+    setPosition({
+      left: Math.min(
+        window.innerWidth - tooltipWidth / 2 - viewportMargin,
+        Math.max(tooltipWidth / 2 + viewportMargin, rect.left + rect.width / 2)
+      ),
+      top: above ? rect.top - 8 : rect.bottom + 8,
+      above
+    })
+  }, [])
+
+  const show = () => {
+    updatePosition()
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    updatePosition()
+    window.addEventListener("resize", updatePosition)
+    window.addEventListener("scroll", updatePosition, true)
+    return () => {
+      window.removeEventListener("resize", updatePosition)
+      window.removeEventListener("scroll", updatePosition, true)
+    }
+  }, [open, updatePosition])
+
+  return (
+    <span className="inline-flex shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={label}
+        aria-describedby={open ? tooltipId : undefined}
+        onMouseEnter={show}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={show}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false)
+        }}
+        className="rounded-full text-socx-muted outline-none transition hover:text-socx-accent focus-visible:ring-2 focus-visible:ring-socx-accent dark:text-socx-muted-dark">
+        <QuestionMarkCircleIcon className="h-4 w-4" />
+      </button>
+      {open &&
+        createPortal(
+          <span
+            id={tooltipId}
+            role="tooltip"
+            style={{
+              left: position.left,
+              top: position.top,
+              transform: `translate(-50%, ${position.above ? "-100%" : "0"})`
+            }}
+            className="pointer-events-none fixed z-[9999] w-64 rounded-lg border border-socx-border-light bg-white px-3 py-2 text-left text-[11px] font-normal leading-relaxed text-socx-ink shadow-xl dark:border-socx-border-dark dark:bg-socx-panel dark:text-white">
+            {text}
+          </span>,
+          document.body
+        )}
     </span>
-  </span>
-)
+  )
+}
 
 const QueryWorkspace = () => {
   const launch = useMemo(() => parseQueryWorkspaceHash(location.hash), [])
@@ -204,6 +273,12 @@ const QueryWorkspace = () => {
     () => buildFacets(entries, filters, favorites, dialectLabels),
     [dialectLabels, entries, filters, favorites]
   )
+  const activeNarrowFilterCount =
+    Number(filters.favoritesOnly) +
+    Number(filters.dialect !== "all") +
+    Number(filters.group !== "all") +
+    Object.values(filters.labels ?? {}).filter((value) => value !== "all")
+      .length
 
   const patchFilters = (patch: Partial<PaletteFilterState>) => {
     setFilters((previous) => ({ ...previous, ...patch }))
@@ -300,7 +375,7 @@ const QueryWorkspace = () => {
         {/* A fixed height rather than a minimum: with a floor, a catalogue of a
             few hundred templates stretches the row and the page ends up
             scrolling instead of the list inside it. */}
-        <div className="grid min-h-[32rem] gap-5 lg:h-[calc(100vh-13rem)] lg:grid-cols-[minmax(220px,0.65fr)_minmax(360px,1.2fr)_minmax(330px,1fr)]">
+        <div className="grid min-h-[32rem] gap-5 lg:h-[calc(100vh-10.5rem)] lg:grid-cols-[minmax(220px,0.65fr)_minmax(360px,1.2fr)_minmax(330px,1fr)]">
           <section
             className={`${card} flex min-h-0 flex-col gap-3 ${
               // A hunting playbook reads no indicator: the list stays in place,
@@ -349,14 +424,27 @@ const QueryWorkspace = () => {
             </div>
           </section>
 
-          <section className={`${card} flex min-h-0 flex-col gap-3`}>
+          <section className={`${card} flex min-h-0 flex-col gap-2 lg:p-4`}>
             <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-semibold">
-                <label htmlFor="query-template-search">Find a query</label>
-                <InfoTooltip
-                  label="About query search"
-                  text="Searches template names and descriptions first, then query text, fields, tables, operators, tags and ATT&CK identifiers. Separate terms must all match."
-                />
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+                <span className="inline-flex items-center gap-1.5">
+                  <label htmlFor="query-template-search">Find a query</label>
+                  <InfoTooltip
+                    label="About query search"
+                    text="Searches template names and descriptions first, then query text, fields, tables, operators, tags and ATT&CK identifiers. Separate terms must all match."
+                  />
+                </span>
+                {hasActiveFilters(filters) && (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold text-socx-muted underline transition hover:text-socx-accent dark:text-socx-muted-dark"
+                    onClick={() => {
+                      setFilters({ ...ALL_FILTERS, labels: {} })
+                      setPage(0)
+                    }}>
+                    Clear filters
+                  </button>
+                )}
               </div>
               <div className="relative">
                 <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-socx-muted" />
@@ -376,65 +464,77 @@ const QueryWorkspace = () => {
             {/* IOC and hunting queries are two libraries, not two values of a
                 filter, so they get a segmented control of their own — visually
                 separated from the controls that narrow the list. */}
-            <div className="flex items-center gap-1.5 text-xs font-semibold">
-              <span>Query type</span>
+            <div className="flex items-center gap-2">
+              <div
+                role="tablist"
+                aria-label="Query library"
+                className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-full border border-socx-border-light bg-socx-cloud-soft/60 p-1 dark:border-socx-border-dark dark:bg-socx-panel/50">
+                {(
+                  [
+                    { value: "all", label: "All queries" },
+                    { value: "ioc", label: KIND_LABELS.ioc },
+                    { value: "standard", label: KIND_LABELS.standard }
+                  ] as { value: "all" | PackKind; label: string }[]
+                ).map((tab) => {
+                  const active = filters.kind === tab.value
+                  const count =
+                    tab.value === "all"
+                      ? facets.kinds.reduce((sum, row) => sum + row.count, 0)
+                      : (facets.kinds.find((row) => row.value === tab.value)
+                          ?.count ?? 0)
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      title={
+                        tab.value === "all"
+                          ? "Show IOC templates and complete hunting playbooks"
+                          : tab.value === "ioc"
+                            ? "Show templates that insert the indicators from the left panel"
+                            : "Show complete hunting playbooks, including queries that do not require indicators"
+                      }
+                      onClick={() => patchFilters({ kind: tab.value })}
+                      className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition ${
+                        active
+                          ? "bg-socx-accent text-socx-ink"
+                          : "text-socx-muted hover:text-socx-accent dark:text-socx-muted-dark"
+                      }`}>
+                      {tab.label}
+                      <span className="tabular-nums opacity-70">{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
               <InfoTooltip
                 label="About query types"
                 text="IOC queries insert the indicators from the left panel. Hunting queries are complete playbooks and may not require any indicator."
               />
             </div>
-            <div
-              role="tablist"
-              aria-label="Query library"
-              className="inline-flex w-full items-center gap-1 rounded-full border border-socx-border-light bg-socx-cloud-soft/60 p-1 dark:border-socx-border-dark dark:bg-socx-panel/50">
-              {(
-                [
-                  { value: "all", label: "All queries" },
-                  { value: "ioc", label: KIND_LABELS.ioc },
-                  { value: "standard", label: KIND_LABELS.standard }
-                ] as { value: "all" | PackKind; label: string }[]
-              ).map((tab) => {
-                const active = filters.kind === tab.value
-                const count =
-                  tab.value === "all"
-                    ? facets.kinds.reduce((sum, row) => sum + row.count, 0)
-                    : (facets.kinds.find((row) => row.value === tab.value)
-                        ?.count ?? 0)
-                return (
-                  <button
-                    key={tab.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    title={
-                      tab.value === "all"
-                        ? "Show IOC templates and complete hunting playbooks"
-                        : tab.value === "ioc"
-                          ? "Show templates that insert the indicators from the left panel"
-                          : "Show complete hunting playbooks, including queries that do not require indicators"
-                    }
-                    onClick={() => patchFilters({ kind: tab.value })}
-                    className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition ${
-                      active
-                        ? "bg-socx-accent text-socx-ink"
-                        : "text-socx-muted hover:text-socx-accent dark:text-socx-muted-dark"
-                    }`}>
-                    {tab.label}
-                    <span className="tabular-nums opacity-70">{count}</span>
-                  </button>
-                )
-              })}
-            </div>
 
-            <div className="border-t border-socx-border-light pt-3 dark:border-socx-border-dark">
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
-                <span>Narrow results</span>
-                <InfoTooltip
-                  label="About result filters"
-                  text="Filters combine with each other. Counts are recalculated against the other active filters, while options stay in a stable order."
-                />
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+            <details className="group/filters rounded-xl border border-socx-border-light bg-socx-cloud-soft/35 dark:border-socx-border-dark dark:bg-socx-panel/30">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-semibold marker:hidden transition hover:bg-socx-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-socx-accent [&::-webkit-details-marker]:hidden">
+                <span className="inline-flex items-center gap-2">
+                  <AdjustmentsHorizontalIcon className="h-4 w-4 text-socx-muted" />
+                  More filters
+                  {activeNarrowFilterCount > 0 && (
+                    <span className="rounded-full bg-socx-accent px-1.5 py-0.5 text-[10px] font-bold text-socx-ink">
+                      {activeNarrowFilterCount} active
+                    </span>
+                  )}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] text-socx-muted dark:text-socx-muted-dark">
+                  <span className="tabular-nums">
+                    {visibleEntries.length} matches
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span className="group-open/filters:hidden">Show</span>
+                  <span className="hidden group-open/filters:inline">Hide</span>
+                  <ChevronDownIcon className="h-3.5 w-3.5 transition group-open/filters:rotate-180" />
+                </span>
+              </summary>
+              <div className="grid gap-2 border-t border-socx-border-light px-3 py-3 dark:border-socx-border-dark sm:grid-cols-2">
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-socx-muted dark:text-socx-muted-dark">
                     <span>Shortlist</span>
@@ -554,29 +654,7 @@ const QueryWorkspace = () => {
                   )
                 })}
               </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-                {visibleEntries.length === 0
-                  ? `0 of ${entries.length} templates`
-                  : `${firstOnPage + 1}–${Math.min(
-                      firstOnPage + PAGE_SIZE,
-                      visibleEntries.length
-                    )} of ${visibleEntries.length} templates`}
-              </p>
-              {hasActiveFilters(filters) && (
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-socx-muted underline transition hover:text-socx-accent dark:text-socx-muted-dark"
-                  onClick={() => {
-                    setFilters({ ...ALL_FILTERS, labels: {} })
-                    setPage(0)
-                  }}>
-                  Clear filters
-                </button>
-              )}
-            </div>
+            </details>
 
             <div
               ref={listRef}
@@ -609,7 +687,7 @@ const QueryWorkspace = () => {
                         </p>
                       )}
                       <div
-                        className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 transition ${
+                        className={`flex items-start gap-2 rounded-xl border px-3 py-2 transition ${
                           entry.key === selected?.key
                             ? "border-socx-accent bg-socx-accent/15"
                             : "border-socx-border-light hover:border-socx-accent dark:border-socx-border-dark"
@@ -621,12 +699,13 @@ const QueryWorkspace = () => {
                           <p className="break-words text-sm font-semibold leading-snug">
                             {entry.template.name}
                           </p>
-                          {entry.template.description && (
-                            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-socx-muted dark:text-socx-muted-dark">
-                              {entry.template.description}
-                            </p>
-                          )}
-                          <span className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-socx-muted dark:text-socx-muted-dark">
+                          {entry.template.description &&
+                            entry.key === selected?.key && (
+                              <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-socx-muted dark:text-socx-muted-dark">
+                                {entry.template.description}
+                              </p>
+                            )}
+                          <span className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-socx-muted dark:text-socx-muted-dark">
                             <span className="max-w-full break-words">
                               {entry.path.join(" › ")}
                             </span>
