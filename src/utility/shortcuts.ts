@@ -5,6 +5,11 @@
 // else stays unbound until the analyst assigns a key in the browser's own
 // shortcuts page.
 
+import {
+  callExtensionCallback,
+  type ExtensionRuntimeError
+} from "./extensionCallbacks"
+
 export const QUERY_COMMAND = "open-query-palette"
 export const SMART_FORMAT_COMMAND = "smart-format-selection"
 
@@ -71,4 +76,38 @@ export const shortcutSettingsUrl = (
   return /Edg\//.test(userAgent)
     ? "edge://extensions/shortcuts"
     : "chrome://extensions/shortcuts"
+}
+
+type ShortcutManagerBridge = {
+  openFirefoxSettings?: (callback: () => void) => void
+  openTab: (url: string, callback: () => void) => void
+  readLastError: () => ExtensionRuntimeError | undefined
+}
+
+/** Opens the browser-owned shortcut editor through the API supported there. */
+export const openShortcutManager = (
+  bridge: ShortcutManagerBridge,
+  isFirefox: boolean,
+  userAgent: string
+): Promise<void> => {
+  if (isFirefox) {
+    const openFirefoxSettings = bridge.openFirefoxSettings
+    if (!openFirefoxSettings) {
+      return Promise.reject(
+        new Error(
+          "Open about:addons and choose Manage Extension Shortcuts from the settings menu."
+        )
+      )
+    }
+    return callExtensionCallback<void>(
+      (callback) => openFirefoxSettings(callback),
+      bridge.readLastError
+    )
+  }
+
+  return callExtensionCallback<void>(
+    (callback) =>
+      bridge.openTab(shortcutSettingsUrl(false, userAgent), callback),
+    bridge.readLastError
+  )
 }

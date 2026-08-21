@@ -307,6 +307,9 @@ Run this matrix on all three browsers before a release:
    fit narrow popup viewports without inheriting host-page button styles. With
    the selection still active, press the default smart-format shortcut
    (`Alt+Shift+F`), then reassign it from Options and verify the new combination.
+   On Firefox, also verify that **Customize shortcuts** opens Manage Extension
+   Shortcuts with SOCx highlighted and that `Alt+Shift+Q` opens the query palette;
+   `Ctrl+Shift+K` is reserved by Firefox for its Web Console.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
    list. An IP-only list must preselect AbuseIPDB without VirusTotal; mixed lists
    must still select the providers needed by their other IOC types. Confirm errors

@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   commandPage,
+  openShortcutManager,
   QUERY_COMMAND,
   SHORTCUT_COMMANDS,
   shortcutSettingsUrl,
@@ -36,6 +37,10 @@ describe("shortcut catalogue", () => {
       .filter(([, command]) => command.suggested_key)
       .map(([id]) => id)
     expect(withDefaults).toEqual([QUERY_COMMAND, SMART_FORMAT_COMMAND])
+    expect(declared[QUERY_COMMAND].suggested_key?.default).toBe("Alt+Shift+Q")
+    expect(declared[SMART_FORMAT_COMMAND].suggested_key?.default).toBe(
+      "Alt+Shift+F"
+    )
   })
 
   it("points every command at a page that exists", () => {
@@ -62,5 +67,44 @@ describe("shortcut catalogue", () => {
     expect(shortcutSettingsUrl(false, "Chrome/140.0")).toBe(
       "chrome://extensions/shortcuts"
     )
+  })
+
+  it("uses Firefox's dedicated shortcut manager API", async () => {
+    const openFirefoxSettings = vi.fn((callback: () => void) => callback())
+    const openTab = vi.fn()
+
+    await openShortcutManager(
+      { openFirefoxSettings, openTab, readLastError: () => undefined },
+      true,
+      "Firefox/147"
+    )
+
+    expect(openFirefoxSettings).toHaveBeenCalledOnce()
+    expect(openTab).not.toHaveBeenCalled()
+  })
+
+  it("opens Chromium's shortcut page in a tab", async () => {
+    const openTab = vi.fn((_url: string, callback: () => void) => callback())
+
+    await openShortcutManager(
+      { openTab, readLastError: () => undefined },
+      false,
+      "Edg/147"
+    )
+
+    expect(openTab).toHaveBeenCalledWith(
+      "edge://extensions/shortcuts",
+      expect.any(Function)
+    )
+  })
+
+  it("gives actionable guidance on Firefox versions without the manager API", async () => {
+    await expect(
+      openShortcutManager(
+        { openTab: vi.fn(), readLastError: () => undefined },
+        true,
+        "Firefox/136"
+      )
+    ).rejects.toThrow("Manage Extension Shortcuts")
   })
 })

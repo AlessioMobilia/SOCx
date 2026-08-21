@@ -1,7 +1,7 @@
 {
   "name": "so-cx",
   "displayName": "SOCx",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=20"
@@ -99,7 +99,7 @@
     "commands": {
       "open-query-palette": {
         "suggested_key": {
-          "default": "Ctrl+Shift+K",
+          "default": "Alt+Shift+Q",
           "mac": "Command+Shift+K"
         },
         "description": "Open the SOCx query palette"

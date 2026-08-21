@@ -2,6 +2,7 @@ import {
   SELECTION_BUTTONS_MESSAGE,
   SERVICE_PAGE_COPY_BUTTONS_MESSAGE
 } from "../utility/buttonPreferences"
+import { resolveActiveTab } from "../utility/extensionCallbacks"
 import {
   DEFAULT_QUERY_MENU_ENABLED,
   OPEN_QUERY_PALETTE_MESSAGE,
@@ -72,9 +73,15 @@ const scheduleContextMenuSetup = (reason: string): Promise<void> => {
 
 /** Opens the palette in the active tab, falling back to the SOCx query page. */
 const openPaletteInActiveTab = async (
-  body: Record<string, unknown> = {}
+  body: Record<string, unknown> = {},
+  commandTab?: chrome.tabs.Tab
 ): Promise<void> => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  const tab = await resolveActiveTab(
+    commandTab,
+    (callback) =>
+      chrome.tabs.query({ active: true, currentWindow: true }, callback),
+    () => chrome.runtime.lastError
+  )
   if (typeof tab?.id !== "number") return
 
   chrome.tabs.sendMessage(
@@ -90,8 +97,15 @@ const openPaletteInActiveTab = async (
   )
 }
 
-const formatSelectionInActiveTab = async (): Promise<void> => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+const formatSelectionInActiveTab = async (
+  commandTab?: chrome.tabs.Tab
+): Promise<void> => {
+  const tab = await resolveActiveTab(
+    commandTab,
+    (callback) =>
+      chrome.tabs.query({ active: true, currentWindow: true }, callback),
+    () => chrome.runtime.lastError
+  )
   if (typeof tab?.id !== "number") return
 
   chrome.tabs.sendMessage(
@@ -144,13 +158,13 @@ contextMenuApi.onClicked.addListener((info, tab) => {
 // Options. In-page commands act on the active tab; workspace commands open a
 // dedicated extension page.
 if (chrome.commands?.onCommand) {
-  chrome.commands.onCommand.addListener((command) => {
+  chrome.commands.onCommand.addListener((command, tab) => {
     if (command === QUERY_COMMAND) {
-      void openPaletteInActiveTab()
+      void openPaletteInActiveTab({}, tab)
       return
     }
     if (command === SMART_FORMAT_COMMAND) {
-      void formatSelectionInActiveTab()
+      void formatSelectionInActiveTab(tab)
       return
     }
     const page = commandPage(command)

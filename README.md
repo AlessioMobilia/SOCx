@@ -209,7 +209,7 @@ branch when you want reproducibility.
 
 The in-page palette never appears on its own. It opens only when you ask for it:
 
-- the keyboard shortcut (`Ctrl+Shift+K` by default); the **Keyboard shortcuts**
+- the keyboard shortcut (`Alt+Shift+Q` by default); the **Keyboard shortcuts**
   section of the settings lists every SOCx action available from the keyboard,
   shows its current binding and links to the browser page where combinations
   are reassigned. The query palette and **Smart format selection**
@@ -297,7 +297,8 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.4.0 release notes](docs/RELEASE_NOTES_1.4.0.md) for visual smart
+See the [SOCx 1.4.1 release notes](docs/RELEASE_NOTES_1.4.1.md) for Firefox
+shortcut fixes; the [1.4.0 notes](docs/RELEASE_NOTES_1.4.0.md) for visual smart
 formatting, partial JSON recovery and the formatting shortcut; the [1.3.1
 notes](docs/RELEASE_NOTES_1.3.1.md) for query rendering fixes; the [1.3.0
 notes](docs/RELEASE_NOTES_1.3.0.md) for HTTP repositories and the pack format

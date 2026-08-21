@@ -1,7 +1,7 @@
 import { CommandLineIcon } from "@heroicons/react/24/outline"
 import React, { useEffect, useState } from "react"
 
-import { SHORTCUT_COMMANDS, shortcutSettingsUrl } from "../utility/shortcuts"
+import { openShortcutManager, SHORTCUT_COMMANDS } from "../utility/shortcuts"
 
 const cardClass =
   "rounded-socx-lg border border-socx-border-light bg-white/90 p-6 shadow-sm dark:border-socx-border-dark dark:bg-socx-night-soft/80"
@@ -21,9 +21,14 @@ const ShortcutSettings: React.FC = () => {
   const [bindings, setBindings] = useState<Record<string, string>>({})
   const [error, setError] = useState("")
 
-  useEffect(() => {
+  const readBindings = () => {
     try {
       chrome.commands.getAll((commands) => {
+        const readError = chrome.runtime.lastError
+        if (readError) {
+          setError(readError.message ?? "Unable to read keyboard shortcuts.")
+          return
+        }
         const next: Record<string, string> = {}
         for (const command of commands) {
           if (command.name) next[command.name] = command.shortcut ?? ""
@@ -33,24 +38,51 @@ const ShortcutSettings: React.FC = () => {
     } catch (readError) {
       console.error("Unable to read the keyboard shortcuts:", readError)
     }
+  }
+
+  useEffect(() => {
+    readBindings()
+    window.addEventListener("focus", readBindings)
+    document.addEventListener("visibilitychange", readBindings)
+    return () => {
+      window.removeEventListener("focus", readBindings)
+      document.removeEventListener("visibilitychange", readBindings)
+    }
   }, [])
 
-  const openShortcutSettings = () => {
+  const openShortcutSettings = async () => {
     const manifest = chrome.runtime.getManifest() as chrome.runtime.Manifest & {
       browser_specific_settings?: { gecko?: unknown }
     }
-    void chrome.tabs
-      .create({
-        url: shortcutSettingsUrl(
-          Boolean(manifest.browser_specific_settings?.gecko),
-          navigator.userAgent
-        )
-      })
-      .catch(() =>
-        setError(
-          "The browser blocked its shortcuts page. Open the extension shortcut manager manually."
-        )
+    const firefoxCommands = chrome.commands as typeof chrome.commands & {
+      openShortcutSettings?: (callback: () => void) => void
+    }
+    setError("")
+    try {
+      await openShortcutManager(
+        {
+          openFirefoxSettings: firefoxCommands.openShortcutSettings
+            ? (callback) =>
+                firefoxCommands.openShortcutSettings?.call(
+                  firefoxCommands,
+                  callback
+                )
+            : undefined,
+          openTab: (url, callback) => {
+            chrome.tabs.create({ url }, () => callback())
+          },
+          readLastError: () => chrome.runtime.lastError
+        },
+        Boolean(manifest.browser_specific_settings?.gecko),
+        navigator.userAgent
       )
+    } catch (openError) {
+      setError(
+        openError instanceof Error
+          ? openError.message
+          : "Unable to open the browser shortcut manager."
+      )
+    }
   }
 
   return (
@@ -101,9 +133,9 @@ const ShortcutSettings: React.FC = () => {
       </div>
 
       <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
-        Browsers only allow shortcut assignment from their native extension
-        shortcuts page, and cap the number of combinations an extension may hold
-        at once.
+        Shortcut assignment stays in the browser's native extension editor.
+        Firefox opens its dedicated Manage Extension Shortcuts view; Chromium
+        opens the extensions shortcut page.
       </p>
       {error && <p className="text-xs text-socx-danger">{error}</p>}
     </section>
