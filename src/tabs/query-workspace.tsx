@@ -1,7 +1,8 @@
 import {
   ClipboardDocumentListIcon,
   MagnifyingGlassIcon,
-  PencilSquareIcon
+  PencilSquareIcon,
+  QuestionMarkCircleIcon
 } from "@heroicons/react/24/outline"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
@@ -43,6 +44,7 @@ import {
   toWorkspaceIndicators
 } from "../utility/query/workspace"
 import { ensureIsDarkMode } from "../utility/theme"
+import QueryLanguageGuides from "./QueryLanguageGuides"
 
 const card =
   "rounded-socx-lg border border-socx-border-light bg-white/90 p-5 shadow-sm dark:border-socx-border-dark dark:bg-socx-night-soft/80"
@@ -57,6 +59,22 @@ type LibraryResponse = { packs?: QueryPack[]; indicators?: string[] }
 
 /** Templates listed per page: enough to scan, few enough to read. */
 const PAGE_SIZE = 25
+
+const InfoTooltip = ({ text, label }: { text: string; label: string }) => (
+  <span className="group/tip relative inline-flex shrink-0">
+    <button
+      type="button"
+      aria-label={label}
+      className="rounded-full text-socx-muted outline-none transition hover:text-socx-accent focus-visible:ring-2 focus-visible:ring-socx-accent dark:text-socx-muted-dark">
+      <QuestionMarkCircleIcon className="h-4 w-4" />
+    </button>
+    <span
+      role="tooltip"
+      className="pointer-events-none invisible absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-socx-border-light bg-white px-3 py-2 text-left text-[11px] font-normal leading-relaxed text-socx-ink opacity-0 shadow-lg transition group-hover/tip:visible group-hover/tip:opacity-100 group-focus-within/tip:visible group-focus-within/tip:opacity-100 dark:border-socx-border-dark dark:bg-socx-panel dark:text-white">
+      {text}
+    </span>
+  </span>
+)
 
 const QueryWorkspace = () => {
   const launch = useMemo(() => parseQueryWorkspaceHash(location.hash), [])
@@ -146,10 +164,11 @@ const QueryWorkspace = () => {
       if (document.visibilityState === "visible") void loadLibrary()
     }
 
-    chrome.storage.onChanged.addListener(onStorageChange)
+    const storageChanges = globalThis.chrome?.storage?.onChanged
+    storageChanges?.addListener(onStorageChange)
     document.addEventListener("visibilitychange", onVisible)
     return () => {
-      chrome.storage.onChanged.removeListener(onStorageChange)
+      storageChanges?.removeListener(onStorageChange)
       document.removeEventListener("visibilitychange", onVisible)
     }
   }, [loadLibrary])
@@ -306,42 +325,64 @@ const QueryWorkspace = () => {
               <p className="text-xs text-socx-muted dark:text-socx-muted-dark">
                 {indicators.length} unique indicators detected
               </p>
-              <button
-                type="button"
-                aria-pressed={mergeTypes}
-                onClick={toggleMergeTypes}
-                title={
-                  mergeTypes
-                    ? "Every indicator type is compared in one query, each against its own field"
-                    : "Each indicator type gets its own query"
-                }
-                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
-                  mergeTypes
-                    ? "border-socx-accent bg-socx-accent/15"
-                    : "border-socx-border-light text-socx-muted hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:text-socx-muted-dark"
-                }`}>
-                {mergeTypes ? "Single query" : "One per type"}
-              </button>
+              <span className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-pressed={mergeTypes}
+                  onClick={toggleMergeTypes}
+                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                    mergeTypes
+                      ? "border-socx-accent bg-socx-accent/15"
+                      : "border-socx-border-light text-socx-muted hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:text-socx-muted-dark"
+                  }`}>
+                  {mergeTypes ? "Single query" : "One per type"}
+                </button>
+                <InfoTooltip
+                  label="About query splitting"
+                  text={
+                    mergeTypes
+                      ? "Builds one query that compares every detected IOC type with its matching field. The renderer falls back to separate queries when the template cannot merge safely."
+                      : "Builds a separate query for every detected IOC type, useful when a console or template cannot combine fields."
+                  }
+                />
+              </span>
             </div>
           </section>
 
           <section className={`${card} flex min-h-0 flex-col gap-3`}>
-            <div className="relative">
-              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-socx-muted" />
-              <input
-                className={`${input} pl-9`}
-                type="search"
-                placeholder="Search a name, a description, a field or a value"
-                value={filters.search}
-                onChange={(event) =>
-                  patchFilters({ search: event.target.value })
-                }
-              />
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold">
+                <label htmlFor="query-template-search">Find a query</label>
+                <InfoTooltip
+                  label="About query search"
+                  text="Searches template names and descriptions first, then query text, fields, tables, operators, tags and ATT&CK identifiers. Separate terms must all match."
+                />
+              </div>
+              <div className="relative">
+                <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-socx-muted" />
+                <input
+                  id="query-template-search"
+                  className={`${input} pl-9`}
+                  type="search"
+                  placeholder="Name, field, command, value or ATT&CK ID"
+                  value={filters.search}
+                  onChange={(event) =>
+                    patchFilters({ search: event.target.value })
+                  }
+                />
+              </div>
             </div>
 
             {/* IOC and hunting queries are two libraries, not two values of a
                 filter, so they get a segmented control of their own — visually
                 separated from the controls that narrow the list. */}
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              <span>Query type</span>
+              <InfoTooltip
+                label="About query types"
+                text="IOC queries insert the indicators from the left panel. Hunting queries are complete playbooks and may not require any indicator."
+              />
+            </div>
             <div
               role="tablist"
               aria-label="Query library"
@@ -365,6 +406,13 @@ const QueryWorkspace = () => {
                     type="button"
                     role="tab"
                     aria-selected={active}
+                    title={
+                      tab.value === "all"
+                        ? "Show IOC templates and complete hunting playbooks"
+                        : tab.value === "ioc"
+                          ? "Show templates that insert the indicators from the left panel"
+                          : "Show complete hunting playbooks, including queries that do not require indicators"
+                    }
                     onClick={() => patchFilters({ kind: tab.value })}
                     className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition ${
                       active
@@ -378,77 +426,134 @@ const QueryWorkspace = () => {
               })}
             </div>
 
-            <div className="grid gap-2 border-t border-socx-border-light pt-3 sm:grid-cols-2 dark:border-socx-border-dark">
-              <button
-                type="button"
-                aria-pressed={filters.favoritesOnly}
-                onClick={() =>
-                  patchFilters({ favoritesOnly: !filters.favoritesOnly })
-                }
-                className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                  filters.favoritesOnly
-                    ? "border-socx-accent bg-socx-accent/15"
-                    : "border-socx-border-light text-socx-muted hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:text-socx-muted-dark"
-                }`}>
-                ★ {FAVORITES_LABEL}
-                <span className="tabular-nums opacity-70">
-                  {facets.favorites}
-                </span>
-              </button>
-              <select
-                aria-label="Filter by query language"
-                className={input}
-                value={filters.dialect}
-                onChange={(event) =>
-                  patchFilters({ dialect: event.target.value })
-                }>
-                <option value="all">Language: all</option>
-                {facets.dialects.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label} ({option.count})
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Filter by category"
-                className={input}
-                value={filters.group}
-                onChange={(event) =>
-                  patchFilters({ group: event.target.value })
-                }>
-                <option value="all">Category: all</option>
-                {facets.groups.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label} ({option.count})
-                  </option>
-                ))}
-              </select>
-              {facets.custom.map((facet) => {
-                const selectedValue = filters.labels?.[facet.id] ?? "all"
-                return (
-                  <select
-                    key={facet.id}
-                    aria-label={`Filter by ${facet.label}`}
-                    title={facet.description}
-                    className={input}
-                    value={selectedValue}
-                    onChange={(event) =>
+            <div className="border-t border-socx-border-light pt-3 dark:border-socx-border-dark">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
+                <span>Narrow results</span>
+                <InfoTooltip
+                  label="About result filters"
+                  text="Filters combine with each other. Counts are recalculated against the other active filters, while options stay in a stable order."
+                />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-socx-muted dark:text-socx-muted-dark">
+                    <span>Shortlist</span>
+                    <InfoTooltip
+                      label="About favorites filter"
+                      text="Shows only templates you starred. Stars are stored in this browser and favorites are also kept at the top of unfiltered results."
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    aria-pressed={filters.favoritesOnly}
+                    onClick={() =>
                       patchFilters({
-                        labels: {
-                          ...filters.labels,
-                          [facet.id]: event.target.value
-                        }
+                        favoritesOnly: !filters.favoritesOnly
                       })
+                    }
+                    className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                      filters.favoritesOnly
+                        ? "border-socx-accent bg-socx-accent/15"
+                        : "border-socx-border-light text-socx-muted hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark dark:text-socx-muted-dark"
+                    }`}>
+                    ★ {FAVORITES_LABEL}
+                    <span className="tabular-nums opacity-70">
+                      {facets.favorites}
+                    </span>
+                  </button>
+                </div>
+                <div className="space-y-1 text-[11px] font-semibold text-socx-muted dark:text-socx-muted-dark">
+                  <span className="flex items-center gap-1.5">
+                    <label htmlFor="query-language-filter">Language</label>
+                    <InfoTooltip
+                      label="About language filter"
+                      text="Keeps templates written for one query dialect. Similar product names do not imply compatible syntax; Microsoft KQL and Elastic KQL are separate choices."
+                    />
+                  </span>
+                  <select
+                    id="query-language-filter"
+                    aria-label="Filter by query language"
+                    className={input}
+                    value={filters.dialect}
+                    onChange={(event) =>
+                      patchFilters({ dialect: event.target.value })
                     }>
-                    <option value="all">{facet.label}: all</option>
-                    {facet.options.map((option) => (
+                    <option value="all">All languages</option>
+                    {facets.dialects.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label} ({option.count})
                       </option>
                     ))}
                   </select>
-                )
-              })}
+                </div>
+                <div className="space-y-1 text-[11px] font-semibold text-socx-muted dark:text-socx-muted-dark">
+                  <span className="flex items-center gap-1.5">
+                    <label htmlFor="query-category-filter">Category</label>
+                    <InfoTooltip
+                      label="About category filter"
+                      text="Keeps templates from one top-level investigation category, such as network, endpoint, identity or email. Categories come from the enabled packs."
+                    />
+                  </span>
+                  <select
+                    id="query-category-filter"
+                    aria-label="Filter by category"
+                    className={input}
+                    value={filters.group}
+                    onChange={(event) =>
+                      patchFilters({ group: event.target.value })
+                    }>
+                    <option value="all">All categories</option>
+                    {facets.groups.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label} ({option.count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {facets.custom.map((facet) => {
+                  const selectedValue = filters.labels?.[facet.id] ?? "all"
+                  return (
+                    <div
+                      key={facet.id}
+                      className="space-y-1 text-[11px] font-semibold text-socx-muted dark:text-socx-muted-dark">
+                      <span className="flex items-center gap-1.5">
+                        <label htmlFor={`query-facet-${facet.id}`}>
+                          {facet.label}
+                        </label>
+                        <InfoTooltip
+                          label={`About ${facet.label} filter`}
+                          text={
+                            facet.description ||
+                            `Keeps templates tagged with one ${facet.label} value declared by the enabled query packs.`
+                          }
+                        />
+                      </span>
+                      <select
+                        id={`query-facet-${facet.id}`}
+                        aria-label={`Filter by ${facet.label}`}
+                        className={input}
+                        value={selectedValue}
+                        onChange={(event) =>
+                          patchFilters({
+                            labels: {
+                              ...filters.labels,
+                              [facet.id]: event.target.value
+                            }
+                          })
+                        }>
+                        <option value="all">
+                          All {facet.label.toLowerCase()}
+                        </option>
+                        {facet.options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label} ({option.count})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-2">
@@ -645,40 +750,57 @@ const QueryWorkspace = () => {
                     {templateVariables(selected.pack, selected.template).map(
                       (variable) =>
                         variable.type === "checkbox" ? (
-                          <label
+                          <div
                             key={variable.id}
-                            className="flex items-center gap-2 rounded-lg border border-socx-border-light px-3 py-2 text-xs dark:border-socx-border-dark"
-                            title={variable.description}>
-                            <input
-                              type="checkbox"
-                              aria-label={variable.label}
-                              className="h-4 w-4 accent-socx-teal"
-                              checked={
-                                (variables[variable.id] ??
-                                  variable.default ??
-                                  "false") === "true"
-                              }
-                              onChange={(event) =>
-                                setVariables((previous) => ({
-                                  ...previous,
-                                  [variable.id]: String(event.target.checked)
-                                }))
+                            className="flex items-center justify-between gap-2 rounded-lg border border-socx-border-light px-3 py-2 text-xs dark:border-socx-border-dark">
+                            <label className="flex min-w-0 cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                role="switch"
+                                aria-label={variable.label}
+                                className="peer sr-only"
+                                checked={
+                                  (variables[variable.id] ??
+                                    variable.default ??
+                                    "false") === "true"
+                                }
+                                onChange={(event) =>
+                                  setVariables((previous) => ({
+                                    ...previous,
+                                    [variable.id]: String(event.target.checked)
+                                  }))
+                                }
+                              />
+                              <span className="relative h-5 w-9 shrink-0 rounded-full border border-socx-border-light bg-socx-cloud-soft transition after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-socx-muted after:transition peer-checked:border-socx-accent peer-checked:bg-socx-accent/25 peer-checked:after:translate-x-4 peer-checked:after:bg-socx-accent-muted peer-focus-visible:ring-2 peer-focus-visible:ring-socx-accent dark:border-socx-border-dark dark:bg-socx-panel" />
+                              <span className="truncate font-semibold">
+                                {variable.label}
+                              </span>
+                            </label>
+                            <InfoTooltip
+                              label={`About ${variable.label}`}
+                              text={
+                                variable.description ||
+                                `Turns ${variable.label} on or off in the generated query.`
                               }
                             />
-                            <span className="font-semibold">
-                              {variable.label}
-                            </span>
-                          </label>
+                          </div>
                         ) : (
-                          <label
-                            key={variable.id}
-                            className="space-y-1 text-xs"
-                            title={variable.description}>
-                            <span className="font-semibold">
-                              {variable.label}
+                          <div key={variable.id} className="space-y-1 text-xs">
+                            <span className="flex items-center gap-1.5 font-semibold">
+                              <label htmlFor={`query-variable-${variable.id}`}>
+                                {variable.label}
+                              </label>
+                              <InfoTooltip
+                                label={`About ${variable.label}`}
+                                text={
+                                  variable.description ||
+                                  `Sets the ${variable.label} value inserted into the generated query.`
+                                }
+                              />
                             </span>
                             {variable.options?.length ? (
                               <select
+                                id={`query-variable-${variable.id}`}
                                 className={input}
                                 value={
                                   variables[variable.id] ??
@@ -699,6 +821,7 @@ const QueryWorkspace = () => {
                               </select>
                             ) : (
                               <input
+                                id={`query-variable-${variable.id}`}
                                 className={input}
                                 value={
                                   variables[variable.id] ??
@@ -713,7 +836,7 @@ const QueryWorkspace = () => {
                                 }
                               />
                             )}
-                          </label>
+                          </div>
                         )
                     )}
                   </div>
@@ -784,6 +907,8 @@ const QueryWorkspace = () => {
             )}
           </section>
         </div>
+
+        <QueryLanguageGuides dialects={dialects} />
       </div>
     </main>
   )
