@@ -135,6 +135,43 @@ describe("smart formatting", () => {
     expect(result?.text).toContain("Time:        12:45:20")
   })
 
+  it("parses alternating key and value lines copied without punctuation", () => {
+    const result = formatSmartContainer(
+      fromHtml(`<pre>Network
+23.34.4.0/22
+Autonomous System Number
+20940
+Autonomous System Label
+Akamai International B.V.
+Regional Internet Registry
+ARIN
+Country
+US
+Continent
+NA</pre>`)
+    )
+
+    expect(result?.kind).toBe("text-key-value")
+    expect(result?.text).toContain("Network:                    23.34.4.0/22")
+    expect(result?.text).toContain(
+      "Autonomous System Label:    Akamai International B.V."
+    )
+    expect(result?.text).toContain("Continent:                  NA")
+  })
+
+  it("does not alternate ordinary heading and paragraph prose", () => {
+    const result = formatSmartContainer(
+      fromHtml(`<article>First finding
+The analyst reviewed the original alert.
+Next action
+The team isolated the affected device.
+Final note
+The investigation remains open.</article>`)
+    )
+
+    expect(result).toBeNull()
+  })
+
   it("uses contextual headers for a grid selection whose header was clipped", () => {
     const result = formatSmartContainer(
       fromHtml(`

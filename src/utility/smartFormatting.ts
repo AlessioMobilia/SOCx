@@ -1076,6 +1076,37 @@ const parseKeyValueLine = (line: string): [string, string] | null => {
   return null
 }
 
+const parseAlternatingKeyValueLines = (
+  lines: string[]
+): Array<[string, string]> => {
+  if (lines.length < 6 || lines.length % 2 !== 0) return []
+  const pairs: Array<[string, string]> = []
+  for (let index = 0; index < lines.length; index += 2) {
+    const key = lines[index]
+    const value = lines[index + 1]
+    if (
+      !isLikelyLabel(key) ||
+      !value ||
+      value.length > 512 ||
+      normalizeLabel(key).toLowerCase() === cleanText(value).toLowerCase()
+    ) {
+      return []
+    }
+    pairs.push([key, value])
+  }
+
+  const uniqueKeys = new Set(
+    pairs.map(([key]) => normalizeLabel(key).toLowerCase())
+  )
+  const sentenceValues = pairs.filter(([, value]) =>
+    /[.!?]\s*$/.test(value)
+  ).length
+  if (uniqueKeys.size !== pairs.length || sentenceValues > pairs.length / 2) {
+    return []
+  }
+  return pairs
+}
+
 const extractTextCandidate = (text: string): SmartFormatResult | null => {
   const cef = parseCef(text)
   if (cef) return cef
@@ -1087,6 +1118,15 @@ const extractTextCandidate = (text: string): SmartFormatResult | null => {
   const allLogfmt = lines.flatMap(parseLogfmt)
   if (allLogfmt.length >= 2) {
     return { kind: "logfmt", score: 90, text: formatKeyValues(allLogfmt) }
+  }
+
+  const alternatingPairs = parseAlternatingKeyValueLines(lines)
+  if (alternatingPairs.length >= 3) {
+    return {
+      kind: "text-key-value",
+      score: Math.min(88, 80 + alternatingPairs.length),
+      text: formatKeyValues(alternatingPairs)
+    }
   }
 
   const pairs = lines

@@ -253,6 +253,57 @@ const rootForRange = (range: Range): Node => {
     : common
 }
 
+const collectOpenShadowRoots = (root: Document | ShadowRoot): ShadowRoot[] => {
+  const roots: ShadowRoot[] = []
+  root.querySelectorAll("*").forEach((element) => {
+    if (!element.shadowRoot) return
+    roots.push(element.shadowRoot)
+    roots.push(...collectOpenShadowRoots(element.shadowRoot))
+  })
+  return roots
+}
+
+const rangeFromAbstractRange = (
+  document: Document,
+  source: AbstractRange
+): Range | null => {
+  if (
+    source.startContainer.getRootNode() !== source.endContainer.getRootNode()
+  ) {
+    return null
+  }
+  try {
+    const range = document.createRange()
+    range.setStart(source.startContainer, source.startOffset)
+    range.setEnd(source.endContainer, source.endOffset)
+    return range
+  } catch {
+    return null
+  }
+}
+
+const rangesForSelection = (selection: Selection): Range[] => {
+  const document = selection.anchorNode?.ownerDocument ?? window.document
+  if (typeof selection.getComposedRanges === "function") {
+    try {
+      const shadowRoots = collectOpenShadowRoots(document)
+      const composed = selection
+        .getComposedRanges({ shadowRoots })
+        .map((range) => rangeFromAbstractRange(document, range))
+        .filter((range): range is Range => !!range)
+      if (composed.length > 0) return composed
+    } catch {
+      // Older engines may expose the method without accepting shadow roots.
+    }
+  }
+
+  const ranges: Range[] = []
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    ranges.push(selection.getRangeAt(index).cloneRange())
+  }
+  return ranges
+}
+
 export const captureVisualSelection = (
   selection: Selection
 ): VisualSelectionSnapshot | null => {
@@ -260,44 +311,49 @@ export const captureVisualSelection = (
     return null
   }
 
-  const range = selection.getRangeAt(0).cloneRange()
-  const root = rootForRange(range)
-  const boundary =
-    root.nodeType === Node.ELEMENT_NODE ? (root as HTMLElement) : null
-  const document = range.startContainer.ownerDocument
-  const nodes: Text[] = []
-
-  if (root.nodeType === Node.TEXT_NODE) {
-    nodes.push(root as Text)
-  } else {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    while (walker.nextNode()) nodes.push(walker.currentNode as Text)
-  }
-
+  const ranges = rangesForSelection(selection)
+  if (ranges.length === 0) return null
   const tokens: VisualToken[] = []
-  nodes.forEach((node) => {
-    if (!rangeIntersectsNode(range, node)) return
-    const text = selectedNodeText(range, node)
-    const element = node.parentElement
-    if (!text || !element || isNoiseElement(element, boundary)) return
+  ranges.forEach((range) => {
+    const root = rootForRange(range)
+    const boundary =
+      root.nodeType === Node.ELEMENT_NODE ? (root as HTMLElement) : null
+    const document = range.startContainer.ownerDocument
+    const nodes: Text[] = []
 
-    const style = document.defaultView?.getComputedStyle(element)
-    tokens.push({
-      text,
-      rect: textNodeRect(range, node),
-      order: tokens.length,
-      element,
-      parent: element.parentElement,
-      explicitLabel: explicitLabelFor(element),
-      labelMarker: labelMarkerFor(element),
-      emphasized: Boolean(element.closest("strong, b")),
-      fontWeight: parseFontWeight(style?.fontWeight ?? "400"),
-      fontSize: Number.parseFloat(style?.fontSize ?? "16") || 16
+    if (root.nodeType === Node.TEXT_NODE) {
+      nodes.push(root as Text)
+    } else {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+      while (walker.nextNode()) nodes.push(walker.currentNode as Text)
+    }
+
+    nodes.forEach((node) => {
+      if (!rangeIntersectsNode(range, node)) return
+      const text = selectedNodeText(range, node)
+      const element = node.parentElement
+      if (!text || !element || isNoiseElement(element, boundary)) return
+
+      const style = document.defaultView?.getComputedStyle(element)
+      tokens.push({
+        text,
+        rect: textNodeRect(range, node),
+        order: tokens.length,
+        element,
+        parent: element.parentElement,
+        explicitLabel: explicitLabelFor(element),
+        labelMarker: labelMarkerFor(element),
+        emphasized: Boolean(element.closest("strong, b")),
+        fontWeight: parseFontWeight(style?.fontWeight ?? "400"),
+        fontSize: Number.parseFloat(style?.fontSize ?? "16") || 16
+      })
     })
   })
 
   return {
-    text: normalizeSelectionText(selection.toString()),
+    text: normalizeSelectionText(
+      ranges.map((range) => range.toString()).join("\n") || selection.toString()
+    ),
     tokens,
     geometryAvailable: tokens.some((token) => token.rect && hasArea(token.rect))
   }
@@ -501,6 +557,56 @@ const horizontalPairs = (lines: VisualLine[]): VisualPair[] => {
   return pairs
 }
 
+const repeatedHorizontalPairs = (lines: VisualLine[]): VisualPair[] => {
+  const rows = lines
+    .map((line) => ({ line, items: itemsForLine(line) }))
+    .filter(({ items }) => {
+      if (items.length < 2 || items.length % 2 !== 0) return false
+      return items.every((item, index) => {
+        if (index % 2 === 0) return itemLabelScore(item) >= 1
+        return item.rect.left >= items[index - 1].rect.right - 2
+      })
+    })
+  if (rows.length < 3) return []
+
+  const groups: (typeof rows)[] = []
+  rows.forEach((row) => {
+    const matching = groups.find((group) => {
+      const anchor = group[0]
+      return (
+        anchor.items.length === row.items.length &&
+        anchor.items.every(
+          (item, index) =>
+            Math.abs(item.rect.left - row.items[index].rect.left) <=
+            Math.max(24, item.rect.height * 2)
+        )
+      )
+    })
+    if (matching) matching.push(row)
+    else groups.push([row])
+  })
+
+  const best = groups
+    .filter((group) => group.length >= 3)
+    .sort(
+      (left, right) =>
+        right.length * right[0].items.length -
+        left.length * left[0].items.length
+    )[0]
+  if (!best) return []
+
+  return best.flatMap(({ items }) => {
+    const pairs: VisualPair[] = []
+    for (let index = 0; index < items.length; index += 2) {
+      // Repetition across at least three aligned rows is stronger evidence
+      // than interpreting two adjacent rows as labels-above-values.
+      const pair = makePair(items[index].tokens, items[index + 1].tokens, 7)
+      if (pair) pairs.push(pair)
+    }
+    return pairs
+  })
+}
+
 const alignedColumns = (
   upper: VisualLine,
   lower: VisualLine
@@ -656,6 +762,7 @@ export const buildVisualCandidate = (
   const lines = buildLines(snapshot.tokens)
   const pairs = deduplicatePairs([
     ...horizontalPairs(lines),
+    ...repeatedHorizontalPairs(lines),
     ...columnGridPairs(lines),
     ...sequentialVerticalPairs(lines)
   ])

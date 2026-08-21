@@ -200,8 +200,15 @@ an ancestor's `textContent`. It supports:
 - labels and values on the same visual row;
 - labels placed above values;
 - repeated unmarked vertical field blocks;
+- repeated two-column CSS Grid/Flex rows without semantic label elements;
 - multiple columns whose labels form a row above their values;
 - multiline values ending at the next strong label.
+
+Open Shadow DOM selections are resolved through composed ranges before the
+ordinary document range is considered. This is required by component-heavy
+pages such as VirusTotal, where the visible property table lives inside a
+custom element. If geometry is unavailable, a conservative text fallback also
+recognizes at least three alternating `label`/`value` lines without punctuation.
 
 A value selected on its own can be enriched only from a nearby explicit label
 (`label`, `dt`, `aria-labelledby`, a field marker, or a trailing colon).
@@ -231,6 +238,7 @@ fallback remains only for environments that expose no usable text rectangles.
 Any change to this pipeline must add positive and negative fixtures covering:
 
 - same-row and stacked fields;
+- repeated unmarked two-column grids and open Shadow DOM property tables;
 - multi-column stacked fields and multiline values;
 - a nearby heading/paragraph that must remain plain text;
 - visible values accompanied by hidden or semantic tooltips;
@@ -263,8 +271,9 @@ Run this matrix on all three browsers before a release:
    tables with only the selected rows/columns and their corresponding real
    headers (or neutral `Column N` fallbacks). Also cover a two-column property
    table, marked SIEM key/value fields, CEF or logfmt text, URLs, timestamps,
-   and IPv6. Also include horizontal fields, labels above values, multi-column
-   stacked fields, multiline values, an open hover tooltip, and a widget with
+   and IPv6. Also include horizontal fields, labels above values, a repeated
+   unmarked CSS Grid such as Spur, an open Shadow DOM property table such as
+   VirusTotal, multi-column stacked fields, multiline values, an open hover tooltip, and a widget with
    hidden tooltip or raw state. Confirm that only text intersecting the frozen
    rendered selection is copied. Confirm clipboard fallbacks work
    when the page Clipboard API is unavailable. The floating IOC result must copy

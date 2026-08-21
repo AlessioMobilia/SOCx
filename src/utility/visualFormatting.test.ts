@@ -74,6 +74,75 @@ describe("visual structural formatting", () => {
     expect(result?.coverage).toBe(1)
   })
 
+  it("infers a repeated two-column CSS grid without semantic labels", () => {
+    const result = format(
+      mount(`
+        <div id="root">
+          <p data-rect="100,100,110">Observed Risks</p><p data-rect="300,100,60">None</p>
+          <p data-rect="100,144,45">ASN</p><div><a data-rect="300,144,55">20940</a></div>
+          <p data-rect="100,188,100">Registered To</p><p data-rect="300,188,190">Akamai International B.V.</p>
+          <p data-rect="100,232,100">Exit Location</p><div><span data-rect="300,232,210">Rotterdam, South Holland, NL</span></div>
+        </div>
+      `)
+    )
+
+    expect(result?.pairs).toEqual([
+      ["Observed Risks", "None"],
+      ["ASN", "20940"],
+      ["Registered To", "Akamai International B.V."],
+      ["Exit Location", "Rotterdam, South Holland, NL"]
+    ])
+  })
+
+  it("uses composed ranges to read a key/value table inside an open shadow root", () => {
+    const host = document.createElement("section")
+    host.textContent = "retargeted host"
+    document.body.appendChild(host)
+    const shadow = host.attachShadow({ mode: "open" })
+    shadow.innerHTML = `
+      <div id="properties">
+        <span class="label" data-rect="100,100,80">Network</span><span data-rect="300,100,100">23.34.4.0/22</span>
+        <span class="label" data-rect="100,130,180">Autonomous System Number</span><span data-rect="300,130,60">20940</span>
+        <span class="label" data-rect="100,160,180">Autonomous System Label</span><span data-rect="300,160,190">Akamai International B.V.</span>
+      </div>
+    `
+    shadow.querySelectorAll<HTMLElement>("[data-rect]").forEach((element) => {
+      const [left, top, width] = element.dataset.rect!.split(",").map(Number)
+      element.getBoundingClientRect = () => makeRect(left, top, width)
+    })
+
+    const selection = select(host)
+    const first = shadow.querySelector(".label")!.firstChild!
+    const last =
+      shadow.querySelector("#properties")!.lastElementChild!.firstChild!
+    Object.defineProperty(selection, "getComposedRanges", {
+      configurable: true,
+      value: () => [
+        {
+          startContainer: first,
+          startOffset: 0,
+          endContainer: last,
+          endOffset: last.textContent!.length
+        } as unknown as StaticRange
+      ]
+    })
+
+    try {
+      const snapshot = captureVisualSelection(selection)!
+      expect(snapshot.tokens.map((token) => token.text)).not.toContain(
+        "retargeted host"
+      )
+      expect(buildVisualCandidate(snapshot)?.pairs).toEqual([
+        ["Network", "23.34.4.0/22"],
+        ["Autonomous System Number", "20940"],
+        ["Autonomous System Label", "Akamai International B.V."]
+      ])
+    } finally {
+      delete (selection as Selection & { getComposedRanges?: unknown })
+        .getComposedRanges
+    }
+  })
+
   it("keeps nested label fragments as one logical key", () => {
     const result = format(
       mount(`
