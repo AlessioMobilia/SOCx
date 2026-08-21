@@ -124,7 +124,7 @@ const formatMarkdownTable = (rows: string[][], headers?: string[]): string => {
 const removeNoise = (container: HTMLElement): void => {
   container
     .querySelectorAll(
-      "script, style, noscript, template, iframe, object, embed, svg, img, [hidden], [aria-hidden='true']"
+      "script, style, noscript, template, iframe, object, embed, svg, img, [hidden], [inert], [aria-hidden='true'], [role='tooltip'], [data-tippy-root]"
     )
     .forEach((element) => element.remove())
 
@@ -135,9 +135,26 @@ const removeNoise = (container: HTMLElement): void => {
       return
     }
 
-    const marker = `${element.id} ${element.className} ${element.getAttribute("data-testid") ?? ""}`
-    const isControl = element.matches("button, [role='button']")
-    if (isControl && /\b(copy|clipboard|expand|collapse)\b/i.test(marker)) {
+    const marker = [
+      element.id,
+      element.className,
+      element.getAttribute("data-testid"),
+      element.getAttribute("data-test"),
+      element.getAttribute("aria-label"),
+      element.getAttribute("title")
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .join(" ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+    const isControl = element.matches(
+      "button, [role='button'], [role='menuitem'], [role='checkbox'], [role='switch'], [role='tab']"
+    )
+    if (
+      isControl &&
+      /\b(copy|clipboard|expand|collapse|menu|more|sort|filter|help|info|close|dismiss|edit|delete|remove|toggle)\b/i.test(
+        marker
+      )
+    ) {
       element.remove()
     }
   })
@@ -477,11 +494,13 @@ const matrixCandidate = (matrix: Matrix): SmartFormatResult | null => {
       .size === normalizedRows.length
   const rowHeaderSignal =
     matrix.headers?.[0]?.toLowerCase().includes("field") === true
+  const spanningTitleSignal =
+    matrix.headers !== undefined && matrix.headers.filter(Boolean).length === 1
   const isKeyValue =
     columnCount === 2 &&
     firstColumnIsLabels &&
     firstColumnUnique &&
-    (!matrix.semanticHeaders || rowHeaderSignal)
+    (!matrix.semanticHeaders || rowHeaderSignal || spanningTitleSignal)
 
   if (isKeyValue) {
     return {
@@ -584,14 +603,51 @@ const extractSemanticPairs = (
     return null
   }
 
-  container.querySelectorAll("dt").forEach((term) => {
-    const value = term.nextElementSibling
-    if (!value?.matches("dd")) return
-    addPair(
-      readElementText(term as HTMLElement),
-      readElementText(value as HTMLElement)
+  const addDefinitionPairs = (
+    termSelector: string,
+    definitionSelector: string
+  ) => {
+    container.querySelectorAll<HTMLElement>(termSelector).forEach((term) => {
+      const values: string[] = []
+      let sibling = term.nextElementSibling
+      while (sibling?.matches(definitionSelector)) {
+        const value = readValueWithoutControls(sibling)
+        if (value) values.push(value)
+        sibling = sibling.nextElementSibling
+      }
+      addPair(readElementText(term), values.join(" "))
+    })
+  }
+
+  addDefinitionPairs("dt", "dd")
+  addDefinitionPairs("[role='term']", "[role='definition']")
+
+  container
+    .querySelectorAll<HTMLElement>(
+      "output[aria-labelledby], [role='group'][aria-labelledby], [role='listitem'][aria-labelledby], [data-field-value][aria-labelledby]"
     )
-  })
+    .forEach((element) => {
+      if (element.querySelector("[aria-labelledby]")) return
+      const ids = (element.getAttribute("aria-labelledby") ?? "")
+        .split(/\s+/)
+        .filter(Boolean)
+      const labels = ids
+        .map((id) => container.querySelector<HTMLElement>(`#${CSS.escape(id)}`))
+        .filter((label): label is HTMLElement => !!label)
+      const key = labels.map(readElementText).filter(Boolean).join(" ")
+      if (!isLikelyLabel(key)) return
+
+      const clone = element.cloneNode(true) as HTMLElement
+      ids.forEach((id) => clone.querySelector(`#${CSS.escape(id)}`)?.remove())
+      removeNoise(clone)
+      clone
+        .querySelectorAll(
+          "button, input, select, textarea, [role='button'], [role='checkbox'], [role='tab'], [role='switch']"
+        )
+        .forEach((control) => control.remove())
+      const value = cleanText(clone.textContent)
+      if (value.length <= 512) addPair(key, value)
+    })
 
   container.querySelectorAll<HTMLElement>("label").forEach((label) => {
     if (

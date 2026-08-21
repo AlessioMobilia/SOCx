@@ -220,6 +220,25 @@ filter so CSS-hidden descendants, action controls, and semantic tooltips do not
 leak into the clipboard. Attribute payloads such as `data-raw` and `data-json`
 are never considered selected visual values.
 
+The semantic fallback is tested as a matrix of recurring security-product
+structures rather than a list of vendor selectors:
+
+- native OSINT summary tables, including a section title spanning both columns;
+- label/value grids with empty separator elements and multiline values;
+- native and ARIA definition lists, including consecutive values and nested
+  detail cards;
+- atomic `aria-labelledby` groups, list items, outputs, and marked field values;
+- native and ARIA event tables, including clipped rows and contextual headers;
+- explicitly attributed fields used by SIEM event inspectors;
+- structured text commonly copied from consoles: JSON and partial JSON, CEF,
+  logfmt, TSV, and punctuated or alternating key/value lines.
+
+A section title is not treated as a column schema when it is the only populated
+header in a two-column table whose first column is a unique set of labels. Two
+real populated headers still produce a Markdown table. Semantic extraction also
+removes tooltip roots and action controls identified through role, test marker,
+title, or accessible name before reading a value.
+
 JSON is parsed in two stages. Valid objects and arrays are always parsed first
 without changing whitespace inside string values. A separate conservative
 recovery accepts recognizable property fragments: it can add a missing outer
@@ -247,6 +266,10 @@ Any change to this pipeline must add positive and negative fixtures covering:
 - mutation of the live page after the snapshot has been captured.
 - valid JSON with significant string whitespace, partial JSON, and malformed
   property-like prose that must not be recovered.
+- a genuine two-column event table that must not be collapsed into key/value
+  fields;
+- accessible detail groups plus definition lists containing badges, multiple
+  values, tooltip roots, and action controls.
 
 ## Cross-browser manual test matrix
 
