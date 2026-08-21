@@ -1,6 +1,6 @@
 {
   "schema": "socx.dialects/v1",
-  "version": "2026-08-19",
+  "version": "2026-08-21",
   "description": "Query language definitions used by SOCx query packs. A dialect describes how a query language quotes, escapes and joins values. It never contains executable code: the escape strategy is a fixed identifier implemented inside the extension.",
   "dialects": [
     {
@@ -38,11 +38,7 @@
     {
       "id": "spl",
       "label": "Search Processing Language (Splunk)",
-      "vendors": [
-        "Splunk Enterprise",
-        "Splunk Cloud",
-        "CrowdStrike Falcon Event Search"
-      ],
+      "vendors": ["Splunk Enterprise", "Splunk Cloud"],
       "statementStyle": "piped",
       "escape": "backslash",
       "quote": "\"",

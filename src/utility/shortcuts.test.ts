@@ -1,11 +1,16 @@
 import { existsSync, readFileSync } from "node:fs"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   commandPage,
+  DEFAULT_QUERY_SHORTCUT,
+  DEFAULT_SMART_FORMAT_SHORTCUT,
+  firefoxDefaultShortcutUpdates,
+  openShortcutManager,
   QUERY_COMMAND,
   SHORTCUT_COMMANDS,
-  shortcutSettingsUrl
+  shortcutSettingsUrl,
+  SMART_FORMAT_COMMAND
 } from "./shortcuts"
 
 const manifestCommands = (): Record<
@@ -29,12 +34,18 @@ describe("shortcut catalogue", () => {
     }
   })
 
-  it("ships only the palette bound, so nothing is taken by surprise", () => {
+  it("ships defaults for the two in-page commands", () => {
     const declared = manifestCommands()
     const withDefaults = Object.entries(declared)
       .filter(([, command]) => command.suggested_key)
       .map(([id]) => id)
-    expect(withDefaults).toEqual([QUERY_COMMAND])
+    expect(withDefaults).toEqual([QUERY_COMMAND, SMART_FORMAT_COMMAND])
+    expect(declared[QUERY_COMMAND].suggested_key?.default).toBe(
+      DEFAULT_QUERY_SHORTCUT
+    )
+    expect(declared[SMART_FORMAT_COMMAND].suggested_key?.default).toBe(
+      DEFAULT_SMART_FORMAT_SHORTCUT
+    )
   })
 
   it("points every command at a page that exists", () => {
@@ -48,8 +59,9 @@ describe("shortcut catalogue", () => {
     }
   })
 
-  it("has no page for the palette, which opens in the current tab", () => {
+  it("has no page for commands that act in the current tab", () => {
     expect(commandPage(QUERY_COMMAND)).toBeUndefined()
+    expect(commandPage(SMART_FORMAT_COMMAND)).toBeUndefined()
   })
 
   it("routes each browser to its native shortcut manager", () => {
@@ -60,5 +72,79 @@ describe("shortcut catalogue", () => {
     expect(shortcutSettingsUrl(false, "Chrome/140.0")).toBe(
       "chrome://extensions/shortcuts"
     )
+  })
+
+  it("uses Firefox's dedicated shortcut manager API", async () => {
+    const openFirefoxSettings = vi.fn(async () => undefined)
+    const openTab = vi.fn()
+
+    await openShortcutManager(
+      { openFirefoxSettings, openTab, readLastError: () => undefined },
+      true,
+      "Firefox/147"
+    )
+
+    expect(openFirefoxSettings).toHaveBeenCalledOnce()
+    expect(openFirefoxSettings).toHaveBeenCalledWith()
+    expect(openTab).not.toHaveBeenCalled()
+  })
+
+  it("migrates only Firefox shortcuts matching previously shipped defaults", () => {
+    expect(
+      firefoxDefaultShortcutUpdates([
+        { name: QUERY_COMMAND, shortcut: "Ctrl+Shift+K" },
+        { name: SMART_FORMAT_COMMAND, shortcut: "Alt + Shift + F" },
+        { name: "open-bulk-check", shortcut: "Ctrl+Shift+B" }
+      ])
+    ).toEqual([
+      { name: QUERY_COMMAND, shortcut: DEFAULT_QUERY_SHORTCUT },
+      {
+        name: SMART_FORMAT_COMMAND,
+        shortcut: DEFAULT_SMART_FORMAT_SHORTCUT
+      }
+    ])
+  })
+
+  it("preserves custom and disabled Firefox shortcuts", () => {
+    expect(
+      firefoxDefaultShortcutUpdates([
+        { name: QUERY_COMMAND, shortcut: "Ctrl+Shift+7" },
+        { name: SMART_FORMAT_COMMAND, shortcut: "" },
+        { name: "open-bulk-check" }
+      ])
+    ).toEqual([])
+  })
+
+  it("also migrates the interim Firefox query shortcut from 1.4.1", () => {
+    expect(
+      firefoxDefaultShortcutUpdates([
+        { name: QUERY_COMMAND, shortcut: "Alt+Shift+Q" }
+      ])
+    ).toEqual([{ name: QUERY_COMMAND, shortcut: DEFAULT_QUERY_SHORTCUT }])
+  })
+
+  it("opens Chromium's shortcut page in a tab", async () => {
+    const openTab = vi.fn((_url: string, callback: () => void) => callback())
+
+    await openShortcutManager(
+      { openTab, readLastError: () => undefined },
+      false,
+      "Edg/147"
+    )
+
+    expect(openTab).toHaveBeenCalledWith(
+      "edge://extensions/shortcuts",
+      expect.any(Function)
+    )
+  })
+
+  it("gives actionable guidance on Firefox versions without the manager API", async () => {
+    await expect(
+      openShortcutManager(
+        { openTab: vi.fn(), readLastError: () => undefined },
+        true,
+        "Firefox/136"
+      )
+    ).rejects.toThrow("Manage Extension Shortcuts")
   })
 })

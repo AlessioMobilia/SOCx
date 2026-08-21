@@ -186,6 +186,96 @@ selection parsing, add a fixture for both the newly supported markup and a
 nearby case that must remain unmodified, such as URLs, timestamps, IPv6 values,
 empty table cells, or clipped first/last rows.
 
+### Smart-formatting architecture
+
+The browser path is visual-first. The content script freezes an immutable
+selection snapshot as soon as the Range changes, before hover tooltips,
+virtualized rows, or other page mutations can alter it. The snapshot records
+only selected, rendered text nodes together with their rectangles, styles, DOM
+order, and conservative label signals.
+
+`visualFormatting.ts` reconstructs field relationships rather than flattening
+an ancestor's `textContent`. It supports:
+
+- labels and values on the same visual row;
+- labels placed above values;
+- repeated unmarked vertical field blocks;
+- repeated two-column CSS Grid/Flex rows without semantic label elements;
+- multiple columns whose labels form a row above their values;
+- multiline values ending at the next strong label.
+
+Open Shadow DOM selections are resolved through composed ranges before the
+ordinary document range is considered. This is required by component-heavy
+pages such as VirusTotal, where the visible property table lives inside a
+custom element. If geometry is unavailable, a conservative text fallback also
+recognizes at least three alternating `label`/`value` lines without punctuation.
+
+Product field markers are captured before the visual reconstruction. This
+includes Splunk event tokens (`.key.level-*` with `.key-name` and `.t`
+children), so inline log fields keep their key/value relationship even when
+the browser exposes usable text geometry.
+
+A value selected on its own can be enriched only from a nearby explicit label
+(`label`, `dt`, `aria-labelledby`, a field marker, or a trailing colon).
+Surrounding values are never pulled into the selection.
+
+Native tables, ARIA grids, and explicitly marked product fields retain their
+strong semantics. Their values are nevertheless read through the rendered-text
+filter so CSS-hidden descendants, action controls, and semantic tooltips do not
+leak into the clipboard. Attribute payloads such as `data-raw` and `data-json`
+are never considered selected visual values.
+
+The semantic fallback is tested as a matrix of recurring security-product
+structures rather than a list of vendor selectors:
+
+- native OSINT summary tables, including a section title spanning both columns;
+- label/value grids with empty separator elements and multiline values;
+- native and ARIA definition lists, including consecutive values and nested
+  detail cards;
+- atomic `aria-labelledby` groups, list items, outputs, and marked field values;
+- native and ARIA event tables, including clipped rows and contextual headers;
+- explicitly attributed fields used by SIEM event inspectors;
+- structured text commonly copied from consoles: JSON and partial JSON, CEF,
+  logfmt, TSV, and punctuated or alternating key/value lines.
+
+A section title is not treated as a column schema when it is the only populated
+header in a two-column table whose first column is a unique set of labels. Two
+real populated headers still produce a Markdown table. Semantic extraction also
+removes tooltip roots and action controls identified through role, test marker,
+title, or accessible name before reading a value.
+
+JSON is parsed in two stages. Valid objects and arrays are always parsed first
+without changing whitespace inside string values. A separate conservative
+recovery accepts recognizable property fragments: it can add a missing outer
+object, close unfinished objects or arrays, remove trailing commas, decode
+copied HTML whitespace entities, and normalize padded keys/values or `*,*`
+comma markers. Recovery still ends in `JSON.parse`; broken strings, missing
+values, mismatched delimiters, and property-like prose are not guessed.
+
+Visual candidates must cover at least 70% of the selected rendered text. A
+single horizontal field or explicit vertical label may be accepted at high
+coverage; weak vertical inference requires a repeated pattern. When geometry
+is available but no interpretation is sufficiently safe, SOCx returns the
+frozen rendered text instead of parsing a wider ancestor. The older semantic
+fallback remains only for environments that expose no usable text rectangles.
+
+Any change to this pipeline must add positive and negative fixtures covering:
+
+- same-row and stacked fields;
+- repeated unmarked two-column grids and open Shadow DOM property tables;
+- multi-column stacked fields and multiline values;
+- a nearby heading/paragraph that must remain plain text;
+- visible values accompanied by hidden or semantic tooltips;
+- internal `data-raw`/`data-json` payloads containing fields such as `origin`
+  or serialized HTML;
+- mutation of the live page after the snapshot has been captured.
+- valid JSON with significant string whitespace, partial JSON, and malformed
+  property-like prose that must not be recovered.
+- a genuine two-column event table that must not be collapsed into key/value
+  fields;
+- accessible detail groups plus definition lists containing badges, multiple
+  values, tooltip roots, and action controls.
+
 ## Cross-browser manual test matrix
 
 Run this matrix on all three browsers before a release:
@@ -209,13 +299,25 @@ Run this matrix on all three browsers before a release:
    tables with only the selected rows/columns and their corresponding real
    headers (or neutral `Column N` fallbacks). Also cover a two-column property
    table, marked SIEM key/value fields, CEF or logfmt text, URLs, timestamps,
-   and IPv6. Confirm clipboard fallbacks work
+   and IPv6. Also include horizontal fields, labels above values, a repeated
+   unmarked CSS Grid such as Spur, an open Shadow DOM property table such as
+   VirusTotal, multi-column stacked fields, multiline values, an open hover tooltip, and a widget with
+   hidden tooltip or raw state. Confirm that only text intersecting the frozen
+   rendered selection is copied. Confirm clipboard fallbacks work
    when the page Clipboard API is unavailable. The floating IOC result must copy
    the same single-entry report as Bulk Check's Copy formatted, without provider
    headings. Confirm the shared fallback and success/error feedback work from
    Bulk Check and both subnet tools. Toasts
    must remain readable on light/dark host pages, stay above SOCx overlays, and
-   fit narrow popup viewports without inheriting host-page button styles.
+   fit narrow popup viewports without inheriting host-page button styles. With
+   the selection still active, press the default smart-format shortcut
+   (`Ctrl+Shift+Period`), then reassign it from Options and verify the new
+   combination.
+   On Firefox, also verify that **Customize shortcuts** opens Manage Extension
+   Shortcuts with SOCx highlighted and that `Ctrl+Shift+Comma` opens the query
+   palette; `Ctrl+Shift+K` is reserved by Firefox for its Web Console. When
+   upgrading from 1.4.1 or earlier, verify that only the old SOCx defaults are
+   migrated and that disabled or customized bindings remain unchanged.
 6. Run Bulk Check with valid keys, without keys, and with a mixed/duplicate IOC
    list. An IP-only list must preselect AbuseIPDB without VirusTotal; mixed lists
    must still select the providers needed by their other IOC types. Confirm errors

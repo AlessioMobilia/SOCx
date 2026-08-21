@@ -462,22 +462,26 @@ A variable another template in the same file uses is simply not shown.
 ```json
 "variables": [
   { "id": "range", "label": "Time range", "default": "7d", "options": ["1d", "7d", "30d"] },
-  { "id": "index", "label": "Index", "default": "main", "description": "Splunk index to search" }
+  { "id": "index", "label": "Index", "default": "main", "description": "Splunk index to search" },
+  { "id": "summariesonly", "label": "Summaries only", "type": "checkbox", "default": "true" }
 ]
 ```
 
-| Field         | Required | Notes                                            |
-| ------------- | -------- | ------------------------------------------------ |
-| `id`          | **yes**  | `^[a-z0-9][a-z0-9-]{0,63}$`, unique in the pack. |
-| `label`       | **yes**  | ≤ 120 chars.                                     |
-| `default`     | no       | ≤ 500 chars. Used until the analyst changes it.  |
-| `options`     | no       | ≤ 200 values; offered as a choice list.          |
-| `description` | no       | ≤ 500 chars.                                     |
+| Field         | Required | Notes                                                      |
+| ------------- | -------- | ---------------------------------------------------------- |
+| `id`          | **yes**  | `^[a-z0-9][a-z0-9-]{0,63}$`, unique in the pack.           |
+| `label`       | **yes**  | ≤ 120 chars.                                               |
+| `type`        | no       | `"text"` (default) or `"checkbox"`.                        |
+| `default`     | no       | ≤ 500 chars. Checkbox defaults are `"true"` or `"false"`.  |
+| `options`     | no       | ≤ 200 values; offered as a choice list for non-checkboxes. |
+| `description` | no       | ≤ 500 chars.                                               |
 
 Rules:
 
 - Referencing an undeclared variable is an **error**.
 - A variable with no `default` renders as an empty string until it is filled in.
+- A checkbox renders the literal string `true` or `false` into the query and
+  cannot also declare `options`.
 - Variable values are inserted verbatim — they are **not** quoted or escaped, so
   keep them to structural fragments (`7d`, `main`, `index=web`), never
   attacker‑controlled data.

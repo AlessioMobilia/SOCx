@@ -2,6 +2,7 @@ import {
   SELECTION_BUTTONS_MESSAGE,
   SERVICE_PAGE_COPY_BUTTONS_MESSAGE
 } from "../utility/buttonPreferences"
+import { resolveActiveTab } from "../utility/extensionCallbacks"
 import {
   DEFAULT_QUERY_MENU_ENABLED,
   OPEN_QUERY_PALETTE_MESSAGE,
@@ -9,7 +10,12 @@ import {
   resolveBooleanPreference
 } from "../utility/query/paletteBridge"
 import { refreshAllSources } from "../utility/query/registry"
-import { commandPage, QUERY_COMMAND } from "../utility/shortcuts"
+import {
+  commandPage,
+  firefoxDefaultShortcutUpdates,
+  QUERY_COMMAND,
+  SMART_FORMAT_COMMAND
+} from "../utility/shortcuts"
 import { handleMenuClick } from "./menu-handler"
 import { getContextMenuApi, setupContextMenus } from "./menus"
 import { setupQueryMenus } from "./query-menus"
@@ -21,7 +27,17 @@ type ChromiumExtensionApi = typeof chrome & {
   }
 }
 
+type FirefoxCommandsApi = {
+  getAll: () => Promise<chrome.commands.Command[]>
+  update: (details: { name: string; shortcut: string }) => Promise<void>
+}
+
 const extensionApi = chrome as ChromiumExtensionApi
+const firefoxCommands = (
+  globalThis as typeof globalThis & {
+    browser?: { commands?: FirefoxCommandsApi }
+  }
+).browser?.commands
 const contextMenuApi = getContextMenuApi()
 const manifest = chrome.runtime.getManifest() as chrome.runtime.Manifest & {
   browser_specific_settings?: { gecko?: { id?: string } }
@@ -66,11 +82,29 @@ const scheduleContextMenuSetup = (reason: string): Promise<void> => {
   return contextMenuSetup
 }
 
+const migrateFirefoxDefaultShortcuts = async (): Promise<void> => {
+  if (!firefoxCommands) return
+  const commands = await firefoxCommands.getAll()
+  for (const update of firefoxDefaultShortcutUpdates(commands)) {
+    try {
+      await firefoxCommands.update(update)
+    } catch (error) {
+      console.warn(`Unable to migrate shortcut ${update.name}:`, error)
+    }
+  }
+}
+
 /** Opens the palette in the active tab, falling back to the SOCx query page. */
 const openPaletteInActiveTab = async (
-  body: Record<string, unknown> = {}
+  body: Record<string, unknown> = {},
+  commandTab?: chrome.tabs.Tab
 ): Promise<void> => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  const tab = await resolveActiveTab(
+    commandTab,
+    (callback) =>
+      chrome.tabs.query({ active: true, currentWindow: true }, callback),
+    () => chrome.runtime.lastError
+  )
   if (typeof tab?.id !== "number") return
 
   chrome.tabs.sendMessage(
@@ -86,6 +120,28 @@ const openPaletteInActiveTab = async (
   )
 }
 
+const formatSelectionInActiveTab = async (
+  commandTab?: chrome.tabs.Tab
+): Promise<void> => {
+  const tab = await resolveActiveTab(
+    commandTab,
+    (callback) =>
+      chrome.tabs.query({ active: true, currentWindow: true }, callback),
+    () => chrome.runtime.lastError
+  )
+  if (typeof tab?.id !== "number") return
+
+  chrome.tabs.sendMessage(
+    tab.id,
+    { name: "format-selection", silentWhenEmpty: true },
+    () => {
+      // Restricted browser pages do not host the content script. The command
+      // remains a no-op there instead of opening an unrelated extension page.
+      void chrome.runtime.lastError
+    }
+  )
+}
+
 // Firefox uses a persistent MV2 background page, where menus should also be
 // registered at top level. This repairs installs where onInstalled was missed.
 if (isFirefox) {
@@ -93,7 +149,7 @@ if (isFirefox) {
 }
 
 // Eseguito al primo avvio o aggiornamento dell'estensione
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   try {
     if (!isFirefox && extensionApi.sidePanel?.setOptions) {
       await extensionApi.sidePanel.setOptions({ enabled: true })
@@ -103,6 +159,18 @@ chrome.runtime.onInstalled.addListener(async () => {
     // are respected: an upstream change is reported, never silently adopted.
     await refreshAllSources()
     await scheduleContextMenuSetup("extension install/update")
+
+    // Firefox retains the effective shortcuts across extension updates. Only
+    // replace combinations shipped as SOCx defaults through 1.4.1; custom and
+    // disabled commands remain untouched.
+    if (
+      isFirefox &&
+      details.reason === "update" &&
+      details.previousVersion &&
+      /^1\.(?:[0-3](?:\.|$)|4\.[01](?:\.|$))/.test(details.previousVersion)
+    ) {
+      await migrateFirefoxDefaultShortcuts()
+    }
   } catch (e) {
     console.error("Error during onInstalled setup:", e)
   }
@@ -121,13 +189,17 @@ contextMenuApi.onClicked.addListener((info, tab) => {
   }
 })
 
-// Keyboard shortcuts. Only the palette ships with a suggested combination; the
-// others stay unbound until the analyst assigns one from the browser shortcuts
-// page, which is also the only place a combination can be changed.
+// Keyboard shortcuts are changed from the browser shortcuts page linked in
+// Options. In-page commands act on the active tab; workspace commands open a
+// dedicated extension page.
 if (chrome.commands?.onCommand) {
-  chrome.commands.onCommand.addListener((command) => {
+  chrome.commands.onCommand.addListener((command, tab) => {
     if (command === QUERY_COMMAND) {
-      void openPaletteInActiveTab()
+      void openPaletteInActiveTab({}, tab)
+      return
+    }
+    if (command === SMART_FORMAT_COMMAND) {
+      void formatSelectionInActiveTab(tab)
       return
     }
     const page = commandPage(command)

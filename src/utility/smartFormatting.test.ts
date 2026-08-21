@@ -1,11 +1,46 @@
 import { describe, expect, it } from "vitest"
 
-import { formatSmartContainer, formatSmartSelection } from "./smartFormatting"
+import {
+  captureSmartSelection,
+  formatSmartContainer,
+  formatSmartSelection,
+  formatSmartSelectionSnapshot
+} from "./smartFormatting"
 
 const fromHtml = (html: string): HTMLElement => {
   const container = document.createElement("div")
   container.innerHTML = html
   return container
+}
+
+const setRect = (
+  element: HTMLElement,
+  left: number,
+  top: number,
+  width: number,
+  height: number = 18
+) => {
+  element.getBoundingClientRect = () =>
+    ({
+      x: left,
+      y: top,
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      width,
+      height,
+      toJSON: () => ({})
+    }) as DOMRect
+}
+
+const selectContents = (element: Element): Selection => {
+  const range = document.createRange()
+  range.selectNodeContents(element)
+  const selection = window.getSelection()!
+  selection.removeAllRanges()
+  selection.addRange(range)
+  return selection
 }
 
 describe("smart formatting", () => {
@@ -16,6 +51,74 @@ describe("smart formatting", () => {
 
     expect(result?.kind).toBe("json")
     expect(result?.text).toContain('"message": "keep   these spaces"')
+  })
+
+  it("recovers a partial JSON object with encoded indentation and missing braces", () => {
+    const source = document.createElement("pre")
+    source.textContent = [
+      '&#x20; "ip": "73.115.85.232",',
+      '&#x20; "geo": {',
+      '&#x20;   "city": "Houston",',
+      '&#x20;   "region": "Texas",',
+      '&#x20;   "region\\_code": "TX",',
+      '&#x20;   "latitude": 29.76328,'
+    ].join("\n")
+
+    const result = formatSmartContainer(source)
+
+    expect(result?.kind).toBe("partial-json")
+    expect(result?.text).toBe(
+      [
+        "```json",
+        "{",
+        '  "ip": "73.115.85.232",',
+        '  "geo": {',
+        '    "city": "Houston",',
+        '    "region": "Texas",',
+        '    "region_code": "TX",',
+        '    "latitude": 29.76328',
+        "  }",
+        "}",
+        "```"
+      ].join("\n")
+    )
+  })
+
+  it("normalizes padded partial JSON fields and copied comma markers", () => {
+    const result = formatSmartContainer(
+      fromHtml(`<pre>
+        " ip ": " 73.115.85.232 " *,*
+        " geo ": {
+        " city ": " Houston " *,*
+        " country_code ": " US " *,*
+        " pattern ": " a*,*b " *,*
+        " latitude ": 29.76328 ,
+      </pre>`)
+    )
+
+    expect(result?.kind).toBe("partial-json")
+    expect(result?.text).toContain('"ip": "73.115.85.232"')
+    expect(result?.text).toContain('"city": "Houston"')
+    expect(result?.text).toContain('"country_code": "US"')
+    expect(result?.text).toContain('"pattern": "a*,*b"')
+    expect(result?.text).toContain('"latitude": 29.76328')
+  })
+
+  it("closes an unfinished array inside a partial object", () => {
+    const result = formatSmartContainer(
+      fromHtml('<pre>"host": "edge-01",\n"ports": [80, 443,</pre>')
+    )
+
+    expect(result?.kind).toBe("partial-json")
+    expect(result?.text).toContain('"ports": [\n    80,\n    443\n  ]')
+  })
+
+  it("does not classify property-like prose as partial JSON", () => {
+    const result = formatSmartContainer(
+      fromHtml('<pre>Analyst note\n"message": not actually JSON</pre>')
+    )
+
+    expect(result?.kind).not.toBe("partial-json")
   })
 
   it("formats explicit EDR key/value rows without splitting URLs, IPv6 or timestamps", () => {
@@ -30,6 +133,43 @@ describe("smart formatting", () => {
     expect(result?.text).toContain("URL:         https://example.test/a:b")
     expect(result?.text).toContain("IPv6:        2001:db8::1")
     expect(result?.text).toContain("Time:        12:45:20")
+  })
+
+  it("parses alternating key and value lines copied without punctuation", () => {
+    const result = formatSmartContainer(
+      fromHtml(`<pre>Network
+23.34.4.0/22
+Autonomous System Number
+20940
+Autonomous System Label
+Akamai International B.V.
+Regional Internet Registry
+ARIN
+Country
+US
+Continent
+NA</pre>`)
+    )
+
+    expect(result?.kind).toBe("text-key-value")
+    expect(result?.text).toContain("Network:                    23.34.4.0/22")
+    expect(result?.text).toContain(
+      "Autonomous System Label:    Akamai International B.V."
+    )
+    expect(result?.text).toContain("Continent:                  NA")
+  })
+
+  it("does not alternate ordinary heading and paragraph prose", () => {
+    const result = formatSmartContainer(
+      fromHtml(`<article>First finding
+The analyst reviewed the original alert.
+Next action
+The team isolated the affected device.
+Final note
+The investigation remains open.</article>`)
+    )
+
+    expect(result).toBeNull()
   })
 
   it("uses contextual headers for a grid selection whose header was clipped", () => {
@@ -98,7 +238,9 @@ describe("smart formatting", () => {
 
   it("detects TSV tables without discarding delimiters", () => {
     const result = formatSmartContainer(
-      fromHtml("<pre>Device\tProcess\tSeverity\nhost-23\tWINWORD.EXE\tHigh</pre>")
+      fromHtml(
+        "<pre>Device\tProcess\tSeverity\nhost-23\tWINWORD.EXE\tHigh</pre>"
+      )
     )
 
     expect(result?.kind).toBe("delimited-table")
@@ -147,5 +289,172 @@ describe("smart formatting", () => {
     const result = formatSmartSelection(selection)
     expect(result?.text).toContain("| Device | Severity |")
     expect(result?.text).toContain("| host-23 | High |")
+  })
+
+  it("formats Splunk event tokens even when rendered geometry is available", () => {
+    document.body.innerHTML = `
+      <div id="splunk-event">
+        <span class="key level-0">
+          <span class="key-name">src_ip</span>=<span class="t">203.0.113.24</span>
+        </span>
+        <span class="key level-0">
+          <span class="key-name">action</span>=<span class="t">blocked</span>
+        </span>
+      </div>
+    `
+    setRect(
+      document.querySelectorAll<HTMLElement>(".key-name")[0],
+      100,
+      100,
+      45
+    )
+    setRect(document.querySelectorAll<HTMLElement>(".t")[0], 155, 100, 95)
+    setRect(
+      document.querySelectorAll<HTMLElement>(".key-name")[1],
+      270,
+      100,
+      45
+    )
+    setRect(document.querySelectorAll<HTMLElement>(".t")[1], 325, 100, 55)
+
+    const keyNames = document.querySelectorAll<HTMLElement>(".key-name")
+    const values = document.querySelectorAll<HTMLElement>(".t")
+    const range = document.createRange()
+    range.setStart(keyNames[0].firstChild!, 0)
+    range.setEnd(values[1].firstChild!, values[1].textContent!.length)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const result = formatSmartSelection(selection)
+
+    expect(result?.kind).toBe("semantic-key-value")
+    expect(result?.text).toBe("src_ip: 203.0.113.24\naction: blocked")
+  })
+
+  it("does not treat generic key-name and value classes as Splunk fields", () => {
+    const result = formatSmartContainer(
+      fromHtml(
+        '<p><span class="key-name">Investigation summary</span> <span class="t">The analyst reviewed the event.</span></p>'
+      )
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it("formats stacked visual fields from an immutable snapshot", () => {
+    document.body.innerHTML = `
+      <div id="visual-root">
+        <div id="host-label" class="field-label">Host</div>
+        <div id="host-value">pc-01</div>
+        <div id="user-label" class="field-label">User</div>
+        <div id="user-value">alice</div>
+      </div>
+    `
+    setRect(document.getElementById("host-label")!, 100, 100, 70)
+    setRect(document.getElementById("host-value")!, 100, 124, 90)
+    setRect(document.getElementById("user-label")!, 100, 165, 70)
+    setRect(document.getElementById("user-value")!, 100, 189, 90)
+    const root = document.getElementById("visual-root")!
+    const snapshot = captureSmartSelection(selectContents(root))!
+
+    document.getElementById("host-value")!.textContent = "mutated-host"
+    root.insertAdjacentHTML(
+      "beforeend",
+      '<div role="tooltip">Late tooltip</div>'
+    )
+
+    const result = formatSmartSelectionSnapshot(snapshot)
+    expect(result?.kind).toBe("visual-key-value")
+    expect(result?.text).toBe("Host: pc-01\nUser: alice")
+  })
+
+  it("does not prefer internal raw state over rendered selected fields", () => {
+    document.body.innerHTML = `
+      <div id="raw-root" data-raw='{"origin":"widget","html":"<div class=tooltip>Help</div>"}'>
+        <strong id="raw-label">Host</strong>
+        <span id="raw-value">pc-01</span>
+      </div>
+    `
+    setRect(document.getElementById("raw-label")!, 100, 100, 60)
+    setRect(document.getElementById("raw-value")!, 240, 100, 80)
+    const snapshot = captureSmartSelection(
+      selectContents(document.getElementById("raw-root")!)
+    )!
+
+    const result = formatSmartSelectionSnapshot(snapshot)
+    expect(result?.kind).toBe("visual-key-value")
+    expect(result?.text).toBe("Host: pc-01")
+    expect(result?.text).not.toContain("origin")
+    expect(result?.text).not.toContain("tooltip")
+  })
+
+  it("uses an explicit label above a value selected on its own", () => {
+    document.body.innerHTML = `
+      <div>
+        <div class="field-label">Host</div>
+        <div id="only-value">pc-01</div>
+      </div>
+    `
+    setRect(document.querySelector(".field-label")!, 100, 100, 70)
+    setRect(document.getElementById("only-value")!, 100, 126, 90)
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("only-value")!)
+    )
+    expect(result?.kind).toBe("visual-key-value")
+    expect(result?.text).toBe("Host: pc-01")
+  })
+
+  it("uses aria-labelledby without copying the surrounding widget", () => {
+    document.body.innerHTML = `
+      <div>
+        <span id="host-name">Host</span>
+        <div id="aria-value" aria-labelledby="host-name">pc-01</div>
+        <div role="tooltip">Internal help</div>
+      </div>
+    `
+    setRect(document.getElementById("aria-value")!, 100, 126, 90)
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("aria-value")!)
+    )
+    expect(result?.text).toBe("Host: pc-01")
+    expect(result?.text).not.toContain("Internal help")
+  })
+
+  it("does not use an unrelated preceding heading as contextual metadata", () => {
+    document.body.innerHTML = `
+      <article>
+        <strong>Investigation summary</strong>
+        <p id="summary-value">The user opened a suspicious attachment.</p>
+      </article>
+    `
+    setRect(document.getElementById("summary-value")!, 100, 126, 420)
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("summary-value")!)
+    )
+    expect(result).toBeNull()
+  })
+
+  it("excludes CSS-hidden tooltip text from selected table cells", () => {
+    document.head.innerHTML = "<style>.css-hidden { display: none; }</style>"
+    document.body.innerHTML = `
+      <table>
+        <thead><tr><th>Field</th><th>Value</th></tr></thead>
+        <tbody><tr><td id="field">Host</td><td id="value">pc-01<span class="css-hidden">Internal help</span></td></tr></tbody>
+      </table>
+    `
+    const range = document.createRange()
+    range.setStart(document.getElementById("field")!.firstChild!, 0)
+    range.setEnd(document.getElementById("value")!.firstChild!, 5)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const result = formatSmartSelection(selection)
+    expect(result?.text).toContain("pc-01")
+    expect(result?.text).not.toContain("Internal help")
   })
 })

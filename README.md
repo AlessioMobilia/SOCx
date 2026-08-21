@@ -87,7 +87,10 @@ You can install SOCx directly from your browser’s official store:
 - ✨ **Smart selection formatting**
   Selected EDR, SIEM, OSINT, JSON, CEF, logfmt, key/value, CSV, HTML table, and
   ARIA grid data can be normalized for copying. Partial table selections reuse
-  real headers when available and otherwise use neutral column names.
+  real headers when available and otherwise use neutral column names. Generic
+  dashboards are reconstructed from the rendered selection, including fields
+  whose labels sit above their values, without copying hidden tooltips or
+  internal widget state.
 
 - 🧩 **Query packs for SIEM and EDR hunting**
   SOCx ships the [SOCx query packs](https://github.com/AlessioMobilia/socx-query-packs)
@@ -206,12 +209,12 @@ branch when you want reproducibility.
 
 The in-page palette never appears on its own. It opens only when you ask for it:
 
-- the keyboard shortcut (`Ctrl+Shift+K` by default); the **Keyboard shortcuts**
-  section of the settings lists every SOCx window that can be opened from the
-  keyboard — palette, Bulk IOC check, Query workspace, Rule builder, Subnet
-  extractor, Subnet abuse check — shows the binding of each and links to the
-  browser page where they are assigned. Only the palette has a default: the
-  others start disabled so nothing is taken from the console you are on;
+- the keyboard shortcut (`Ctrl+Shift+Comma` by default); the **Keyboard shortcuts**
+  section of the settings lists every SOCx action available from the keyboard,
+  shows its current binding and links to the browser page where combinations
+  are reassigned. The query palette and **Smart format selection**
+  (`Ctrl+Shift+Period`) have defaults; workspace commands start disabled so nothing
+  else is taken from the console you are on;
 - the **Insert query** submenu inside editable fields or selected text.
 
 The palette is not a long list to scroll: a filter bar narrows it down by
@@ -294,10 +297,17 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.3.1 release notes](docs/RELEASE_NOTES_1.3.1.md) for the newest
-fixes, the [1.3.0 notes](docs/RELEASE_NOTES_1.3.0.md) for HTTP repositories and
-the pack format reference, the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
-catalogue work, and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query
+See the [SOCx 1.4.3 release notes](docs/RELEASE_NOTES_1.4.3.md) for checkbox
+query variables and the safer public query catalogue; the [1.4.2
+notes](docs/RELEASE_NOTES_1.4.2.md) for Splunk smart formatting and Firefox
+shortcut migration fixes; the [1.4.1
+notes](docs/RELEASE_NOTES_1.4.1.md) for Firefox shortcut support; the [1.4.0
+notes](docs/RELEASE_NOTES_1.4.0.md) for visual smart formatting, partial JSON
+recovery and the formatting shortcut; the [1.3.1
+notes](docs/RELEASE_NOTES_1.3.1.md) for query rendering fixes; the [1.3.0
+notes](docs/RELEASE_NOTES_1.3.0.md) for HTTP repositories and the pack format
+reference; the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
+catalogue work; and the [1.1.0 notes](docs/RELEASE_NOTES_1.1.0.md) for the query
 pack foundations, safety model and validation scope.
 
 SOCx uses Node.js 22.13+ and pnpm 11.19.0. Install dependencies with the

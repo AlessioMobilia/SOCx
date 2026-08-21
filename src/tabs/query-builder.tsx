@@ -455,7 +455,7 @@ const QueryBuilder = () => {
               {(draft.variables ?? []).map((variable, index) => (
                 <div
                   key={`${variable.id}-${index}`}
-                  className="grid gap-2 sm:grid-cols-5">
+                  className="grid gap-2 sm:grid-cols-6">
                   <input
                     className={input}
                     placeholder="id"
@@ -472,20 +472,60 @@ const QueryBuilder = () => {
                       updateVariable(index, { label: event.target.value })
                     }
                   />
-                  <input
+                  <select
                     className={input}
-                    placeholder="default"
-                    value={variable.default ?? ""}
-                    onChange={(event) =>
-                      updateVariable(index, {
-                        default: event.target.value || undefined
-                      })
-                    }
-                  />
+                    aria-label={`Input type for ${variable.label}`}
+                    value={variable.type ?? "text"}
+                    onChange={(event) => {
+                      if (event.target.value === "checkbox") {
+                        updateVariable(index, {
+                          type: "checkbox",
+                          default:
+                            variable.default === "true" ||
+                            variable.default === "false"
+                              ? variable.default
+                              : "false",
+                          options: undefined
+                        })
+                      } else {
+                        updateVariable(index, { type: undefined })
+                      }
+                    }}>
+                    <option value="text">Text / select</option>
+                    <option value="checkbox">Checkbox</option>
+                  </select>
+                  {variable.type === "checkbox" ? (
+                    <select
+                      className={input}
+                      aria-label={`Default value for ${variable.label}`}
+                      value={variable.default ?? "false"}
+                      onChange={(event) =>
+                        updateVariable(index, { default: event.target.value })
+                      }>
+                      <option value="false">Default off</option>
+                      <option value="true">Default on</option>
+                    </select>
+                  ) : (
+                    <input
+                      className={input}
+                      placeholder="default"
+                      value={variable.default ?? ""}
+                      onChange={(event) =>
+                        updateVariable(index, {
+                          default: event.target.value || undefined
+                        })
+                      }
+                    />
+                  )}
                   <input
                     className={input}
                     placeholder="options, comma separated"
-                    value={(variable.options ?? []).join(", ")}
+                    disabled={variable.type === "checkbox"}
+                    value={
+                      variable.type === "checkbox"
+                        ? ""
+                        : (variable.options ?? []).join(", ")
+                    }
                     onChange={(event) =>
                       updateVariable(index, {
                         options: event.target.value

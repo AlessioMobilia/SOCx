@@ -1,7 +1,17 @@
+import {
+  buildVisualCandidate,
+  captureVisualSelection,
+  readRenderedElementText,
+  visualSelectionText,
+  type VisualSelectionSnapshot
+} from "./visualFormatting"
+
 export type SmartFormatKind =
   | "json"
+  | "partial-json"
   | "semantic-table"
   | "semantic-key-value"
+  | "visual-key-value"
   | "delimited-table"
   | "cef"
   | "logfmt"
@@ -114,7 +124,7 @@ const formatMarkdownTable = (rows: string[][], headers?: string[]): string => {
 const removeNoise = (container: HTMLElement): void => {
   container
     .querySelectorAll(
-      "script, style, noscript, template, iframe, object, embed, svg, img, [hidden], [aria-hidden='true']"
+      "script, style, noscript, template, iframe, object, embed, svg, img, [hidden], [inert], [aria-hidden='true'], [role='tooltip'], [data-tippy-root]"
     )
     .forEach((element) => element.remove())
 
@@ -125,9 +135,26 @@ const removeNoise = (container: HTMLElement): void => {
       return
     }
 
-    const marker = `${element.id} ${element.className} ${element.getAttribute("data-testid") ?? ""}`
-    const isControl = element.matches("button, [role='button']")
-    if (isControl && /\b(copy|clipboard|expand|collapse)\b/i.test(marker)) {
+    const marker = [
+      element.id,
+      element.className,
+      element.getAttribute("data-testid"),
+      element.getAttribute("data-test"),
+      element.getAttribute("aria-label"),
+      element.getAttribute("title")
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .join(" ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+    const isControl = element.matches(
+      "button, [role='button'], [role='menuitem'], [role='checkbox'], [role='switch'], [role='tab']"
+    )
+    if (
+      isControl &&
+      /\b(copy|clipboard|expand|collapse|menu|more|sort|filter|help|info|close|dismiss|edit|delete|remove|toggle)\b/i.test(
+        marker
+      )
+    ) {
       element.remove()
     }
   })
@@ -138,6 +165,9 @@ const removeNoise = (container: HTMLElement): void => {
 }
 
 const readElementText = (element: HTMLElement): string => {
+  if (element.isConnected) {
+    return cleanText(readRenderedElementText(element))
+  }
   const clone = element.cloneNode(true) as HTMLElement
   removeNoise(clone)
   return cleanText(clone.textContent)
@@ -249,7 +279,7 @@ const readRow = (
   const indexed = placeRowCells(row).map(({ cell, index, span }) => ({
     index,
     span,
-    text: cleanText(cell.textContent)
+    text: readElementText(cell)
   }))
   const width = Math.max(...indexed.map((cell) => cell.index + cell.span))
   const values = Array.from({ length: width }, () => "")
@@ -274,7 +304,7 @@ const readRows = (
       )
       const values = Array.from({ length: width }, () => "")
       placements.forEach(({ cell, index }) => {
-        values[index] = cleanText(cell.textContent)
+        values[index] = readElementText(cell)
       })
       const cells = directCells(rows[rowIndex])
       return values.some(Boolean)
@@ -344,7 +374,7 @@ const extractSemanticMatrices = (
     )
     const values = Array.from({ length: width }, () => "")
     orphanCells.forEach((cell, index) => {
-      values[getCellIndex(cell, index)] = cleanText(cell.textContent)
+      values[getCellIndex(cell, index)] = readElementText(cell)
     })
     matrices.push({
       rows: [values],
@@ -464,11 +494,13 @@ const matrixCandidate = (matrix: Matrix): SmartFormatResult | null => {
       .size === normalizedRows.length
   const rowHeaderSignal =
     matrix.headers?.[0]?.toLowerCase().includes("field") === true
+  const spanningTitleSignal =
+    matrix.headers !== undefined && matrix.headers.filter(Boolean).length === 1
   const isKeyValue =
     columnCount === 2 &&
     firstColumnIsLabels &&
     firstColumnUnique &&
-    (!matrix.semanticHeaders || rowHeaderSignal)
+    (!matrix.semanticHeaders || rowHeaderSignal || spanningTitleSignal)
 
   if (isKeyValue) {
     return {
@@ -571,11 +603,51 @@ const extractSemanticPairs = (
     return null
   }
 
-  container.querySelectorAll("dt").forEach((term) => {
-    const value = term.nextElementSibling
-    if (!value?.matches("dd")) return
-    addPair(term.textContent, value.textContent)
-  })
+  const addDefinitionPairs = (
+    termSelector: string,
+    definitionSelector: string
+  ) => {
+    container.querySelectorAll<HTMLElement>(termSelector).forEach((term) => {
+      const values: string[] = []
+      let sibling = term.nextElementSibling
+      while (sibling?.matches(definitionSelector)) {
+        const value = readValueWithoutControls(sibling)
+        if (value) values.push(value)
+        sibling = sibling.nextElementSibling
+      }
+      addPair(readElementText(term), values.join(" "))
+    })
+  }
+
+  addDefinitionPairs("dt", "dd")
+  addDefinitionPairs("[role='term']", "[role='definition']")
+
+  container
+    .querySelectorAll<HTMLElement>(
+      "output[aria-labelledby], [role='group'][aria-labelledby], [role='listitem'][aria-labelledby], [data-field-value][aria-labelledby]"
+    )
+    .forEach((element) => {
+      if (element.querySelector("[aria-labelledby]")) return
+      const ids = (element.getAttribute("aria-labelledby") ?? "")
+        .split(/\s+/)
+        .filter(Boolean)
+      const labels = ids
+        .map((id) => container.querySelector<HTMLElement>(`#${CSS.escape(id)}`))
+        .filter((label): label is HTMLElement => !!label)
+      const key = labels.map(readElementText).filter(Boolean).join(" ")
+      if (!isLikelyLabel(key)) return
+
+      const clone = element.cloneNode(true) as HTMLElement
+      ids.forEach((id) => clone.querySelector(`#${CSS.escape(id)}`)?.remove())
+      removeNoise(clone)
+      clone
+        .querySelectorAll(
+          "button, input, select, textarea, [role='button'], [role='checkbox'], [role='tab'], [role='switch']"
+        )
+        .forEach((control) => control.remove())
+      const value = cleanText(clone.textContent)
+      if (value.length <= 512) addPair(key, value)
+    })
 
   container.querySelectorAll<HTMLElement>("label").forEach((label) => {
     if (
@@ -693,7 +765,7 @@ const extractSemanticPairs = (
     .querySelectorAll<HTMLElement>("[role='gridcell'], [role='cell']")
     .forEach((cell) => {
       const segments = Array.from(cell.children)
-        .map((child) => cleanText(child.textContent))
+        .map((child) => readElementText(child as HTMLElement))
         .filter(Boolean)
       if (segments.length < 2 || !isLikelyLabel(segments[0])) return
       const value = segments.slice(1).join(" ")
@@ -701,16 +773,45 @@ const extractSemanticPairs = (
     })
 
   container.querySelectorAll<HTMLElement>("strong").forEach((label) => {
-    const keyText = cleanText(label.textContent)
+    const keyText = readElementText(label)
     if (!/[:：]\s*$/.test(keyText) || !isLikelyLabel(keyText)) return
     const value = label.nextElementSibling
-    if (value) addPair(keyText, value.textContent)
+    if (value) addPair(keyText, readElementText(value as HTMLElement))
   })
 
   return unique(
     pairs.map(
       ([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`
     )
+  ).map((pair) => pair.split("\u0000") as [string, string])
+}
+
+const extractSplunkEventPairs = (
+  container: HTMLElement
+): Array<[string, string]> => {
+  const fields = [
+    ...(container.matches(".key[class*='level-']") ? [container] : []),
+    ...Array.from(
+      container.querySelectorAll<HTMLElement>(".key[class*='level-']")
+    )
+  ]
+
+  return unique(
+    fields
+      .map((field) => {
+        const keyElement = Array.from(field.children).find((child) =>
+          child.classList.contains("key-name")
+        ) as HTMLElement | undefined
+        const valueElement = Array.from(field.children).find((child) =>
+          child.classList.contains("t")
+        ) as HTMLElement | undefined
+        const key = normalizeLabel(
+          keyElement ? readElementText(keyElement) : ""
+        )
+        const value = valueElement ? readElementText(valueElement) : ""
+        return isLikelyLabel(key) && value ? `${key}\u0000${value}` : ""
+      })
+      .filter(Boolean)
   ).map((pair) => pair.split("\u0000") as [string, string])
 }
 
@@ -733,6 +834,156 @@ const tryJson = (value: string): string | null => {
   return null
 }
 
+const decodePartialJsonWhitespace = (value: string): string =>
+  value
+    .replace(
+      /&(?:nbsp|ensp|emsp|thinsp);|&#(?:0*32|0*160);|&#x(?:0*20|0*a0);/gi,
+      " "
+    )
+    .replace(/\u00a0/g, " ")
+    .replace(/[\u200b-\u200d\ufeff]/g, "")
+
+const normalizePartialJsonCommaMarkers = (value: string): string => {
+  let result = ""
+  let quoted = false
+  let escaped = false
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    if (quoted) {
+      result += character
+      if (escaped) escaped = false
+      else if (character === "\\") escaped = true
+      else if (character === '"') quoted = false
+      continue
+    }
+
+    if (character === '"') {
+      quoted = true
+      result += character
+      continue
+    }
+
+    if (character === "*") {
+      const marker = value.slice(index).match(/^\*\s*,\s*\*/)
+      if (marker) {
+        result += ","
+        index += marker[0].length - 1
+        continue
+      }
+    }
+    result += character
+  }
+  return result
+}
+
+const normalizePartialJsonStrings = (
+  value: string
+): { text: string; propertyCount: number } | null => {
+  let result = ""
+  let propertyCount = 0
+  let previousSignificant = ""
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    if (character !== '"') {
+      result += character
+      if (!/\s/.test(character)) previousSignificant = character
+      continue
+    }
+
+    let content = ""
+    let closed = false
+    index += 1
+    for (; index < value.length; index += 1) {
+      const stringCharacter = value[index]
+      if (stringCharacter === "\\" && index + 1 < value.length) {
+        content += stringCharacter + value[index + 1]
+        index += 1
+      } else if (stringCharacter === '"') {
+        closed = true
+        break
+      } else {
+        content += stringCharacter
+      }
+    }
+    if (!closed) return null
+
+    let lookahead = index + 1
+    while (lookahead < value.length && /\s/.test(value[lookahead])) {
+      lookahead += 1
+    }
+    const isProperty = value[lookahead] === ":"
+    if (isProperty) {
+      propertyCount += 1
+      // A backslash before an underscore is a common Markdown-copy artifact,
+      // but is not a legal JSON escape sequence.
+      content = content.trim().replace(/\\_/g, "_")
+    } else if (previousSignificant === ":") {
+      content = content.trim()
+    }
+
+    result += `"${content}"`
+    previousSignificant = '"'
+  }
+
+  return { text: result, propertyCount }
+}
+
+const closePartialJsonStructure = (value: string): string | null => {
+  const stack: Array<"{" | "["> = []
+  let quoted = false
+  let escaped = false
+
+  for (const character of value) {
+    if (quoted) {
+      if (escaped) escaped = false
+      else if (character === "\\") escaped = true
+      else if (character === '"') quoted = false
+      continue
+    }
+
+    if (character === '"') quoted = true
+    else if (character === "{" || character === "[") stack.push(character)
+    else if (character === "}" || character === "]") {
+      const expected = character === "}" ? "{" : "["
+      if (stack.pop() !== expected) return null
+    }
+  }
+
+  if (quoted || escaped) return null
+  const withoutTrailingComma = value.replace(/,\s*$/, "")
+  const suffix = stack
+    .reverse()
+    .map((opening) => (opening === "{" ? "}" : "]"))
+    .join("")
+  return `${withoutTrailingComma}${suffix}`.replace(/,\s*([}\]])/g, "$1")
+}
+
+const tryPartialJson = (value: string): string | null => {
+  let text = decodePartialJsonWhitespace(value).trim()
+  if (!text) return null
+
+  // Ignore emphasis markers sometimes introduced around commas by copied
+  // Markdown, while leaving ordinary asterisks inside strings untouched.
+  text = normalizePartialJsonCommaMarkers(text)
+  const normalized = normalizePartialJsonStrings(text)
+  if (!normalized || normalized.propertyCount === 0) return null
+
+  text = normalized.text
+  if (!text.startsWith("{") && !text.startsWith("[")) text = `{${text}`
+  const completed = closePartialJsonStructure(text)
+  if (!completed) return null
+
+  try {
+    const parsed = JSON.parse(completed)
+    if (!parsed || typeof parsed !== "object") return null
+    return `\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``
+  } catch {
+    return null
+  }
+}
+
 const extractJsonCandidate = (
   container: HTMLElement
 ): SmartFormatResult | null => {
@@ -753,6 +1004,13 @@ const extractJsonCandidate = (
   for (const source of sources) {
     const formatted = tryJson(source)
     if (formatted) return { kind: "json", score: 100, text: formatted }
+  }
+
+  for (const source of sources) {
+    const formatted = tryPartialJson(source)
+    if (formatted) {
+      return { kind: "partial-json", score: 96, text: formatted }
+    }
   }
 
   const jsonLines = sources
@@ -903,6 +1161,37 @@ const parseKeyValueLine = (line: string): [string, string] | null => {
   return null
 }
 
+const parseAlternatingKeyValueLines = (
+  lines: string[]
+): Array<[string, string]> => {
+  if (lines.length < 6 || lines.length % 2 !== 0) return []
+  const pairs: Array<[string, string]> = []
+  for (let index = 0; index < lines.length; index += 2) {
+    const key = lines[index]
+    const value = lines[index + 1]
+    if (
+      !isLikelyLabel(key) ||
+      !value ||
+      value.length > 512 ||
+      normalizeLabel(key).toLowerCase() === cleanText(value).toLowerCase()
+    ) {
+      return []
+    }
+    pairs.push([key, value])
+  }
+
+  const uniqueKeys = new Set(
+    pairs.map(([key]) => normalizeLabel(key).toLowerCase())
+  )
+  const sentenceValues = pairs.filter(([, value]) =>
+    /[.!?]\s*$/.test(value)
+  ).length
+  if (uniqueKeys.size !== pairs.length || sentenceValues > pairs.length / 2) {
+    return []
+  }
+  return pairs
+}
+
 const extractTextCandidate = (text: string): SmartFormatResult | null => {
   const cef = parseCef(text)
   if (cef) return cef
@@ -914,6 +1203,15 @@ const extractTextCandidate = (text: string): SmartFormatResult | null => {
   const allLogfmt = lines.flatMap(parseLogfmt)
   if (allLogfmt.length >= 2) {
     return { kind: "logfmt", score: 90, text: formatKeyValues(allLogfmt) }
+  }
+
+  const alternatingPairs = parseAlternatingKeyValueLines(lines)
+  if (alternatingPairs.length >= 3) {
+    return {
+      kind: "text-key-value",
+      score: Math.min(88, 80 + alternatingPairs.length),
+      text: formatKeyValues(alternatingPairs)
+    }
   }
 
   const pairs = lines
@@ -956,9 +1254,11 @@ export const formatSmartContainer = (
   })
 
   const semanticPairs = unique(
-    [...extractSemanticPairs(container), ...matrixPairs].map(
-      ([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`
-    )
+    [
+      ...extractSemanticPairs(container),
+      ...extractSplunkEventPairs(container),
+      ...matrixPairs
+    ].map(([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`)
   ).map((pair) => pair.split("\u0000") as [string, string])
   if (semanticPairs.length > 0) {
     candidates.push({
@@ -1018,6 +1318,17 @@ const formatMarkedSelection = (
 ): SmartFormatResult | null => {
   if (selection.rangeCount === 0) return null
   const range = selection.getRangeAt(0)
+  const fragment = range.startContainer.ownerDocument.createElement("div")
+  fragment.appendChild(range.cloneContents())
+  const splunkPairs = extractSplunkEventPairs(fragment)
+  if (splunkPairs.length > 0) {
+    return {
+      kind: "semantic-key-value",
+      score: 99,
+      text: formatKeyValues(splunkPairs)
+    }
+  }
+
   const start = elementFromNode(range.startContainer)
   const end = elementFromNode(range.endContainer)
   const startData = start?.closest<HTMLElement>(DATA_FIELD_SELECTOR)
@@ -1054,14 +1365,33 @@ const formatMarkedSelection = (
   }
 
   const normalizedKey = normalizeLabel(key).toLowerCase()
-  const pair = extractSemanticPairs(candidate).find(
-    ([label]) => normalizeLabel(label).toLowerCase() === normalizedKey
-  )
-  if (!pair) return null
+  const matchingElements = [
+    ...(candidate.matches(`[${attribute}]`) ? [candidate] : []),
+    ...Array.from(candidate.querySelectorAll<HTMLElement>(`[${attribute}]`))
+  ].filter((element) => element.getAttribute(attribute) === key)
+  const value = matchingElements
+    .map((element) => {
+      const text = readRenderedElementText(element)
+      const marker = `${element.className} ${element.getAttribute("data-test") ?? ""}`
+      let score = 0
+      if (/\bf-v\b|\bvalue\b/i.test(marker)) score += 5
+      if (element.hasAttribute("context-data-value")) score += 5
+      if (element.children.length === 0) score += 2
+      if (text.length <= 512) score += 1
+      return { text, score }
+    })
+    .filter(
+      ({ text }) => text && normalizeLabel(text).toLowerCase() !== normalizedKey
+    )
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.text.length - right.text.length
+    )[0]?.text
+  if (!value) return null
   return {
     kind: "semantic-key-value",
     score: 99,
-    text: formatKeyValues([pair])
+    text: formatKeyValues([[key, value]])
   }
 }
 
@@ -1254,25 +1584,252 @@ const findAtomicSelectionContainer = (
     : null
 }
 
+export type SmartSelectionSnapshot = {
+  text: string
+  visual: VisualSelectionSnapshot | null
+  markedResult: SmartFormatResult | null
+  tableResult: SmartFormatResult | null
+  contextualResult: SmartFormatResult | null
+  fallbackResult: SmartFormatResult | null
+}
+
+const isExplicitContextLabel = (
+  element: HTMLElement,
+  text: string
+): boolean => {
+  if (element.matches("label, dt, [data-field-label]")) return true
+  if (/[:：]\s*$/.test(text)) return true
+  const marker = `${element.id} ${element.className} ${element.getAttribute("data-testid") ?? ""}`
+  return /(?:^|[-_\s])(label|field-name|key|term)(?:$|[-_\s])/i.test(marker)
+}
+
+const contextualLabelForSelection = (
+  selection: Selection,
+  visual: VisualSelectionSnapshot
+): string | null => {
+  if (selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  const start = elementFromNode(range.startContainer)
+  const end = elementFromNode(range.endContainer)
+  if (!(start instanceof HTMLElement) || !(end instanceof HTMLElement)) {
+    return null
+  }
+
+  const document = start.ownerDocument
+  const selectedRects = visual.tokens
+    .map((token) => token.rect)
+    .filter((rect): rect is NonNullable<typeof rect> => !!rect)
+  const selectedBounds = selectedRects.length
+    ? {
+        top: Math.min(...selectedRects.map((rect) => rect.top)),
+        right: Math.max(...selectedRects.map((rect) => rect.right)),
+        bottom: Math.max(...selectedRects.map((rect) => rect.bottom)),
+        left: Math.min(...selectedRects.map((rect) => rect.left))
+      }
+    : null
+  const isNearby = (candidate: HTMLElement): boolean => {
+    if (!selectedBounds) return false
+    const rect = candidate.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return false
+    const verticalOverlap = Math.max(
+      0,
+      Math.min(rect.bottom, selectedBounds.bottom) -
+        Math.max(rect.top, selectedBounds.top)
+    )
+    const horizontalOverlap = Math.max(
+      0,
+      Math.min(rect.right, selectedBounds.right) -
+        Math.max(rect.left, selectedBounds.left)
+    )
+    const sameRow = verticalOverlap > 0 && rect.left <= selectedBounds.left + 4
+    const above =
+      rect.bottom <= selectedBounds.top + 2 &&
+      selectedBounds.top - rect.bottom <= 96 &&
+      (horizontalOverlap > 0 || Math.abs(rect.left - selectedBounds.left) <= 16)
+    return sameRow || above
+  }
+  const labelledElement = start.closest<HTMLElement>("[aria-labelledby]")
+  if (labelledElement?.contains(end)) {
+    const labels = (labelledElement.getAttribute("aria-labelledby") ?? "")
+      .split(/\s+/)
+      .map((id) => document.getElementById(id))
+      .filter(
+        (element): element is HTMLElement => element instanceof HTMLElement
+      )
+      .map(readRenderedElementText)
+      .filter((text) => isLikelyLabel(text))
+    if (labels.length > 0) return labels.join(" ")
+  }
+
+  const describedValue = start.closest<HTMLElement>("[id]")
+  if (describedValue?.contains(end)) {
+    const id = describedValue.id
+    const label = Array.from(
+      document.querySelectorAll<HTMLLabelElement>("label")
+    ).find((candidate) => candidate.htmlFor === id)
+    const labelText = label ? readRenderedElementText(label) : ""
+    if (labelText && isLikelyLabel(labelText)) return labelText
+  }
+
+  const description = start.closest<HTMLElement>("dd")
+  if (description?.contains(end)) {
+    const term = description.previousElementSibling
+    if (term instanceof HTMLElement && term.matches("dt")) {
+      const text = readRenderedElementText(term)
+      if (isLikelyLabel(text)) return text
+    }
+  }
+
+  let container: HTMLElement | null = start
+  for (let depth = 0; container && depth < 5; depth += 1) {
+    if (!container.contains(end)) {
+      container = container.parentElement
+      continue
+    }
+
+    const labels = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        "label, dt, [data-field-label], [class*='field-label'], [class~='label']"
+      )
+    ).filter(
+      (candidate) =>
+        !candidate.contains(start) &&
+        !candidate.contains(end) &&
+        isNearby(candidate)
+    )
+    if (labels.length === 1) {
+      const text = readRenderedElementText(labels[0])
+      if (text && isLikelyLabel(text)) return text
+    }
+
+    const previous = container.previousElementSibling
+    if (previous instanceof HTMLElement) {
+      const text = readRenderedElementText(previous)
+      if (
+        text &&
+        isLikelyLabel(text) &&
+        isExplicitContextLabel(previous, text) &&
+        isNearby(previous)
+      ) {
+        return text
+      }
+    }
+    container = container.parentElement
+  }
+
+  return null
+}
+
+const formatContextualSelection = (
+  selection: Selection,
+  visual: VisualSelectionSnapshot | null
+): SmartFormatResult | null => {
+  if (!visual?.geometryAvailable || visual.tokens.length === 0) return null
+  const key = contextualLabelForSelection(selection, visual)
+  const value = visualSelectionText(visual)
+  if (
+    !key ||
+    !value ||
+    normalizeLabel(key).toLowerCase() === value.toLowerCase()
+  ) {
+    return null
+  }
+  return {
+    kind: "visual-key-value",
+    score: 96,
+    text: formatKeyValues([[key, value]])
+  }
+}
+
+export const captureSmartSelection = (
+  selection: Selection
+): SmartSelectionSnapshot | null => {
+  if (!selection || selection.rangeCount === 0) return null
+  const visual = captureVisualSelection(selection)
+  const markedResult = formatMarkedSelection(selection)
+  const tableResult = formatSelectedTable(selection)
+  const contextualResult = formatContextualSelection(selection, visual)
+  const contextualHeaders = readContextualHeaders(selection)
+  const atomicContainer = findAtomicSelectionContainer(selection)
+  let fallbackResult: SmartFormatResult | null = null
+  if (!visual?.geometryAvailable && atomicContainer) {
+    fallbackResult = formatSmartContainer(atomicContainer, contextualHeaders)
+  }
+
+  if (!visual?.geometryAvailable && !fallbackResult) {
+    const range = selection.getRangeAt(0)
+    const wrapper = range.startContainer.ownerDocument.createElement("div")
+    wrapper.appendChild(range.cloneContents())
+    fallbackResult = formatSmartContainer(wrapper, contextualHeaders)
+  }
+
+  return {
+    text: selection.toString(),
+    visual,
+    markedResult,
+    tableResult,
+    contextualResult,
+    fallbackResult
+  }
+}
+
+const safeTextCandidate = (text: string): SmartFormatResult | null => {
+  const value = cleanTextPreservingLines(text)
+  if (!value) return null
+  const candidates: SmartFormatResult[] = []
+  const json = tryJson(value)
+  if (json) candidates.push({ kind: "json", score: 100, text: json })
+  const partialJson = tryPartialJson(text)
+  if (partialJson) {
+    candidates.push({ kind: "partial-json", score: 96, text: partialJson })
+  }
+  const delimited = extractDelimitedCandidate(value)
+  if (delimited) candidates.push(delimited)
+  const structured = extractTextCandidate(value)
+  if (structured) candidates.push(structured)
+  return (
+    candidates.sort(
+      (left, right) =>
+        right.score - left.score || right.text.length - left.text.length
+    )[0] ?? null
+  )
+}
+
+export const formatSmartSelectionSnapshot = (
+  snapshot: SmartSelectionSnapshot
+): SmartFormatResult | null => {
+  // Explicit product fields and real tables have semantics that geometry alone
+  // cannot improve, and are captured before the page can mutate the selection.
+  if (snapshot.markedResult) return snapshot.markedResult
+  if (snapshot.tableResult) return snapshot.tableResult
+
+  if (snapshot.visual) {
+    const visualCandidate = buildVisualCandidate(snapshot.visual)
+    if (visualCandidate) {
+      return {
+        kind: "visual-key-value",
+        score: visualCandidate.score,
+        text: formatKeyValues(visualCandidate.pairs)
+      }
+    }
+
+    if (snapshot.contextualResult) return snapshot.contextualResult
+
+    if (snapshot.visual.geometryAvailable) {
+      // Once rendered geometry is available, never fall back to ancestor DOM
+      // content: it may contain tooltips, hidden panels or internal state.
+      return safeTextCandidate(visualSelectionText(snapshot.visual))
+    }
+  }
+
+  // Headless DOMs and older engines do not expose useful text rectangles.
+  // Preserve the semantic parser as a compatibility fallback in that case.
+  return snapshot.fallbackResult
+}
+
 export const formatSmartSelection = (
   selection: Selection
 ): SmartFormatResult | null => {
-  if (!selection || selection.rangeCount === 0) return null
-  const markedResult = formatMarkedSelection(selection)
-  if (markedResult) return markedResult
-  const tableResult = formatSelectedTable(selection)
-  if (tableResult) return tableResult
-  const contextualHeaders = readContextualHeaders(selection)
-  const atomicContainer = findAtomicSelectionContainer(selection)
-  if (atomicContainer) {
-    const contextualResult = formatSmartContainer(
-      atomicContainer,
-      contextualHeaders
-    )
-    if (contextualResult) return contextualResult
-  }
-  const range = selection.getRangeAt(0)
-  const wrapper = range.startContainer.ownerDocument.createElement("div")
-  wrapper.appendChild(range.cloneContents())
-  return formatSmartContainer(wrapper, contextualHeaders)
+  const snapshot = captureSmartSelection(selection)
+  return snapshot ? formatSmartSelectionSnapshot(snapshot) : null
 }
