@@ -168,13 +168,63 @@ export const QUERY_GUIDE_COMMANDS: Record<string, QueryGuideCommand[]> = {
       ]
     ],
     [
-      "stats ... by",
-      "Calculates aggregate statistics, optionally grouped by fields.",
-      "| stats Function(Field) AS Name by GroupField",
-      "| stats count AS hits by src",
+      "stats",
+      "Transforms the current results into aggregate rows, optionally grouped by one or more fields.",
+      "| stats Function(Field) AS Name [, ...] [BY GroupField, ...]",
+      "| stats count AS events, dc(user) AS users, values(action) AS actions BY src",
       [
-        "Common functions include count, dc, values, earliest and latest.",
-        "Add multiple comma-separated aggregation functions when needed."
+        "Counting: count, count(eval(...)), dc/distinct_count and estdc.",
+        "Numeric: sum, avg/mean, min, max, median, range, stdev and percN.",
+        "Values and order: values, list, earliest, latest, first and last.",
+        "Only aggregated fields and BY fields remain after stats."
+      ]
+    ],
+    [
+      "stats functions",
+      "Quick reference for the main statistical function families used by stats, chart, timechart, eventstats and streamstats.",
+      "Function(Field) [AS OutputName]",
+      "| stats count, sum(bytes) AS total_bytes, perc95(duration) AS p95 BY host",
+      [
+        "count counts events; count(field) counts events where that field is not null.",
+        "dc(field) counts distinct values; values(field) returns a deduplicated multivalue list.",
+        "list(field) preserves values in event order but can contain duplicates.",
+        "earliest/latest use event time; first/last follow processing order.",
+        "Most numeric functions ignore non-numeric values."
+      ]
+    ],
+    [
+      "eventstats",
+      "Calculates aggregate statistics and writes them back onto every matching event instead of replacing the event rows.",
+      "| eventstats Function(Field) AS Name [BY GroupField]",
+      "| eventstats avg(bytes) AS avg_bytes BY host | where bytes > avg_bytes * 3",
+      [
+        "Use it when later commands still need the original event fields.",
+        "It supports the same major aggregate, event-order and multivalue functions as stats.",
+        "Filter early: the generated fields consume search-head memory."
+      ]
+    ],
+    [
+      "streamstats",
+      "Adds running or windowed statistics as events are processed, which is useful for sequences, moving averages and session-like logic.",
+      "| streamstats [window=N] [current=true|false] Function(Field) AS Name [BY GroupField]",
+      "| sort 0 user _time | streamstats window=5 avg(duration) AS moving_avg BY user",
+      [
+        "window limits the number of preceding results included in the calculation.",
+        "current=false excludes the current event and exposes the previous aggregate value.",
+        "reset_on_change and reset_before/reset_after control when running state restarts."
+      ]
+    ],
+    [
+      "tstats",
+      "Runs statistical searches over indexed tsidx fields or accelerated data models, usually much faster than scanning raw events with stats.",
+      "| tstats [summariesonly=true|false] StatsFunction FROM datamodel=Model.Root [WHERE Predicate] [BY Fields]",
+      "| tstats summariesonly=true count FROM datamodel=Authentication.Authentication BY Authentication.user",
+      [
+        "Without FROM, query index-time fields with a WHERE clause such as index or sourcetype.",
+        "summariesonly=true uses only acceleration summaries: faster, but unsummarized data is excluded.",
+        "prestats=true emits an internal aggregate format for a following stats, chart or timechart command.",
+        "Use nodename in the data-model WHERE clause to select a child dataset.",
+        "Except for count, aggregate functions require a named indexed or data-model field."
       ]
     ],
     [
@@ -185,6 +235,39 @@ export const QUERY_GUIDE_COMMANDS: Record<string, QueryGuideCommand[]> = {
       [
         "span controls time bucket size.",
         "limit and useother control split-series cardinality."
+      ]
+    ],
+    [
+      "chart",
+      "Creates a statistical table with one row dimension and an optional split-by column dimension.",
+      "| chart Aggregation [OVER RowField] [BY ColumnField]",
+      "| chart count OVER host BY action",
+      [
+        "OVER defines the row axis; BY creates one result column per split value.",
+        "Use limit and useother to control high-cardinality split fields.",
+        "Unlike timechart, chart does not require _time as its horizontal axis."
+      ]
+    ],
+    [
+      "bin / bucket",
+      "Discretizes numeric or time values into buckets before later aggregation.",
+      "| bin Field span=Span",
+      "| bin _time span=15m | stats count BY _time, host",
+      [
+        "bucket is an alias of bin.",
+        "Use span for an explicit bucket width or bins for an approximate bucket count.",
+        "timechart applies time bucketing automatically."
+      ]
+    ],
+    [
+      "top / rare",
+      "Returns the most or least common combinations of selected fields with count and percentage columns.",
+      "| top|rare [limit=N] Field [BY GroupField]",
+      "| top limit=10 user BY action",
+      [
+        "top selects the most frequent values; rare selects the least frequent.",
+        "showcount and showperc control the generated count and percent fields.",
+        "Use stats count BY ... when you need more control over the aggregation."
       ]
     ],
     [

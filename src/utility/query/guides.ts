@@ -7,6 +7,8 @@ import { QUERY_GUIDE_COMMANDS, type QueryGuideCommand } from "./guideCommands"
 export type QueryGuideItem = {
   term: string
   description: string
+  example?: string
+  notes?: string[]
 }
 
 export type QueryLanguageGuide = {
@@ -88,16 +90,85 @@ const QUERY_LANGUAGE_GUIDE_SEEDS: QueryLanguageGuideSeed[] = [
       "https://help.splunk.com/en/splunk-enterprise/search/spl-search-reference/9.0/quick-reference/command-quick-reference",
     documentationLabel: "Splunk SPL command quick reference",
     fields: [
-      { term: "_time", description: "Event timestamp." },
-      { term: "_raw", description: "Original event text." },
       {
-        term: "index / source / sourcetype / host",
-        description: "Default fields used to scope and identify indexed data."
+        term: "_time",
+        description:
+          "The event timestamp, stored internally as Unix time and rendered for the user's time zone. The time picker, timechart, bin and relative-time modifiers all operate on it.",
+        example: "earliest=-24h | bin _time span=15m",
+        notes: [
+          "It represents event time, not necessarily ingestion time.",
+          "Keep _time when a later command needs a timeline or time bucket."
+        ]
+      },
+      {
+        term: "_raw",
+        description:
+          "The original event payload. Bare keyword searches inspect it and search-time field extractions commonly derive structured fields from it.",
+        example: '| regex _raw="(?i)failed login"',
+        notes: [
+          "Searching a well-scoped extracted field is usually clearer than repeatedly scanning _raw.",
+          "The displayed raw text can contain fields that are not indexed fields."
+        ]
+      },
+      {
+        term: "index",
+        description:
+          "The Splunk index that stores the event. Restricting index and time as early as possible is one of the most important ways to reduce the amount of data read.",
+        example: "index=security earliest=-1h",
+        notes: [
+          "Access is limited to the indexes allowed for the current role.",
+          "tstats can query this index-time field directly from tsidx data."
+        ]
+      },
+      {
+        term: "source",
+        description:
+          "The concrete input an event came from, such as a file path, stream, script or network input. It identifies origin, not event format.",
+        example: 'source="/var/log/auth.log"',
+        notes: [
+          "For network inputs it can look like udp:514.",
+          "Many sources can share the same sourcetype."
+        ]
+      },
+      {
+        term: "sourcetype",
+        description:
+          "The data format and parsing classification assigned to an event. It drives event breaking, timestamp recognition and many search-time field extractions.",
+        example: "sourcetype=WinEventLog:Security",
+        notes: [
+          "Use it to scope a search to comparable event shapes.",
+          "It is different from source: format versus concrete input."
+        ]
+      },
+      {
+        term: "host",
+        description:
+          "The default origin tag assigned during ingestion, commonly a hostname, IP address or FQDN. It may describe a collector or forwarded source rather than the affected endpoint.",
+        example: 'host="dc-01"',
+        notes: [
+          "Confirm the add-on's semantics before treating host as the endpoint.",
+          "CIM fields such as src and dest can be more precise for network events."
+        ]
       },
       {
         term: "src / dest / user / process",
         description:
-          "Common Information Model names; availability depends on CIM-compliant add-ons and data models."
+          "Common Information Model (CIM) field names used to normalize source, destination, identity and process concepts across vendors.",
+        example: "| stats count by src, dest, user",
+        notes: [
+          "They exist only when the source add-on, aliases or calculated fields map the original data correctly.",
+          "Accelerated CIM data models expose prefixed fields such as Authentication.user to tstats."
+        ]
+      },
+      {
+        term: "_indextime / splunk_server",
+        description:
+          "Internal metadata for ingestion time and the indexer that handled an event. These fields are mainly useful for latency and platform troubleshooting.",
+        example: "| eval ingest_delay=_indextime-_time",
+        notes: [
+          "_indextime is different from the event timestamp in _time.",
+          "Internal fields may be hidden unless explicitly used or renamed."
+        ]
       }
     ],
     commands: [
@@ -1184,7 +1255,12 @@ export const guideSearchText = (guide: QueryLanguageGuide): string =>
       guide.summary,
       guide.documentationLabel,
       guide.caution ?? "",
-      ...guide.fields.flatMap((item) => [item.term, item.description]),
+      ...guide.fields.flatMap((item) => [
+        item.term,
+        item.description,
+        item.example ?? "",
+        ...(item.notes ?? [])
+      ]),
       ...guide.commands.flatMap((item) => [
         item.term,
         item.description,

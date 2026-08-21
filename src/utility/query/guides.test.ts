@@ -94,4 +94,46 @@ describe("query language guides", () => {
       )
     ).toEqual([])
   })
+
+  it("documents Splunk fields, statistical functions and accelerated tstats searches", () => {
+    const splunk = QUERY_LANGUAGE_GUIDES.find(
+      (guide) => guide.dialectId === "spl"
+    )
+
+    expect(splunk).toBeDefined()
+    expect(splunk?.fields.length).toBeGreaterThanOrEqual(8)
+    for (const field of splunk?.fields ?? []) {
+      expect(field.description.length).toBeGreaterThan(80)
+      expect(field.example?.length).toBeGreaterThan(0)
+      expect(field.notes?.length).toBeGreaterThanOrEqual(2)
+    }
+    expect(splunk?.commands.map((command) => command.term)).toEqual(
+      expect.arrayContaining([
+        "stats",
+        "stats functions",
+        "eventstats",
+        "streamstats",
+        "tstats",
+        "chart",
+        "bin / bucket",
+        "top / rare"
+      ])
+    )
+    expect(
+      filterQueryLanguageGuides(
+        QUERY_LANGUAGE_GUIDES,
+        "all",
+        "summariesonly prestats nodename",
+        () => ""
+      ).map((guide) => guide.dialectId)
+    ).toContain("spl")
+    expect(
+      filterQueryLanguageGuides(
+        QUERY_LANGUAGE_GUIDES,
+        "all",
+        "ingest_delay _indextime",
+        () => ""
+      ).map((guide) => guide.dialectId)
+    ).toContain("spl")
+  })
 })

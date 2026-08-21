@@ -141,12 +141,34 @@ const QueryLanguageGuides = ({ dialects }: QueryLanguageGuidesProps) => {
                         <h4 className="mb-2 font-semibold">Main fields</h4>
                         <dl className="space-y-2">
                           {guide.fields.map((field) => (
-                            <div key={field.term}>
+                            <div
+                              key={field.term}
+                              className="rounded-lg border border-socx-border-light bg-white/55 px-3 py-2.5 dark:border-socx-border-dark dark:bg-socx-night-soft/35">
                               <dt className="font-mono font-semibold text-socx-ink dark:text-white">
                                 {field.term}
                               </dt>
                               <dd className="mt-0.5 leading-relaxed text-socx-muted dark:text-socx-muted-dark">
                                 {field.description}
+                                {field.notes && (
+                                  <ul className="mt-2 space-y-1">
+                                    {field.notes.map((note) => (
+                                      <li
+                                        key={note}
+                                        className="flex items-start gap-1.5">
+                                        <span
+                                          aria-hidden="true"
+                                          className="mt-[0.45em] h-1 w-1 shrink-0 rounded-full bg-socx-accent"
+                                        />
+                                        <span>{note}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                {field.example && (
+                                  <code className="mt-2 block overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-socx-night px-2.5 py-2 font-mono text-[11px] leading-relaxed text-white">
+                                    {field.example}
+                                  </code>
+                                )}
                               </dd>
                             </div>
                           ))}
