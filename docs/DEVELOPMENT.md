@@ -386,7 +386,9 @@ Run this matrix on all three browsers before a release:
     repository declared facet. On a recognised console, confirm its pack filter
     is active on open. Switch between IOC and hunting templates and verify the
     grid tracks do not move, no horizontal scrollbar appears, and the query-list
-    scrollbar uses the SOCx theme. Open the in-palette language guide, search
+    scrollbar uses the SOCx theme. Compare the workspace cards, controls,
+    spacing and active states with Bulk Check in both themes. Open the
+    in-palette language guide, search
     for a command and follow an official-documentation link. Confirm a starred
     query survives a pack refresh and a browser restart. Search for a field name
     that only appears inside a query body, and

@@ -231,9 +231,11 @@ under **★ Favorites**, on every console, until you unstar it.
 
 The in-page palette and the dedicated Query workspace use the same query
 browser rather than maintaining two parallel interfaces. Both therefore show
-the same three-pane layout on wide screens, the same filters, source path,
-pack-verification state, tags, repository facets, ATT&CK ids, references,
-variables and rendered-query warnings. Language, pack, category and custom
+the same three-card layout on wide screens, using the same canvas, surfaces,
+borders, rounded controls, accent states and scrollbars as Bulk Check and the
+other SOCx tools. They also share the same filters, source path, pack-verification
+state, tags, repository facets, ATT&CK ids, references, variables and
+rendered-query warnings. Language, pack, category and custom
 facets sit inside the collapsed **More filters** disclosure; their native hover
 help is painted outside the panel and cannot be clipped by its scrolling
 columns. Fixed grid tracks keep column widths stable while queries change, and
