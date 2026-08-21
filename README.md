@@ -215,7 +215,8 @@ The in-page palette never appears on its own. It opens only when you ask for it:
   are reassigned. The query palette and **Smart format selection**
   (`Ctrl+Shift+Period`) have defaults; workspace commands start disabled so nothing
   else is taken from the console you are on;
-- the **Insert query** submenu inside editable fields or selected text.
+- `SOCx › Open query palette…` from the page context menu, or the
+  **Insert query** submenu inside editable fields or selected text.
 
 The palette is not a long list to scroll: a filter bar narrows it down by
 **favorites**, by **kind** (IOC or hunting), by **query language**, by
@@ -234,14 +235,14 @@ variables and rendered-query warnings. Language, category and custom facets sit
 inside the collapsed **More filters** disclosure; their native hover help is
 painted outside the panel and cannot be clipped by its scrolling columns.
 
-When no console is open, use **Query workspace** from the SOCx popup or from the
-persistent `SOCx › Open query workspace…` page context menu. It accepts a mixed
-IOC list, offers the same filters, favorites and deep search over every enabled
-IOC and hunting template, keeps the full catalogue in a scrolling column,
-exposes template variables, shows uncovered IOC types and chunk warnings, and
-copies the generated query. Its compact one-line banner gives nearly all of the
-tab height to that shared browser. Boolean variables use a consistent switch
-instead of a browser-native checkbox.
+When no console is open, use **Query workspace** from the SOCx popup or assign
+its optional browser shortcut. It accepts a mixed IOC list, offers the same
+filters, favorites and deep search over every enabled IOC and hunting template,
+keeps the full catalogue in a scrolling column, exposes template variables,
+shows uncovered IOC types and chunk warnings, and copies the generated query.
+Its compact one-line banner gives nearly all of the tab height to that shared
+browser. Boolean variables use a consistent switch instead of a browser-native
+checkbox.
 
 Below the workspace is a collapsed **Query language mini guides** reference. It
 covers every bundled dialect — including regex and PowerShell — and can be

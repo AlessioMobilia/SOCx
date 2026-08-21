@@ -359,10 +359,12 @@ Run this matrix on all three browsers before a release:
 10. If file-URL support is part of the release, enable **Allow access to file
     URLs** in Chrome/Edge and test an explicit local HTML file. This user toggle
     cannot be enabled by the extension.
-11. On a fresh profile, open Query workspace from both the popup and a page
-    context menu without selecting text. Paste a mixed IOC list, browse both IOC
-    and standard templates, set variables and copy a rendered query. Confirm
-    IOC-specific context actions remain selection-only.
+11. On a fresh profile, open Query workspace from the popup without selecting
+    text. Paste a mixed IOC list, browse both IOC and standard templates, set
+    variables and copy a rendered query. On a regular page, use
+    `SOCx › Open query palette…` and confirm it opens the in-page palette rather
+    than a workspace tab. Confirm IOC-specific context actions remain
+    selection-only.
 12. Open the query palette and confirm the built-in sources populate
     automatically. Verify the catalogue count, platform matching,
     fuzzy search, keyboard navigation, insertion into a plain input and a
