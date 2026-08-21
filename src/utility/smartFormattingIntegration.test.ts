@@ -61,4 +61,29 @@ describe("smart formatting public selection flow", () => {
       "Investigation summary\nThe user opened a suspicious attachment."
     )
   })
+
+  it("recovers partial JSON through the frozen visual selection flow", () => {
+    const { selection } = selectRoot(`
+      <div id="root"><pre data-rect="100,100,420">"ip": "73.115.85.232",
+"geo": {
+  "city": "Houston",
+  "latitude": 29.76328,</pre></div>
+    `)
+    const snapshot = captureSmartSelection(selection)!
+
+    expect(snapshot.visual?.geometryAvailable).toBe(true)
+    expect(formatSelectedText(selection, snapshot)).toBe(
+      [
+        "```json",
+        "{",
+        '  "ip": "73.115.85.232",',
+        '  "geo": {',
+        '    "city": "Houston",',
+        '    "latitude": 29.76328',
+        "  }",
+        "}",
+        "```"
+      ].join("\n")
+    )
+  })
 })

@@ -213,6 +213,14 @@ filter so CSS-hidden descendants, action controls, and semantic tooltips do not
 leak into the clipboard. Attribute payloads such as `data-raw` and `data-json`
 are never considered selected visual values.
 
+JSON is parsed in two stages. Valid objects and arrays are always parsed first
+without changing whitespace inside string values. A separate conservative
+recovery accepts recognizable property fragments: it can add a missing outer
+object, close unfinished objects or arrays, remove trailing commas, decode
+copied HTML whitespace entities, and normalize padded keys/values or `*,*`
+comma markers. Recovery still ends in `JSON.parse`; broken strings, missing
+values, mismatched delimiters, and property-like prose are not guessed.
+
 Visual candidates must cover at least 70% of the selected rendered text. A
 single horizontal field or explicit vertical label may be accepted at high
 coverage; weak vertical inference requires a repeated pattern. When geometry
@@ -229,6 +237,8 @@ Any change to this pipeline must add positive and negative fixtures covering:
 - internal `data-raw`/`data-json` payloads containing fields such as `origin`
   or serialized HTML;
 - mutation of the live page after the snapshot has been captured.
+- valid JSON with significant string whitespace, partial JSON, and malformed
+  property-like prose that must not be recovered.
 
 ## Cross-browser manual test matrix
 

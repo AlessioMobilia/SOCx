@@ -8,6 +8,7 @@ import {
 
 export type SmartFormatKind =
   | "json"
+  | "partial-json"
   | "semantic-table"
   | "semantic-key-value"
   | "visual-key-value"
@@ -748,6 +749,156 @@ const tryJson = (value: string): string | null => {
   return null
 }
 
+const decodePartialJsonWhitespace = (value: string): string =>
+  value
+    .replace(
+      /&(?:nbsp|ensp|emsp|thinsp);|&#(?:0*32|0*160);|&#x(?:0*20|0*a0);/gi,
+      " "
+    )
+    .replace(/\u00a0/g, " ")
+    .replace(/[\u200b-\u200d\ufeff]/g, "")
+
+const normalizePartialJsonCommaMarkers = (value: string): string => {
+  let result = ""
+  let quoted = false
+  let escaped = false
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    if (quoted) {
+      result += character
+      if (escaped) escaped = false
+      else if (character === "\\") escaped = true
+      else if (character === '"') quoted = false
+      continue
+    }
+
+    if (character === '"') {
+      quoted = true
+      result += character
+      continue
+    }
+
+    if (character === "*") {
+      const marker = value.slice(index).match(/^\*\s*,\s*\*/)
+      if (marker) {
+        result += ","
+        index += marker[0].length - 1
+        continue
+      }
+    }
+    result += character
+  }
+  return result
+}
+
+const normalizePartialJsonStrings = (
+  value: string
+): { text: string; propertyCount: number } | null => {
+  let result = ""
+  let propertyCount = 0
+  let previousSignificant = ""
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    if (character !== '"') {
+      result += character
+      if (!/\s/.test(character)) previousSignificant = character
+      continue
+    }
+
+    let content = ""
+    let closed = false
+    index += 1
+    for (; index < value.length; index += 1) {
+      const stringCharacter = value[index]
+      if (stringCharacter === "\\" && index + 1 < value.length) {
+        content += stringCharacter + value[index + 1]
+        index += 1
+      } else if (stringCharacter === '"') {
+        closed = true
+        break
+      } else {
+        content += stringCharacter
+      }
+    }
+    if (!closed) return null
+
+    let lookahead = index + 1
+    while (lookahead < value.length && /\s/.test(value[lookahead])) {
+      lookahead += 1
+    }
+    const isProperty = value[lookahead] === ":"
+    if (isProperty) {
+      propertyCount += 1
+      // A backslash before an underscore is a common Markdown-copy artifact,
+      // but is not a legal JSON escape sequence.
+      content = content.trim().replace(/\\_/g, "_")
+    } else if (previousSignificant === ":") {
+      content = content.trim()
+    }
+
+    result += `"${content}"`
+    previousSignificant = '"'
+  }
+
+  return { text: result, propertyCount }
+}
+
+const closePartialJsonStructure = (value: string): string | null => {
+  const stack: Array<"{" | "["> = []
+  let quoted = false
+  let escaped = false
+
+  for (const character of value) {
+    if (quoted) {
+      if (escaped) escaped = false
+      else if (character === "\\") escaped = true
+      else if (character === '"') quoted = false
+      continue
+    }
+
+    if (character === '"') quoted = true
+    else if (character === "{" || character === "[") stack.push(character)
+    else if (character === "}" || character === "]") {
+      const expected = character === "}" ? "{" : "["
+      if (stack.pop() !== expected) return null
+    }
+  }
+
+  if (quoted || escaped) return null
+  const withoutTrailingComma = value.replace(/,\s*$/, "")
+  const suffix = stack
+    .reverse()
+    .map((opening) => (opening === "{" ? "}" : "]"))
+    .join("")
+  return `${withoutTrailingComma}${suffix}`.replace(/,\s*([}\]])/g, "$1")
+}
+
+const tryPartialJson = (value: string): string | null => {
+  let text = decodePartialJsonWhitespace(value).trim()
+  if (!text) return null
+
+  // Ignore emphasis markers sometimes introduced around commas by copied
+  // Markdown, while leaving ordinary asterisks inside strings untouched.
+  text = normalizePartialJsonCommaMarkers(text)
+  const normalized = normalizePartialJsonStrings(text)
+  if (!normalized || normalized.propertyCount === 0) return null
+
+  text = normalized.text
+  if (!text.startsWith("{") && !text.startsWith("[")) text = `{${text}`
+  const completed = closePartialJsonStructure(text)
+  if (!completed) return null
+
+  try {
+    const parsed = JSON.parse(completed)
+    if (!parsed || typeof parsed !== "object") return null
+    return `\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``
+  } catch {
+    return null
+  }
+}
+
 const extractJsonCandidate = (
   container: HTMLElement
 ): SmartFormatResult | null => {
@@ -768,6 +919,13 @@ const extractJsonCandidate = (
   for (const source of sources) {
     const formatted = tryJson(source)
     if (formatted) return { kind: "json", score: 100, text: formatted }
+  }
+
+  for (const source of sources) {
+    const formatted = tryPartialJson(source)
+    if (formatted) {
+      return { kind: "partial-json", score: 96, text: formatted }
+    }
   }
 
   const jsonLines = sources
@@ -1483,6 +1641,10 @@ const safeTextCandidate = (text: string): SmartFormatResult | null => {
   const candidates: SmartFormatResult[] = []
   const json = tryJson(value)
   if (json) candidates.push({ kind: "json", score: 100, text: json })
+  const partialJson = tryPartialJson(text)
+  if (partialJson) {
+    candidates.push({ kind: "partial-json", score: 96, text: partialJson })
+  }
   const delimited = extractDelimitedCandidate(value)
   if (delimited) candidates.push(delimited)
   const structured = extractTextCandidate(value)

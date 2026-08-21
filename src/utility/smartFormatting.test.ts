@@ -53,6 +53,74 @@ describe("smart formatting", () => {
     expect(result?.text).toContain('"message": "keep   these spaces"')
   })
 
+  it("recovers a partial JSON object with encoded indentation and missing braces", () => {
+    const source = document.createElement("pre")
+    source.textContent = [
+      '&#x20; "ip": "73.115.85.232",',
+      '&#x20; "geo": {',
+      '&#x20;   "city": "Houston",',
+      '&#x20;   "region": "Texas",',
+      '&#x20;   "region\\_code": "TX",',
+      '&#x20;   "latitude": 29.76328,'
+    ].join("\n")
+
+    const result = formatSmartContainer(source)
+
+    expect(result?.kind).toBe("partial-json")
+    expect(result?.text).toBe(
+      [
+        "```json",
+        "{",
+        '  "ip": "73.115.85.232",',
+        '  "geo": {',
+        '    "city": "Houston",',
+        '    "region": "Texas",',
+        '    "region_code": "TX",',
+        '    "latitude": 29.76328',
+        "  }",
+        "}",
+        "```"
+      ].join("\n")
+    )
+  })
+
+  it("normalizes padded partial JSON fields and copied comma markers", () => {
+    const result = formatSmartContainer(
+      fromHtml(`<pre>
+        " ip ": " 73.115.85.232 " *,*
+        " geo ": {
+        " city ": " Houston " *,*
+        " country_code ": " US " *,*
+        " pattern ": " a*,*b " *,*
+        " latitude ": 29.76328 ,
+      </pre>`)
+    )
+
+    expect(result?.kind).toBe("partial-json")
+    expect(result?.text).toContain('"ip": "73.115.85.232"')
+    expect(result?.text).toContain('"city": "Houston"')
+    expect(result?.text).toContain('"country_code": "US"')
+    expect(result?.text).toContain('"pattern": "a*,*b"')
+    expect(result?.text).toContain('"latitude": 29.76328')
+  })
+
+  it("closes an unfinished array inside a partial object", () => {
+    const result = formatSmartContainer(
+      fromHtml('<pre>"host": "edge-01",\n"ports": [80, 443,</pre>')
+    )
+
+    expect(result?.kind).toBe("partial-json")
+    expect(result?.text).toContain('"ports": [\n    80,\n    443\n  ]')
+  })
+
+  it("does not classify property-like prose as partial JSON", () => {
+    const result = formatSmartContainer(
+      fromHtml('<pre>Analyst note\n"message": not actually JSON</pre>')
+    )
+
+    expect(result?.kind).not.toBe("partial-json")
+  })
+
   it("formats explicit EDR key/value rows without splitting URLs, IPv6 or timestamps", () => {
     const result = formatSmartContainer(
       fromHtml(
