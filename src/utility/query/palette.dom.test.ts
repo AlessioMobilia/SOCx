@@ -162,6 +162,57 @@ describe("query palette", () => {
     expect(labels.some((text) => text.includes("Pre-filter"))).toBe(false)
   })
 
+  it("renders checkbox variables and emits boolean strings", () => {
+    const checkboxPack = makePack({
+      id: "splunk-tstats",
+      name: "Splunk tstats",
+      dialect: "spl",
+      kind: "standard",
+      variables: [
+        {
+          id: "summariesonly",
+          label: "Summaries only",
+          type: "checkbox",
+          default: "true"
+        }
+      ],
+      templates: [
+        {
+          id: "accelerated-traffic",
+          name: "Accelerated traffic",
+          group: "network",
+          requiresIocs: false,
+          body: "| tstats summariesonly={{var:summariesonly}} count"
+        }
+      ]
+    })
+    const values: string[] = []
+
+    openPalette({
+      entries: entriesFromTree(
+        buildGroupTree([{ ...checkboxPack, sourceId: "checkbox" }])
+      ),
+      onRender: (
+        _entry: unknown,
+        input: { variables: Record<string, string> }
+      ) => {
+        if (input.variables.summariesonly) {
+          values.push(input.variables.summariesonly)
+        }
+        return [{ text: "rendered" }]
+      }
+    } as never)
+
+    const checkbox = document.querySelector(
+      'input[aria-label="Summaries only"]'
+    ) as HTMLInputElement
+    expect(checkbox.type).toBe("checkbox")
+    expect(checkbox.checked).toBe(true)
+
+    checkbox.click()
+    expect(values.at(-1)).toBe("false")
+  })
+
   it("opens with every template and closes on demand", () => {
     open()
     expect(isPaletteOpen()).toBe(true)

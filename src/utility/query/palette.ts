@@ -1058,18 +1058,32 @@ export const openPalette = (request: PaletteRequest): void => {
       const input = variable.options?.length
         ? document.createElement("select")
         : document.createElement("input")
-      setStyles(input, {
-        all: "initial",
-        "font-family": font,
-        "font-size": "12px",
-        color: ink,
-        "background-color": fill,
-        border: `1px solid ${line}`,
-        "border-radius": "8px",
-        padding: "5px 8px",
-        flex: "1 1 auto",
-        "min-width": "0"
-      })
+      input.setAttribute("aria-label", variable.label)
+      if (variable.type === "checkbox" && input instanceof HTMLInputElement) {
+        input.type = "checkbox"
+        setStyles(input, {
+          all: "initial",
+          appearance: "auto",
+          width: "16px",
+          height: "16px",
+          flex: "0 0 auto",
+          cursor: "pointer",
+          "accent-color": accent
+        })
+      } else {
+        setStyles(input, {
+          all: "initial",
+          "font-family": font,
+          "font-size": "12px",
+          color: ink,
+          "background-color": fill,
+          border: `1px solid ${line}`,
+          "border-radius": "8px",
+          padding: "5px 8px",
+          flex: "1 1 auto",
+          "min-width": "0"
+        })
+      }
 
       const current = variables[variable.id] ?? variable.default ?? ""
       if (input instanceof HTMLSelectElement) {
@@ -1084,18 +1098,21 @@ export const openPalette = (request: PaletteRequest): void => {
           input.appendChild(element)
         }
         input.value = current
+      } else if (input.type === "checkbox") {
+        input.checked = current === "true"
       } else {
         ;(input as HTMLInputElement).value = current
       }
 
-      input.addEventListener("input", () => {
-        variables[variable.id] = (input as HTMLInputElement).value
+      const updateVariable = () => {
+        variables[variable.id] =
+          input instanceof HTMLInputElement && input.type === "checkbox"
+            ? String(input.checked)
+            : input.value
         renderPreview()
-      })
-      input.addEventListener("change", () => {
-        variables[variable.id] = (input as HTMLInputElement).value
-        renderPreview()
-      })
+      }
+      input.addEventListener("input", updateVariable)
+      input.addEventListener("change", updateVariable)
 
       row.append(label, input)
       variableGrid.appendChild(row)

@@ -127,6 +127,41 @@ describe("validateQueryPack", () => {
     expect(duplicate.ok).toBe(false)
   })
 
+  it("validates checkbox variables as boolean string inputs", () => {
+    const checkbox = { id: "range", label: "Summaries only", type: "checkbox" }
+    const valid = validateQueryPack(
+      {
+        ...validPack,
+        variables: [{ ...checkbox, default: "true" }]
+      },
+      { knownDialects }
+    )
+    const invalidDefault = validateQueryPack(
+      {
+        ...validPack,
+        variables: [{ ...checkbox, default: "yes" }]
+      },
+      { knownDialects }
+    )
+    const invalidOptions = validateQueryPack(
+      {
+        ...validPack,
+        variables: [{ ...checkbox, default: "false", options: ["yes", "no"] }]
+      },
+      { knownDialects }
+    )
+
+    expect(valid.ok).toBe(true)
+    if (valid.ok) {
+      expect(valid.value.variables?.[0]).toMatchObject({
+        type: "checkbox",
+        default: "true"
+      })
+    }
+    expect(invalidDefault.ok).toBe(false)
+    expect(invalidOptions.ok).toBe(false)
+  })
+
   it("rejects an ioc template that never renders its indicators", () => {
     const result = validateQueryPack(
       {
