@@ -291,6 +291,57 @@ The investigation remains open.</article>`)
     expect(result?.text).toContain("| host-23 | High |")
   })
 
+  it("formats Splunk event tokens even when rendered geometry is available", () => {
+    document.body.innerHTML = `
+      <div id="splunk-event">
+        <span class="key level-0">
+          <span class="key-name">src_ip</span>=<span class="t">203.0.113.24</span>
+        </span>
+        <span class="key level-0">
+          <span class="key-name">action</span>=<span class="t">blocked</span>
+        </span>
+      </div>
+    `
+    setRect(
+      document.querySelectorAll<HTMLElement>(".key-name")[0],
+      100,
+      100,
+      45
+    )
+    setRect(document.querySelectorAll<HTMLElement>(".t")[0], 155, 100, 95)
+    setRect(
+      document.querySelectorAll<HTMLElement>(".key-name")[1],
+      270,
+      100,
+      45
+    )
+    setRect(document.querySelectorAll<HTMLElement>(".t")[1], 325, 100, 55)
+
+    const keyNames = document.querySelectorAll<HTMLElement>(".key-name")
+    const values = document.querySelectorAll<HTMLElement>(".t")
+    const range = document.createRange()
+    range.setStart(keyNames[0].firstChild!, 0)
+    range.setEnd(values[1].firstChild!, values[1].textContent!.length)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const result = formatSmartSelection(selection)
+
+    expect(result?.kind).toBe("semantic-key-value")
+    expect(result?.text).toBe("src_ip: 203.0.113.24\naction: blocked")
+  })
+
+  it("does not treat generic key-name and value classes as Splunk fields", () => {
+    const result = formatSmartContainer(
+      fromHtml(
+        '<p><span class="key-name">Investigation summary</span> <span class="t">The analyst reviewed the event.</span></p>'
+      )
+    )
+
+    expect(result).toBeNull()
+  })
+
   it("formats stacked visual fields from an immutable snapshot", () => {
     document.body.innerHTML = `
       <div id="visual-root">

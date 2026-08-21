@@ -210,6 +210,11 @@ pages such as VirusTotal, where the visible property table lives inside a
 custom element. If geometry is unavailable, a conservative text fallback also
 recognizes at least three alternating `label`/`value` lines without punctuation.
 
+Product field markers are captured before the visual reconstruction. This
+includes Splunk event tokens (`.key.level-*` with `.key-name` and `.t`
+children), so inline log fields keep their key/value relationship even when
+the browser exposes usable text geometry.
+
 A value selected on its own can be enriched only from a nearby explicit label
 (`label`, `dt`, `aria-labelledby`, a field marker, or a trailing colon).
 Surrounding values are never pulled into the selection.

@@ -786,6 +786,35 @@ const extractSemanticPairs = (
   ).map((pair) => pair.split("\u0000") as [string, string])
 }
 
+const extractSplunkEventPairs = (
+  container: HTMLElement
+): Array<[string, string]> => {
+  const fields = [
+    ...(container.matches(".key[class*='level-']") ? [container] : []),
+    ...Array.from(
+      container.querySelectorAll<HTMLElement>(".key[class*='level-']")
+    )
+  ]
+
+  return unique(
+    fields
+      .map((field) => {
+        const keyElement = Array.from(field.children).find((child) =>
+          child.classList.contains("key-name")
+        ) as HTMLElement | undefined
+        const valueElement = Array.from(field.children).find((child) =>
+          child.classList.contains("t")
+        ) as HTMLElement | undefined
+        const key = normalizeLabel(
+          keyElement ? readElementText(keyElement) : ""
+        )
+        const value = valueElement ? readElementText(valueElement) : ""
+        return isLikelyLabel(key) && value ? `${key}\u0000${value}` : ""
+      })
+      .filter(Boolean)
+  ).map((pair) => pair.split("\u0000") as [string, string])
+}
+
 const tryJson = (value: string): string | null => {
   const text = value.trim()
   if (!(
@@ -1225,9 +1254,11 @@ export const formatSmartContainer = (
   })
 
   const semanticPairs = unique(
-    [...extractSemanticPairs(container), ...matrixPairs].map(
-      ([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`
-    )
+    [
+      ...extractSemanticPairs(container),
+      ...extractSplunkEventPairs(container),
+      ...matrixPairs
+    ].map(([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`)
   ).map((pair) => pair.split("\u0000") as [string, string])
   if (semanticPairs.length > 0) {
     candidates.push({
@@ -1287,6 +1318,17 @@ const formatMarkedSelection = (
 ): SmartFormatResult | null => {
   if (selection.rangeCount === 0) return null
   const range = selection.getRangeAt(0)
+  const fragment = range.startContainer.ownerDocument.createElement("div")
+  fragment.appendChild(range.cloneContents())
+  const splunkPairs = extractSplunkEventPairs(fragment)
+  if (splunkPairs.length > 0) {
+    return {
+      kind: "semantic-key-value",
+      score: 99,
+      text: formatKeyValues(splunkPairs)
+    }
+  }
+
   const start = elementFromNode(range.startContainer)
   const end = elementFromNode(range.endContainer)
   const startData = start?.closest<HTMLElement>(DATA_FIELD_SELECTOR)
