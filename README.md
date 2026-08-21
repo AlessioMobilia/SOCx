@@ -226,19 +226,22 @@ actually contain them; space separated terms all have to match. Star a query
 with `Alt+F` or the ☆ next to its name and it is pinned to the top of the list
 under **★ Favorites**, on every console, until you unstar it.
 
+The in-page palette and the dedicated Query workspace use the same query
+browser rather than maintaining two parallel interfaces. Both therefore show
+the same three-pane layout on wide screens, the same filters, source path,
+pack-verification state, tags, repository facets, ATT&CK ids, references,
+variables and rendered-query warnings. Language, category and custom facets sit
+inside the collapsed **More filters** disclosure; their native hover help is
+painted outside the panel and cannot be clipped by its scrolling columns.
+
 When no console is open, use **Query workspace** from the SOCx popup or from the
 persistent `SOCx › Open query workspace…` page context menu. It accepts a mixed
 IOC list, offers the same filters, favorites and deep search over every enabled
-IOC and hunting template, lists them 25 to a page inside a scrolling column,
+IOC and hunting template, keeps the full catalogue in a scrolling column,
 exposes template variables, shows uncovered IOC types and chunk warnings, and
-copies the generated query. The template catalogue receives the largest share
-of the three-column layout and wraps names, descriptions and metadata instead
-of hiding them in a narrow row. Secondary filters stay in a collapsed **More
-filters** panel so the scrolling template list keeps most of the available
-height. Every filter and template variable explains itself on hover or keyboard
-focus; these tooltips render above the workspace panels instead of being clipped
-by them. Boolean template variables use the same switch pattern as the rest of
-the workspace.
+copies the generated query. Its compact one-line banner gives nearly all of the
+tab height to that shared browser. Boolean variables use a consistent switch
+instead of a browser-native checkbox.
 
 Below the workspace is a collapsed **Query language mini guides** reference. It
 covers every bundled dialect — including regex and PowerShell — and can be
@@ -258,10 +261,10 @@ console keeps your session, filters and time picker. Insertion goes through the
 one path React, CodeMirror and Monaco all recognise, and falls back to the
 clipboard with a message when a field refuses it.
 
-The palette carries its own **indicator field**, at the top of the preview
-column: it opens prefilled with whatever was found, shows what was recognised
-("3 indicators · 2 IP · 1 Domain"), and can be typed into or pasted over at any
-time — the query below it re-renders as you edit.
+The shared query browser carries its own **indicator field**, in the left
+column on wide screens: it opens prefilled with whatever was found, shows what
+was recognised ("3 indicators · 2 IP · 1 Domain"), and can be typed into or
+pasted over at any time — the query below it re-renders as you edit.
 
 Indicators come from your current selection, or from the Bulk Check workspace
 when there is none. Each template maps every indicator type to its own field,
@@ -273,7 +276,8 @@ cannot merge safely — types read from different tables, or a body that is not
 one field-to-list comparison — falls back to one query per type and says why.
 Long lists are split into chunks and labelled, and quoting and escaping are
 decided by the dialect, never by the pack. Hunting queries read no indicator, so
-the indicator list disappears when one is selected.
+the fixed three-pane layout dims the indicator column and explains that it is
+not used; compact layouts hide it to preserve preview space.
 
 ### The rule builder
 
