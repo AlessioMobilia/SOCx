@@ -1,7 +1,7 @@
-// The query palette: an in-page overlay that is only ever created when the
-// analyst asks for it — keyboard shortcut, context menu entry, or the SOCx UI.
-// Nothing is injected on page load, and no floating control is added to the
-// host page.
+// The shared query browser. It mounts as an in-page overlay only when the
+// analyst asks for the palette, or as the main region of Query workspace.
+// Nothing is injected into a host page on load and no floating control is
+// added.
 //
 // The overlay lives in a hostile styling environment, so every node is built
 // from `all: initial` plus explicit `!important` declarations rather than from
@@ -55,6 +55,10 @@ export type PaletteRequest = {
   /** Start with the per-type comparisons merged into one query. */
   mergeTypes?: boolean
   onMergeTypesChange?: (value: boolean) => void
+  /** Keeps an embedding surface's draft alive if the library is remounted. */
+  onIndicatorTextChange?: (value: string) => void
+  /** Keeps the current template alive if the library is remounted. */
+  onSelectedKeyChange?: (key: string) => void
   platformLabel?: string
   /** Starred entry keys, most recently starred first. */
   favorites?: string[]
@@ -71,6 +75,13 @@ export type PaletteRequest = {
       mergeTypes: boolean
     }
   ) => { text: string; note?: string; warning?: string }[]
+}
+
+export type QueryViewMode = "overlay" | "workspace"
+
+export type QueryViewOptions = {
+  mode: QueryViewMode
+  host: HTMLElement
 }
 
 const setStyles = (
@@ -108,13 +119,25 @@ export const closePalette = (): void => {
 export const isPaletteOpen = (): boolean =>
   Boolean(document.querySelector(`[${OVERLAY_ATTRIBUTE}="true"]`))
 
-export const openPalette = (request: PaletteRequest): void => {
-  if (typeof document === "undefined" || !document.documentElement) return
-  closePalette()
+/**
+ * Mounts the one query browser used by both the in-page palette and the
+ * dedicated workspace. The mode only changes the surrounding chrome and the
+ * actions that make sense in that context; catalogue, filters and preview stay
+ * identical.
+ */
+export const mountQueryView = (
+  request: PaletteRequest,
+  options: QueryViewOptions
+): (() => void) => {
+  if (typeof document === "undefined" || !document.documentElement) {
+    return () => undefined
+  }
+  const embedded = options.mode === "workspace"
+  if (!embedded) closePalette()
 
   // Captured before the overlay steals the focus, so the query can be inserted
   // back into the field the analyst was standing in.
-  const insertionTarget = resolveTarget()
+  const insertionTarget = embedded ? null : resolveTarget()
   const dark = isDark()
   const font =
     "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
@@ -134,31 +157,43 @@ export const openPalette = (request: PaletteRequest): void => {
   const warn = "#f59e0b"
 
   const overlay = document.createElement("div")
-  overlay.setAttribute(OVERLAY_ATTRIBUTE, "true")
+  overlay.setAttribute(OVERLAY_ATTRIBUTE, embedded ? "workspace" : "true")
   setStyles(overlay, {
     all: "initial",
-    position: "fixed",
-    inset: "0",
-    "z-index": MAX_Z_INDEX,
+    position: embedded ? "relative" : "fixed",
+    inset: embedded ? "auto" : "0",
+    "z-index": embedded ? "1" : MAX_Z_INDEX,
     display: "flex",
     "align-items": "flex-start",
     "justify-content": "center",
-    padding: "8vh 16px 16px",
-    "background-color": dark ? "rgba(2, 6, 16, 0.6)" : "rgba(15, 23, 42, 0.42)",
+    width: "100%",
+    height: embedded ? "100%" : "auto",
+    "min-height": "0",
+    "box-sizing": "border-box",
+    padding: embedded ? "0" : "4vh 16px 16px",
+    "background-color": embedded
+      ? "transparent"
+      : dark
+        ? "rgba(2, 6, 16, 0.6)"
+        : "rgba(15, 23, 42, 0.42)",
     isolation: "isolate"
   })
 
   const panel = document.createElement("div")
-  panel.setAttribute("role", "dialog")
-  panel.setAttribute("aria-modal", "true")
-  panel.setAttribute("aria-label", "SOCx query palette")
+  panel.setAttribute("role", embedded ? "region" : "dialog")
+  if (!embedded) panel.setAttribute("aria-modal", "true")
+  panel.setAttribute(
+    "aria-label",
+    embedded ? "SOCx query workspace" : "SOCx query palette"
+  )
   setStyles(panel, {
     all: "initial",
     display: "flex",
     "flex-direction": "column",
-    width: "880px",
-    "max-width": "calc(100vw - 32px)",
-    "max-height": "80vh",
+    width: embedded ? "100%" : "1180px",
+    height: embedded ? "100%" : "auto",
+    "max-width": embedded ? "none" : "calc(100vw - 32px)",
+    "max-height": embedded ? "none" : "90vh",
     "box-sizing": "border-box",
     color: ink,
     "background-color": dark
@@ -166,10 +201,12 @@ export const openPalette = (request: PaletteRequest): void => {
       : "rgba(255, 255, 255, 0.99)",
     border: `1px solid ${strongLine}`,
     "border-top": `3px solid ${accent}`,
-    "border-radius": "16px",
-    "box-shadow": dark
-      ? "0 32px 64px rgba(0,0,0,0.62)"
-      : "0 32px 64px rgba(15,23,42,0.26)",
+    "border-radius": embedded ? "14px" : "16px",
+    "box-shadow": embedded
+      ? "0 8px 24px rgba(15,23,42,0.08)"
+      : dark
+        ? "0 32px 64px rgba(0,0,0,0.62)"
+        : "0 32px 64px rgba(15,23,42,0.26)",
     "font-family": font,
     overflow: "hidden"
   })
@@ -332,6 +369,7 @@ export const openPalette = (request: PaletteRequest): void => {
 
   const makeSelect = (options: {
     ariaLabel: string
+    title?: string
     entries: { value: string; label: string; title?: string }[]
     value: string
     active: boolean
@@ -339,6 +377,7 @@ export const openPalette = (request: PaletteRequest): void => {
   }) => {
     const select = document.createElement("select")
     select.setAttribute("aria-label", options.ariaLabel)
+    if (options.title) select.title = options.title
     setStyles(select, {
       all: "initial",
       display: "inline-flex",
@@ -429,8 +468,8 @@ export const openPalette = (request: PaletteRequest): void => {
     all: "initial",
     display: "flex",
     "flex-direction": "column",
-    gap: "10px",
-    padding: "12px 14px 10px",
+    gap: embedded ? "8px" : "10px",
+    padding: embedded ? "9px 12px" : "12px 14px 10px",
     "border-bottom": `1px solid ${line}`,
     "font-family": font
   })
@@ -438,7 +477,7 @@ export const openPalette = (request: PaletteRequest): void => {
   const titleRow = document.createElement("div")
   setStyles(titleRow, {
     all: "initial",
-    display: "flex",
+    display: embedded ? "none" : "flex",
     "align-items": "center",
     gap: "8px",
     "font-family": font
@@ -451,7 +490,7 @@ export const openPalette = (request: PaletteRequest): void => {
       "text-transform": "uppercase",
       color: accent
     }),
-    makeText("span", "Query palette", {
+    makeText("span", embedded ? "Query workspace" : "Query palette", {
       "font-size": "11px",
       "font-weight": "600",
       color: muted
@@ -486,6 +525,8 @@ export const openPalette = (request: PaletteRequest): void => {
   const search = document.createElement("input")
   search.type = "text"
   search.setAttribute("aria-label", "Search queries")
+  search.title =
+    "Search names, descriptions, query text, fields, commands, tags and ATT&CK identifiers"
   // Deep search: the placeholder has to say so, or nobody types a field name.
   search.placeholder = "Search a name, a description, a field or a value"
   setStyles(search, {
@@ -508,7 +549,8 @@ export const openPalette = (request: PaletteRequest): void => {
     search
   )
 
-  // Two rows, on purpose: which library you are in, then how you narrow it.
+  // The library choice stays visible. Narrowing filters are collapsed until
+  // needed, which gives the catalogue more vertical room in both surfaces.
   const scopeRow = document.createElement("div")
   setStyles(scopeRow, {
     all: "initial",
@@ -526,12 +568,55 @@ export const openPalette = (request: PaletteRequest): void => {
     "align-items": "center",
     "flex-wrap": "wrap",
     gap: "6px",
-    "padding-top": "8px",
+    padding: "8px 10px 10px",
     "border-top": `1px solid ${line}`,
     "font-family": font
   })
 
-  header.append(titleRow, searchRow, scopeRow, filterRow)
+  const filterDetails = document.createElement("details")
+  setStyles(filterDetails, {
+    all: "initial",
+    display: "block",
+    "border-radius": "10px",
+    border: `1px solid ${line}`,
+    "font-family": font,
+    overflow: "hidden"
+  })
+  const filterSummary = document.createElement("summary")
+  filterSummary.title =
+    "Filter by query language, category and repository-specific fields"
+  setStyles(filterSummary, {
+    all: "initial",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "space-between",
+    gap: "8px",
+    padding: "7px 10px",
+    "font-family": font,
+    "font-size": "11px",
+    "font-weight": "700",
+    color: muted,
+    cursor: "pointer"
+  })
+  const filterSummaryLabel = makeText("span", "More filters", {
+    "font-size": "11px",
+    "font-weight": "700",
+    color: "inherit"
+  })
+  const filterSummaryMeta = makeText("span", "", {
+    "font-size": "10px",
+    "font-variant-numeric": "tabular-nums",
+    color: faint
+  })
+  filterSummary.append(filterSummaryLabel, filterSummaryMeta)
+  filterDetails.append(filterSummary, filterRow)
+  filterDetails.addEventListener("toggle", () => {
+    filterSummaryMeta.textContent = `${filtered.length} matches · ${
+      filterDetails.open ? "Hide" : "Show"
+    }`
+  })
+
+  header.append(titleRow, searchRow, scopeRow, filterDetails)
 
   // ------------------------------------------------------------------- body
   const body = document.createElement("div")
@@ -543,14 +628,16 @@ export const openPalette = (request: PaletteRequest): void => {
     "font-family": font
   })
 
+  const threePane = window.innerWidth >= (embedded ? 900 : 1100)
+
   const list = document.createElement("div")
   list.setAttribute("role", "listbox")
   list.setAttribute("aria-label", "Query results")
   setStyles(list, {
     all: "initial",
     display: "block",
-    width: "42%",
-    "min-width": "220px",
+    width: threePane ? "34%" : "42%",
+    "min-width": threePane ? "280px" : "220px",
     "overflow-y": "auto",
     padding: "6px 0 10px",
     "border-right": `1px solid ${line}`,
@@ -588,10 +675,14 @@ export const openPalette = (request: PaletteRequest): void => {
     all: "initial",
     display: "flex",
     "align-items": "center",
+    "flex-wrap": "wrap",
     gap: "8px",
     "font-family": font
   })
   const indicatorSummary = makeText("span", "", {
+    display: "block",
+    width: "100%",
+    order: "2",
     "font-size": "11px",
     color: muted
   })
@@ -608,8 +699,8 @@ export const openPalette = (request: PaletteRequest): void => {
       color: faint
     }),
     indicatorSpacer,
-    indicatorSummary,
-    mergeSlot
+    mergeSlot,
+    indicatorSummary
   )
 
   const indicators = document.createElement("textarea")
@@ -655,8 +746,26 @@ export const openPalette = (request: PaletteRequest): void => {
     "font-family": font
   })
 
-  previewColumn.append(indicatorBox, preview)
-  body.append(list, previewColumn)
+  if (threePane) {
+    setStyles(indicatorBox, {
+      width: "24%",
+      "min-width": "210px",
+      "box-sizing": "border-box",
+      "border-right": `1px solid ${line}`,
+      "border-bottom": "0",
+      padding: "14px"
+    })
+    setStyles(indicators, {
+      flex: "1 1 auto",
+      "min-height": "180px",
+      "max-height": "none",
+      resize: "none"
+    })
+    body.append(indicatorBox, list, preview)
+  } else {
+    previewColumn.append(indicatorBox, preview)
+    body.append(list, previewColumn)
+  }
 
   // ----------------------------------------------------------------- footer
   const footer = document.createElement("div")
@@ -673,7 +782,9 @@ export const openPalette = (request: PaletteRequest): void => {
 
   const hint = makeText(
     "span",
-    "↑↓ move · ↵ insert · ⇧↵ at caret · Alt+F favorite · Esc close",
+    embedded
+      ? "Select a template, adjust its options, then copy the generated query"
+      : "↑↓ move · ↵ insert · ⇧↵ at caret · Alt+F favorite · Esc close",
     { "font-size": "11px", color: faint }
   )
 
@@ -681,7 +792,8 @@ export const openPalette = (request: PaletteRequest): void => {
   const insertButton = makeButton("Insert", true)
   const actions = document.createElement("div")
   setStyles(actions, { all: "initial", display: "flex", gap: "8px" })
-  actions.append(copyButton, insertButton)
+  actions.append(copyButton)
+  if (!embedded) actions.append(insertButton)
   footer.append(hint, actions)
 
   panel.append(header, body, footer)
@@ -733,10 +845,8 @@ export const openPalette = (request: PaletteRequest): void => {
 
   // -------------------------------------------------------------- filter bar
   //
-  // Every filter stays on screen at all times, whatever is selected: a control
-  // that disappears when you click elsewhere cannot be reasoned about. A value
-  // that no longer matches anything is shown counting zero instead of being
-  // removed, and the order never changes while you type.
+  // Filter values never disappear or reorder. The containing disclosure may be
+  // closed, but its active count makes the current state visible at a glance.
   function renderFilters() {
     scopeRow.textContent = ""
     filterRow.textContent = ""
@@ -746,6 +856,17 @@ export const openPalette = (request: PaletteRequest): void => {
       favorites,
       request.dialectLabels
     )
+    const narrowFilterCount =
+      Number(filters.dialect !== "all") +
+      Number(filters.group !== "all") +
+      Object.values(filters.labels ?? {}).filter((value) => value !== "all")
+        .length
+    filterSummaryLabel.textContent = narrowFilterCount
+      ? `More filters · ${narrowFilterCount} active`
+      : "More filters"
+    filterSummaryMeta.textContent = `${filtered.length} matches · ${
+      filterDetails.open ? "Hide" : "Show"
+    }`
 
     // The two libraries are not one filter among many: they choose *what you
     // are browsing*, so they get a segmented control of their own.
@@ -798,6 +919,7 @@ export const openPalette = (request: PaletteRequest): void => {
       "text-decoration": "underline"
     }) as HTMLButtonElement
     clear.type = "button"
+    clear.title = "Reset search, query type and every narrowing filter"
     clear.disabled = !hasActiveFilters(filters)
     clear.addEventListener("click", () => {
       search.value = ""
@@ -826,6 +948,7 @@ export const openPalette = (request: PaletteRequest): void => {
       filterRow.appendChild(
         makeSelect({
           ariaLabel: "Filter by query language",
+          title: "Show templates written for one query language or product",
           active: filters.dialect !== "all",
           value: filters.dialect,
           entries: [
@@ -844,6 +967,7 @@ export const openPalette = (request: PaletteRequest): void => {
     filterRow.appendChild(
       makeSelect({
         ariaLabel: "Filter by category",
+        title: "Narrow templates to one catalogue category",
         active: filters.group !== "all",
         value: filters.group,
         entries: [
@@ -863,6 +987,7 @@ export const openPalette = (request: PaletteRequest): void => {
       filterRow.appendChild(
         makeSelect({
           ariaLabel: `Filter by ${facet.label}`,
+          title: facet.description || `Narrow templates by ${facet.label}`,
           active: (filters.labels?.[facet.id] ?? "all") !== "all",
           value: filters.labels?.[facet.id] ?? "all",
           entries: [
@@ -886,7 +1011,13 @@ export const openPalette = (request: PaletteRequest): void => {
     const entry = activeEntry()
     if (!entry) {
       rendered = []
-      indicatorBox.style.setProperty("display", "none", "important")
+      indicatorBox.style.setProperty(
+        "display",
+        threePane ? "flex" : "none",
+        "important"
+      )
+      indicatorBox.style.setProperty("opacity", "0.5", "important")
+      indicatorSummary.textContent = "No selected query"
       preview.append(
         makeText(
           "p",
@@ -906,13 +1037,22 @@ export const openPalette = (request: PaletteRequest): void => {
       return
     }
 
-    // A hunting playbook runs as it is written: showing it an indicator list it
-    // will never read only invites the analyst to fill one in for nothing.
+    // In the three-pane view the indicator column stays put so selecting a
+    // hunting playbook does not make the layout jump. Compact overlays can
+    // still hide it to protect the query preview.
     indicatorBox.style.setProperty(
       "display",
-      entry.template.requiresIocs ? "flex" : "none",
+      entry.template.requiresIocs || threePane ? "flex" : "none",
       "important"
     )
+    indicatorBox.style.setProperty(
+      "opacity",
+      entry.template.requiresIocs ? "1" : "0.5",
+      "important"
+    )
+    indicatorSummary.textContent = entry.template.requiresIocs
+      ? (request.describeIndicators?.(indicators.value) ?? "")
+      : "Not used by this hunting query"
 
     const variables = variablesByEntry.get(entry.key) ?? {}
     variablesByEntry.set(entry.key, variables)
@@ -986,8 +1126,15 @@ export const openPalette = (request: PaletteRequest): void => {
       makeBadge(KIND_LABELS[entry.pack.kind] ?? entry.pack.kind, "neutral"),
       makeBadge(dialectChipLabel(entryDialect(entry)), "neutral")
     )
-    if (entry.pack.verified !== true) {
-      badges.appendChild(makeBadge("unverified fields", "warn"))
+    badges.appendChild(
+      makeBadge(
+        entry.pack.verified === true ? "verified pack" : "unverified fields",
+        entry.pack.verified === true ? "accent" : "warn"
+      )
+    )
+    for (const values of Object.values(resolveEntryLabels(entry))) {
+      for (const value of values)
+        badges.appendChild(makeBadge(value, "neutral"))
     }
     const tags = entry.template.tags ?? []
     for (const tag of tags.slice(0, 4)) {
@@ -1018,6 +1165,31 @@ export const openPalette = (request: PaletteRequest): void => {
       )
     }
 
+    const references = document.createElement("div")
+    setStyles(references, {
+      all: "initial",
+      display: "flex",
+      "flex-wrap": "wrap",
+      gap: "6px",
+      "font-family": font
+    })
+    if (/^https?:\/\//i.test(entry.template.reference ?? "")) {
+      const reference = makeText("a", "Template reference ↗", {
+        "font-size": "11px",
+        "font-weight": "600",
+        color: muted,
+        "text-decoration": "underline"
+      }) as HTMLAnchorElement
+      reference.href = entry.template.reference
+      reference.target = "_blank"
+      reference.rel = "noreferrer"
+      references.appendChild(reference)
+    }
+    for (const technique of entry.template.mitre ?? []) {
+      references.appendChild(makeBadge(technique, "neutral"))
+    }
+    if (references.childElementCount > 0) meta.appendChild(references)
+
     // Variable inputs, which are the only input a standard query needs. Only
     // the ones this template actually substitutes are offered: a pack declares
     // its variables once for every template in it, and a field the query never
@@ -1035,6 +1207,9 @@ export const openPalette = (request: PaletteRequest): void => {
 
     for (const variable of variableFields) {
       const row = document.createElement("label")
+      row.title =
+        variable.description ||
+        `${variable.label} changes the value inserted into the generated query.`
       setStyles(row, {
         all: "initial",
         display: "flex",
@@ -1061,14 +1236,17 @@ export const openPalette = (request: PaletteRequest): void => {
       input.setAttribute("aria-label", variable.label)
       if (variable.type === "checkbox" && input instanceof HTMLInputElement) {
         input.type = "checkbox"
+        input.setAttribute("role", "switch")
         setStyles(input, {
           all: "initial",
-          appearance: "auto",
-          width: "16px",
-          height: "16px",
+          appearance: "none",
+          width: "34px",
+          height: "20px",
           flex: "0 0 auto",
           cursor: "pointer",
-          "accent-color": accent
+          "border-radius": "999px",
+          border: `1px solid ${line}`,
+          outline: "none"
         })
       } else {
         setStyles(input, {
@@ -1100,6 +1278,13 @@ export const openPalette = (request: PaletteRequest): void => {
         input.value = current
       } else if (input.type === "checkbox") {
         input.checked = current === "true"
+        const thumbPosition = input.checked ? "24px" : "9px"
+        setStyles(input, {
+          "background-color": input.checked ? accentSoft : fill,
+          "background-image": `radial-gradient(circle at ${thumbPosition} 50%, ${
+            input.checked ? accent : faint
+          } 0 6px, transparent 6.5px)`
+        })
       } else {
         ;(input as HTMLInputElement).value = current
       }
@@ -1296,10 +1481,13 @@ export const openPalette = (request: PaletteRequest): void => {
       item.append(text, star)
       item.addEventListener("click", () => {
         activeIndex = index
+        request.onSelectedKeyChange?.(entry.key)
         renderList()
         renderPreview()
       })
-      item.addEventListener("dblclick", () => void insert("replace"))
+      if (!embedded) {
+        item.addEventListener("dblclick", () => void insert("replace"))
+      }
       list.appendChild(item)
     }
 
@@ -1356,7 +1544,7 @@ export const openPalette = (request: PaletteRequest): void => {
     if (!text) return
     try {
       await navigator.clipboard.writeText(text)
-      closePalette()
+      if (!embedded) closePalette()
       showToast("Query copied to clipboard", "success")
     } catch {
       showToast("Could not copy the query", "danger")
@@ -1369,6 +1557,8 @@ export const openPalette = (request: PaletteRequest): void => {
       Math.max(activeIndex + delta, 0),
       filtered.length - 1
     )
+    const entry = activeEntry()
+    if (entry) request.onSelectedKeyChange?.(entry.key)
     // Walking past the fold expands it rather than trapping the cursor.
     if (activeIndex >= visibleLimit) {
       visibleLimit = Math.min(filtered.length, activeIndex + PAGE_SIZE)
@@ -1383,8 +1573,11 @@ export const openPalette = (request: PaletteRequest): void => {
   search.addEventListener("input", () => setFilters({ search: search.value }))
 
   const renderIndicatorSummary = () => {
+    const selected = activeEntry()
     indicatorSummary.textContent =
-      request.describeIndicators?.(indicators.value) ?? ""
+      selected && !selected.template.requiresIocs
+        ? "Not used by this hunting query"
+        : (request.describeIndicators?.(indicators.value) ?? "")
 
     // One query for the whole selection, or one per indicator type. The choice
     // lives next to the list it applies to, and is remembered.
@@ -1406,11 +1599,13 @@ export const openPalette = (request: PaletteRequest): void => {
     )
   }
   indicators.addEventListener("input", () => {
+    request.onIndicatorTextChange?.(indicators.value)
     renderIndicatorSummary()
     renderPreview()
   })
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (embedded) return
     if (event.key === "Escape") {
       event.preventDefault()
       event.stopPropagation()
@@ -1445,21 +1640,33 @@ export const openPalette = (request: PaletteRequest): void => {
   }
 
   const cleanup = () => {
-    document.removeEventListener("keydown", onKeyDown, true)
+    if (!embedded) document.removeEventListener("keydown", onKeyDown, true)
     overlay.remove()
     if (activePaletteCleanup === cleanup) {
       activePaletteCleanup = null
     }
   }
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) cleanup()
-  })
-  document.addEventListener("keydown", onKeyDown, true)
-  activePaletteCleanup = cleanup
+  if (!embedded) {
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) cleanup()
+    })
+    document.addEventListener("keydown", onKeyDown, true)
+    activePaletteCleanup = cleanup
+  }
 
-  ;(document.body ?? document.documentElement).appendChild(overlay)
+  options.host.appendChild(overlay)
   renderIndicatorSummary()
   recompute()
-  search.focus()
+  if (!embedded) search.focus()
+  return cleanup
+}
+
+export const openPalette = (request: PaletteRequest): void => {
+  if (typeof document === "undefined" || !document.documentElement) return
+  closePalette()
+  mountQueryView(request, {
+    mode: "overlay",
+    host: document.body ?? document.documentElement
+  })
 }

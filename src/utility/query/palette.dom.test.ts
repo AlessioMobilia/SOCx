@@ -6,6 +6,7 @@ import {
   closePalette,
   entriesFromTree,
   isPaletteOpen,
+  mountQueryView,
   openPalette
 } from "./palette"
 import { bundledDialectMap } from "./render"
@@ -219,6 +220,35 @@ describe("query palette", () => {
     expect(rows()).toHaveLength(entries.length)
     closePalette()
     expect(isPaletteOpen()).toBe(false)
+  })
+
+  it("mounts the same browser as an embedded workspace", () => {
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const onIndicatorTextChange = vi.fn()
+    const cleanup = mountQueryView(
+      {
+        entries,
+        indicatorHint: ["8.8.8.8"],
+        onIndicatorTextChange,
+        onRender: () => [{ text: "embedded query" }]
+      },
+      { mode: "workspace", host }
+    )
+
+    expect(isPaletteOpen()).toBe(false)
+    expect(host.querySelector('[role="region"]')).toBeTruthy()
+    expect(rows()).toHaveLength(entries.length)
+    expect(host.textContent).toContain("embedded query")
+    expect(host.querySelector("details")?.open).toBe(false)
+
+    const field = indicatorField()
+    field.value = "1.1.1.1"
+    field.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(onIndicatorTextChange).toHaveBeenCalledWith("1.1.1.1")
+
+    cleanup()
+    expect(host.childElementCount).toBe(0)
   })
 
   it("narrows the list from a value that only appears inside the query", () => {
