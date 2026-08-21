@@ -154,6 +154,7 @@ export type QueryPack = {
   variables?: {
     id: string
     label: string
+    type?: "text" | "checkbox"
     default?: string
     options?: string[]
     description?: string
@@ -509,11 +510,40 @@ export const validateQueryPack = (
         return
       }
       seenVariableIds.add(variableId)
+      const variableType =
+        raw.type === "text" || raw.type === "checkbox" ? raw.type : undefined
+      if (raw.type !== undefined && !variableType) {
+        errors.push({
+          path,
+          message: 'variable type must be "text" or "checkbox"'
+        })
+      }
+      const variableDefault = asString(raw.default, 500)
+      const variableOptions = asStringArray(raw.options)
+      if (variableType === "checkbox") {
+        if (
+          variableDefault !== undefined &&
+          variableDefault !== "true" &&
+          variableDefault !== "false"
+        ) {
+          errors.push({
+            path,
+            message: 'checkbox default must be "true" or "false"'
+          })
+        }
+        if (variableOptions?.length) {
+          errors.push({
+            path,
+            message: "checkbox variables cannot have options"
+          })
+        }
+      }
       variables.push({
         id: variableId,
         label: variableLabel,
-        default: asString(raw.default, 500),
-        options: asStringArray(raw.options),
+        type: variableType,
+        default: variableDefault,
+        options: variableOptions,
         description: asString(raw.description, 500)
       })
     })

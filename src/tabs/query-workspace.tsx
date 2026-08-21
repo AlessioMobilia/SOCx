@@ -643,45 +643,78 @@ const QueryWorkspace = () => {
                     filling it in had no effect. */}
                   <div className="grid gap-2 sm:grid-cols-2">
                     {templateVariables(selected.pack, selected.template).map(
-                      (variable) => (
-                        <label key={variable.id} className="space-y-1 text-xs">
-                          <span className="font-semibold">
-                            {variable.label}
-                          </span>
-                          {variable.options?.length ? (
-                            <select
-                              className={input}
-                              value={
-                                variables[variable.id] ?? variable.default ?? ""
-                              }
-                              onChange={(event) =>
-                                setVariables((previous) => ({
-                                  ...previous,
-                                  [variable.id]: event.target.value
-                                }))
-                              }>
-                              {variable.options.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
+                      (variable) =>
+                        variable.type === "checkbox" ? (
+                          <label
+                            key={variable.id}
+                            className="flex items-center gap-2 rounded-lg border border-socx-border-light px-3 py-2 text-xs dark:border-socx-border-dark"
+                            title={variable.description}>
                             <input
-                              className={input}
-                              value={
-                                variables[variable.id] ?? variable.default ?? ""
+                              type="checkbox"
+                              aria-label={variable.label}
+                              className="h-4 w-4 accent-socx-teal"
+                              checked={
+                                (variables[variable.id] ??
+                                  variable.default ??
+                                  "false") === "true"
                               }
                               onChange={(event) =>
                                 setVariables((previous) => ({
                                   ...previous,
-                                  [variable.id]: event.target.value
+                                  [variable.id]: String(event.target.checked)
                                 }))
                               }
                             />
-                          )}
-                        </label>
-                      )
+                            <span className="font-semibold">
+                              {variable.label}
+                            </span>
+                          </label>
+                        ) : (
+                          <label
+                            key={variable.id}
+                            className="space-y-1 text-xs"
+                            title={variable.description}>
+                            <span className="font-semibold">
+                              {variable.label}
+                            </span>
+                            {variable.options?.length ? (
+                              <select
+                                className={input}
+                                value={
+                                  variables[variable.id] ??
+                                  variable.default ??
+                                  ""
+                                }
+                                onChange={(event) =>
+                                  setVariables((previous) => ({
+                                    ...previous,
+                                    [variable.id]: event.target.value
+                                  }))
+                                }>
+                                {variable.options.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                className={input}
+                                value={
+                                  variables[variable.id] ??
+                                  variable.default ??
+                                  ""
+                                }
+                                onChange={(event) =>
+                                  setVariables((previous) => ({
+                                    ...previous,
+                                    [variable.id]: event.target.value
+                                  }))
+                                }
+                              />
+                            )}
+                          </label>
+                        )
                     )}
                   </div>
                 </div>
