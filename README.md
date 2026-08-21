@@ -297,9 +297,11 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.4.1 release notes](docs/RELEASE_NOTES_1.4.1.md) for Firefox
-shortcut fixes; the [1.4.0 notes](docs/RELEASE_NOTES_1.4.0.md) for visual smart
-formatting, partial JSON recovery and the formatting shortcut; the [1.3.1
+See the [SOCx 1.4.2 release notes](docs/RELEASE_NOTES_1.4.2.md) for Splunk smart
+formatting and Firefox shortcut migration fixes; the [1.4.1
+notes](docs/RELEASE_NOTES_1.4.1.md) for Firefox shortcut support; the [1.4.0
+notes](docs/RELEASE_NOTES_1.4.0.md) for visual smart formatting, partial JSON
+recovery and the formatting shortcut; the [1.3.1
 notes](docs/RELEASE_NOTES_1.3.1.md) for query rendering fixes; the [1.3.0
 notes](docs/RELEASE_NOTES_1.3.0.md) for HTTP repositories and the pack format
 reference; the [1.2.0 notes](docs/RELEASE_NOTES_1.2.0.md) for the palette and
