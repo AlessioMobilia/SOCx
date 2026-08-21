@@ -16,7 +16,7 @@ import {
   uniqueStrings
 } from "../utility/utils"
 import { runMagicIoc } from "./magic-ioc"
-import { SOCX_QUERY_WORKSPACE_MENU } from "./menus"
+import { SOCX_QUERY_PALETTE_MENU } from "./menus"
 import {
   parseQueryMenuId,
   QUERY_MENU_OPEN_ALL,
@@ -27,16 +27,35 @@ import { openQueryWorkspace } from "./query-workspace"
 const storage = new Storage({ area: "local" })
 
 export async function handleMenuClick(info: any, tab: any) {
-  if (info.menuItemId === SOCX_QUERY_WORKSPACE_MENU) {
+  if (info.menuItemId === SOCX_QUERY_PALETTE_MENU) {
     const indicators = info.selectionText
       ? (extractIOCs(info.selectionText) ?? [])
       : []
-    await openQueryWorkspace(indicators)
+    if (typeof tab?.id !== "number") {
+      showNotification("Query palette", "Unavailable on this page.")
+      return
+    }
+    await new Promise<void>((resolve) => {
+      chrome.tabs.sendMessage(
+        tab.id,
+        {
+          name: OPEN_QUERY_PALETTE_MESSAGE,
+          body: { indicators }
+        },
+        () => {
+          const unavailable = Boolean(chrome.runtime.lastError)
+          if (unavailable) {
+            showNotification("Query palette", "Unavailable on this page.")
+          }
+          resolve()
+        }
+      )
+    })
     return
   }
 
-  // Query palette entries are handled first: they are the only ones that also
-  // work without a selection, right inside a console search bar.
+  // Pack-specific query entries also work without a selection, right inside a
+  // console search bar.
   if (
     info.menuItemId === QUERY_MENU_OPEN_ALL ||
     String(info.menuItemId).startsWith(QUERY_MENU_PREFIX)

@@ -508,6 +508,32 @@ export const mountQueryView = (
     color: faint
   })
   titleRow.append(spacer, counter)
+  if (!embedded) {
+    const closeButton = document.createElement("button")
+    closeButton.type = "button"
+    closeButton.textContent = "×"
+    closeButton.title = "Close query palette"
+    closeButton.setAttribute("aria-label", "Close query palette")
+    setStyles(closeButton, {
+      all: "initial",
+      display: "inline-flex",
+      "align-items": "center",
+      "justify-content": "center",
+      width: "26px",
+      height: "26px",
+      "flex-shrink": "0",
+      "border-radius": "999px",
+      "font-family": font,
+      "font-size": "20px",
+      "line-height": "1",
+      color: muted,
+      cursor: "pointer",
+      border: `1px solid ${line}`,
+      "background-color": "transparent"
+    })
+    closeButton.addEventListener("click", () => closePalette())
+    titleRow.appendChild(closeButton)
+  }
 
   const searchRow = document.createElement("div")
   setStyles(searchRow, {

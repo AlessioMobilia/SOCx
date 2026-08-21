@@ -218,6 +218,14 @@ describe("query palette", () => {
     open()
     expect(isPaletteOpen()).toBe(true)
     expect(rows()).toHaveLength(entries.length)
+    const closeButton = document.querySelector(
+      'button[aria-label="Close query palette"]'
+    ) as HTMLButtonElement
+    expect(closeButton).toBeTruthy()
+    closeButton.click()
+    expect(isPaletteOpen()).toBe(false)
+
+    open()
     closePalette()
     expect(isPaletteOpen()).toBe(false)
   })
@@ -238,6 +246,9 @@ describe("query palette", () => {
 
     expect(isPaletteOpen()).toBe(false)
     expect(host.querySelector('[role="region"]')).toBeTruthy()
+    expect(
+      host.querySelector('button[aria-label="Close query palette"]')
+    ).toBeNull()
     expect(rows()).toHaveLength(entries.length)
     expect(host.textContent).toContain("embedded query")
     expect(host.querySelector("details")?.open).toBe(false)
