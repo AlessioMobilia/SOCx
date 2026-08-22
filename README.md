@@ -338,8 +338,10 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.4.3 release notes](docs/RELEASE_NOTES_1.4.3.md) for checkbox
-query variables and the safer public query catalogue; the [1.4.2
+See the [SOCx 1.5.0 release notes](docs/RELEASE_NOTES_1.5.0.md) for the unified
+query browser, searchable language guides and redesigned workspace; the [1.4.3
+notes](docs/RELEASE_NOTES_1.4.3.md) for checkbox query variables and the safer
+public query catalogue; the [1.4.2
 notes](docs/RELEASE_NOTES_1.4.2.md) for Splunk smart formatting and Firefox
 shortcut migration fixes; the [1.4.1
 notes](docs/RELEASE_NOTES_1.4.1.md) for Firefox shortcut support; the [1.4.0
