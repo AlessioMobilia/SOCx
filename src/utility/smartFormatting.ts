@@ -489,18 +489,7 @@ const matrixCandidate = (matrix: Matrix): SmartFormatResult | null => {
   const firstColumnIsLabels = normalizedRows.every(
     (row) => row[0] && row[1] && isLikelyLabel(row[0])
   )
-  const firstColumnUnique =
-    new Set(normalizedRows.map((row) => normalizeLabel(row[0]).toLowerCase()))
-      .size === normalizedRows.length
-  const rowHeaderSignal =
-    matrix.headers?.[0]?.toLowerCase().includes("field") === true
-  const spanningTitleSignal =
-    matrix.headers !== undefined && matrix.headers.filter(Boolean).length === 1
-  const isKeyValue =
-    columnCount === 2 &&
-    firstColumnIsLabels &&
-    firstColumnUnique &&
-    (!matrix.semanticHeaders || rowHeaderSignal || spanningTitleSignal)
+  const isKeyValue = columnCount === 2 && firstColumnIsLabels
 
   if (isKeyValue) {
     return {
@@ -812,6 +801,75 @@ const extractSplunkEventPairs = (
         return isLikelyLabel(key) && value ? `${key}\u0000${value}` : ""
       })
       .filter(Boolean)
+  ).map((pair) => pair.split("\u0000") as [string, string])
+}
+
+const extractSplunkTablePairs = (
+  container: HTMLElement
+): Array<[string, string]> => {
+  const rows = [
+    ...(container.matches("tr") ? [container] : []),
+    ...Array.from(container.querySelectorAll<HTMLElement>("tr"))
+  ]
+  const pairs: Array<[string, string]> = []
+  let previousReactKey = ""
+  let previousReactGroup = ""
+
+  rows.forEach((row) => {
+    const classicKey = row.querySelector<HTMLElement>(".field-key")
+    const classicValue = row.querySelector<HTMLElement>(".field-value")
+    if (classicKey && classicValue) {
+      const key = normalizeLabel(
+        classicKey
+          .querySelector<HTMLElement>("[data-field-name]")
+          ?.getAttribute("data-field-name") ?? readElementText(classicKey)
+      )
+      const value = readElementText(classicValue)
+      if (isLikelyLabel(key) && value) pairs.push([key, value])
+      return
+    }
+
+    const group = row.getAttribute("data-test") ?? ""
+    const explicitKey = row.querySelector<HTMLElement>(
+      "[data-test='field_name']"
+    )
+    const explicitValue = row.querySelector<HTMLElement>(
+      "[data-test='field_value']"
+    )
+    if (explicitValue) {
+      const key = explicitKey
+        ? normalizeLabel(readElementText(explicitKey))
+        : group && group === previousReactGroup
+          ? previousReactKey
+          : ""
+      const value = readElementText(explicitValue)
+      if (isLikelyLabel(key) && value) pairs.push([key, value])
+      if (explicitKey && isLikelyLabel(key)) {
+        previousReactKey = key
+        previousReactGroup = group
+      }
+      return
+    }
+
+    if (!row.matches("[data-test='notable_fields_row'][data-field-name]")) {
+      previousReactKey = ""
+      previousReactGroup = ""
+      return
+    }
+
+    const cells = directCells(row).filter(
+      (cell) => !cell.matches("[data-test='workflow-action-dropdown']")
+    )
+    if (cells.length < 2) return
+    const key = normalizeLabel(readElementText(cells[0]))
+    const value = readElementText(cells[1])
+    if (isLikelyLabel(key) && value) pairs.push([key, value])
+  })
+
+  return unique(
+    pairs.map(
+      ([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`
+    )
   ).map((pair) => pair.split("\u0000") as [string, string])
 }
 
@@ -1235,6 +1293,10 @@ export const formatSmartContainer = (
   contextualHeaders: string[] = []
 ): SmartFormatResult | null => {
   const container = source.cloneNode(true) as HTMLElement
+  const markedSplunkPairs = [
+    ...extractSplunkEventPairs(container),
+    ...extractSplunkTablePairs(container)
+  ]
   removeNoise(container)
   const text = cleanTextPreservingLines(container.textContent)
   const candidates: SmartFormatResult[] = []
@@ -1253,12 +1315,25 @@ export const formatSmartContainer = (
     }
   })
 
-  const semanticPairs = unique(
+  const splunkPairs = unique(
     [
-      ...extractSemanticPairs(container),
+      ...markedSplunkPairs,
       ...extractSplunkEventPairs(container),
-      ...matrixPairs
+      ...extractSplunkTablePairs(container)
     ].map(([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`)
+  ).map((pair) => pair.split("\u0000") as [string, string])
+  if (splunkPairs.length > 0) {
+    candidates.push({
+      kind: "semantic-key-value",
+      score: 100,
+      text: formatKeyValues(splunkPairs)
+    })
+  }
+
+  const semanticPairs = unique(
+    [...extractSemanticPairs(container), ...splunkPairs, ...matrixPairs].map(
+      ([key, value]) => `${normalizeLabel(key)}\u0000${cleanText(value)}`
+    )
   ).map((pair) => pair.split("\u0000") as [string, string])
   if (semanticPairs.length > 0) {
     candidates.push({
@@ -1320,7 +1395,10 @@ const formatMarkedSelection = (
   const range = selection.getRangeAt(0)
   const fragment = range.startContainer.ownerDocument.createElement("div")
   fragment.appendChild(range.cloneContents())
-  const splunkPairs = extractSplunkEventPairs(fragment)
+  const splunkPairs = [
+    ...extractSplunkEventPairs(fragment),
+    ...extractSplunkTablePairs(fragment)
+  ]
   if (splunkPairs.length > 0) {
     return {
       kind: "semantic-key-value",
@@ -1501,6 +1579,21 @@ const formatSelectedTable = (
   const normalizedHeaders = headers?.map(
     (header, index) => header || `Column ${firstColumn + index + 1}`
   )
+
+  const fullColumnCount = Math.max(
+    ...layouts.flatMap(({ placements }) =>
+      placements.map(({ index, span }) => index + span)
+    )
+  )
+  if (fullColumnCount === 2) {
+    return matrixCandidate({
+      rows: selectedRows,
+      headers: normalizedHeaders,
+      semanticHeaders: !!normalizedHeaders,
+      explicitHeaders: headerLayouts.length > 0,
+      source: startRoot.matches("table") ? "table" : "grid"
+    })
+  }
 
   return {
     kind: "semantic-table",

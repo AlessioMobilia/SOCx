@@ -272,7 +272,7 @@ The investigation remains open.</article>`)
     expect(result?.text).toContain("msg:          PowerShell execution blocked")
   })
 
-  it("reads headers from the original table when only data cells are selected", () => {
+  it("formats a selected two-column table as key/value data", () => {
     document.body.innerHTML = `
       <table>
         <thead><tr><th>Device</th><th>Severity</th></tr></thead>
@@ -287,8 +287,8 @@ The investigation remains open.</article>`)
     selection.addRange(range)
 
     const result = formatSmartSelection(selection)
-    expect(result?.text).toContain("| Device | Severity |")
-    expect(result?.text).toContain("| host-23 | High |")
+    expect(result?.kind).toBe("semantic-key-value")
+    expect(result?.text).toBe("host-23: High")
   })
 
   it("formats Splunk event tokens even when rendered geometry is available", () => {
@@ -330,6 +330,97 @@ The investigation remains open.</article>`)
 
     expect(result?.kind).toBe("semantic-key-value")
     expect(result?.text).toBe("src_ip: 203.0.113.24\naction: blocked")
+  })
+
+  it("formats classic Splunk field tables as key/value data", () => {
+    document.body.innerHTML = `
+      <table id="classic-splunk" class="table table-condensed table-expanded">
+        <thead><tr>
+          <th class="col-field-type">Tipo</th>
+          <th class="col-visibility"></th>
+          <th class="col-field-name">Campo</th>
+          <th class="col-field-value">Valore</th>
+          <th class="col-field-action">Azioni</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td rowspan="2" class="field-type">Selezionato</td>
+            <td class="col-visibility"><a role="checkbox"></a></td>
+            <td class="field-key">host</td>
+            <td class="field-value">splunk-edge-01</td>
+            <td class="actions"><a role="button" aria-label="Actions for host"></a></td>
+          </tr>
+          <tr>
+            <td class="col-visibility"><a role="checkbox"></a></td>
+            <td class="field-key">sourcetype</td>
+            <td class="field-value">firewall_traffic</td>
+            <td class="actions"><a role="button" aria-label="Actions for sourcetype"></a></td>
+          </tr>
+        </tbody>
+      </table>
+    `
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("classic-splunk")!)
+    )
+
+    expect(result?.kind).toBe("semantic-key-value")
+    expect(result?.text).toBe(
+      "host:       splunk-edge-01\nsourcetype: firewall_traffic"
+    )
+    expect(result?.text).not.toContain("Selezionato")
+    expect(result?.text).not.toContain("Azioni")
+  })
+
+  it("formats Splunk Enterprise Security detail tables as key/value data", () => {
+    document.body.innerHTML = `
+      <div id="splunk-es-details">
+        <table data-test="detail-table">
+          <thead><tr><th>Additional Fields</th><th>Valore</th><th>Azione</th></tr></thead>
+          <tbody>
+            <tr data-test="notable_fields_row" data-field-name="notable_fields_app">
+              <td>Applicazione</td>
+              <td data-test="notable-details-app">HTTPS</td>
+              <td data-test="workflow-action-dropdown" data-field-name="app"><svg><title>Actions Menu</title></svg></td>
+            </tr>
+            <tr data-test="notable_fields_row" data-field-name="notable_fields_bytes_out">
+              <td>Bytes Out</td>
+              <td data-test="notable-details-bytes_out">1113367655</td>
+              <td data-test="workflow-action-dropdown" data-field-name="bytes_out"><svg><title>Actions Menu</title></svg></td>
+            </tr>
+          </tbody>
+        </table>
+        <table data-test="detail-table">
+          <tbody>
+            <tr data-test="eventtype">
+              <td rowspan="2" data-test="field_name">eventtype</td>
+              <td data-test="field_value">modnotable_results</td>
+              <td data-test="workflow-action-dropdown" data-field-name="eventtype"></td>
+            </tr>
+            <tr data-test="eventtype">
+              <td data-test="field_value">notable</td>
+              <td data-test="workflow-action-dropdown" data-field-name="eventtype"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `
+
+    const result = formatSmartSelection(
+      selectContents(document.getElementById("splunk-es-details")!)
+    )
+
+    expect(result?.kind).toBe("semantic-key-value")
+    expect(result?.text).toBe(
+      [
+        "Applicazione: HTTPS",
+        "Bytes Out:    1113367655",
+        "eventtype:    modnotable_results",
+        "eventtype:    notable"
+      ].join("\n")
+    )
+    expect(result?.text).not.toContain("Actions Menu")
+    expect(result?.text).not.toContain("Azione")
   })
 
   it("does not treat generic key-name and value classes as Splunk fields", () => {

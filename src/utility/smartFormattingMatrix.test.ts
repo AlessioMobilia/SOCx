@@ -124,7 +124,7 @@ describe("smart formatting structure matrix", () => {
     expect(result?.text).not.toContain("Internal tag metadata")
   })
 
-  it("preserves a real two-column event table instead of treating it as fields", () => {
+  it("treats a two-column table as key/value data", () => {
     const result = formatSmartContainer(
       fixture(`
         <table>
@@ -137,8 +137,8 @@ describe("smart formatting structure matrix", () => {
       `)
     )
 
-    expect(result?.kind).toBe("semantic-table")
-    expect(result?.text).toContain("| Entity | Risk |")
+    expect(result?.kind).toBe("semantic-key-value")
+    expect(result?.text).toBe("DC-01:  Critical\nWS-023: High")
   })
 
   it("reads nested definition-list cards used by investigation panels", () => {
