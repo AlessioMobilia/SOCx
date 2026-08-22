@@ -267,7 +267,9 @@ default, internal and CIM fields and covers statistical functions, `stats`,
 `eventstats`, `streamstats`, `tstats`, `chart`, `bin` and frequency commands.
 Each guide also links to the relevant official documentation in a new tab. In
 the page workspace it expands in normal document flow and uses page scrolling;
-inside the palette it keeps its own bounded scrollbar.
+inside the palette it keeps its own bounded scrollbar. The workspace always
+starts on **All languages and products**; only a palette opened on a recognised
+SIEM or EDR starts from that console's query language.
 IOC-only context actions remain hidden until text is selected, so an empty page
 menu stays compact. If a page blocks the palette content script, the context
 menu falls back to opening Query workspace with the same selected indicators.

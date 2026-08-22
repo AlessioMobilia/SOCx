@@ -390,8 +390,12 @@ Run this matrix on all three browsers before a release:
     scrollbar uses the SOCx theme. Confirm Query workspace uses the standard
     Bulk Check page shell, a two-column 720px work area and normal page
     scrolling. Open the workspace guide and confirm it expands in document
-    flow; then open the palette guide and scroll its bounded viewport from the
-    first fields to the last commands. Search for a command and follow an
+    flow, starts on **All languages and products**, and keeps that selection as
+    queries change. Then open the palette guide on a recognised console,
+    confirm it starts from the matched language, and scroll its bounded viewport
+    from the first fields to the last commands. Confirm the Indicators field
+    uses the themed vertical scrollbar and long variable labels wrap instead of
+    ending in an ellipsis. Search for a command and follow an
     official-documentation link. Confirm a starred
     query survives a pack refresh and a browser restart. Search for a field name
     that only appears inside a query body, and
