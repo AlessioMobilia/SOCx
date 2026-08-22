@@ -9,7 +9,7 @@ import { readFavorites, writeFavorites } from "./favorites"
 import { buildGroupTree } from "./groups"
 import type { PackKind, QueryPack } from "./packSchema"
 import { entriesFromTree, openPalette } from "./palette"
-import { entryPackKey } from "./paletteFilters"
+import { entryDialect, entrySourceKey } from "./paletteFilters"
 import { readMergeTypes, writeMergeTypes } from "./paletteSettings"
 import { createQueryViewRequest } from "./queryViewRequest"
 import { bundledDialectMap } from "./render"
@@ -24,7 +24,8 @@ export type OpenPaletteOptions = {
 type LibraryResponse = {
   packs?: QueryPack[]
   platformLabel?: string
-  platformPackKey?: string
+  platformSourceKey?: string
+  platformDialect?: string
   indicators?: string[]
   matched?: boolean
   paletteEnabled?: boolean
@@ -93,18 +94,21 @@ export const openQueryPalette = async (
         ...entries.filter((entry) => entry.key !== options.templateKey)
       ]
     : entries
+  const requestedEntry = options.templateKey
+    ? (ordered.find((entry) => entry.key === options.templateKey) ?? ordered[0])
+    : undefined
 
   openPalette(
     createQueryViewRequest({
       entries: ordered,
       dialects,
       platformLabel: response?.platformLabel,
-      initialPackKey: options.templateKey
-        ? entryPackKey(
-            ordered.find((entry) => entry.key === options.templateKey) ??
-              ordered[0]
-          )
-        : response?.platformPackKey,
+      initialSourceKey: requestedEntry
+        ? entrySourceKey(requestedEntry)
+        : response?.platformSourceKey,
+      initialDialect: requestedEntry
+        ? entryDialect(requestedEntry)
+        : response?.platformDialect,
       indicatorHint: values,
       initialKey: options.templateKey,
       favorites,

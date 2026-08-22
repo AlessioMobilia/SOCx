@@ -9,7 +9,7 @@ import {
   mountQueryView,
   openPalette
 } from "./palette"
-import { entryPackKey } from "./paletteFilters"
+import { entrySourceKey } from "./paletteFilters"
 import { bundledDialectMap } from "./render"
 
 const knownDialects = new Set(bundledDialectMap().keys())
@@ -77,8 +77,8 @@ const splunkPack = makePack({
 
 const entries = entriesFromTree(
   buildGroupTree([
-    { ...makePack(), sourceId: "a" },
-    { ...splunkPack, sourceId: "b" }
+    { ...makePack(), sourceId: "a", sourceLabel: "Defender catalogue" },
+    { ...splunkPack, sourceId: "b", sourceLabel: "Security team queries" }
   ])
 )
 
@@ -311,14 +311,17 @@ describe("query palette", () => {
     expect(rows()[0]).toContain("Proxy hits")
   })
 
-  it("starts from the pack recognized for the current platform", () => {
+  it("starts from the source and language recognized for the platform", () => {
     const splunkEntry = entries.find((entry) => entry.pack.name === "Splunk")!
-    open({ initialPackKey: entryPackKey(splunkEntry) })
+    open({
+      initialSourceKey: entrySourceKey(splunkEntry),
+      initialDialect: "spl"
+    })
 
     const select = document.querySelector(
-      'select[aria-label="Filter by query pack"]'
+      'select[aria-label="Filter by query source"]'
     ) as HTMLSelectElement
-    expect(select.value).toBe(entryPackKey(splunkEntry))
+    expect(select.value).toBe(entrySourceKey(splunkEntry))
     expect(rows()).toHaveLength(2)
     expect(rows().every((row) => /Proxy hits|VPN sessions/.test(row))).toBe(
       true

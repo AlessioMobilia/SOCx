@@ -24,10 +24,11 @@ import {
   buildFacets,
   dialectChipLabel,
   entryDialect,
-  entryPackKey,
+  entrySourceKey,
   FAVORITES_LABEL,
   hasActiveFilters,
   KIND_LABELS,
+  querySourceLabel,
   resolveEntryLabels,
   type PaletteFilterState
 } from "./paletteFilters"
@@ -63,8 +64,10 @@ export type PaletteRequest = {
   /** Keeps the current template alive if the library is remounted. */
   onSelectedKeyChange?: (key: string) => void
   platformLabel?: string
-  /** Pack selected automatically from the current SIEM/EDR URL. */
-  initialPackKey?: string
+  /** Repository source selected automatically from the current SIEM/EDR URL. */
+  initialSourceKey?: string
+  /** Query language selected automatically from the current SIEM/EDR URL. */
+  initialDialect?: string
   /** Starred entry keys, most recently starred first. */
   favorites?: string[]
   /** Entry to open on, e.g. the template a context menu entry named. */
@@ -228,7 +231,7 @@ export const mountQueryView = (
     position: "relative",
     display: "flex",
     "flex-direction": "column",
-    gap: "12px",
+    gap: embedded ? "16px" : "12px",
     width: embedded ? "100%" : "1180px",
     height: embedded ? "100%" : "auto",
     "max-width": embedded ? "none" : "calc(100vw - 32px)",
@@ -508,8 +511,8 @@ export const mountQueryView = (
     all: "initial",
     display: "flex",
     "flex-direction": "column",
-    gap: embedded ? "8px" : "10px",
-    padding: embedded ? "10px 12px" : "12px 14px",
+    gap: "10px",
+    padding: embedded ? "16px" : "12px 14px",
     "box-sizing": "border-box",
     "background-color": surface,
     border: `1px solid ${line}`,
@@ -697,7 +700,7 @@ export const mountQueryView = (
     width: "100%",
     "min-height": "0",
     "min-width": "0",
-    gap: "12px",
+    gap: embedded ? "16px" : "12px",
     overflow: "hidden",
     "font-family": font
   })
@@ -980,12 +983,19 @@ export const mountQueryView = (
   let mergeTypes = request.mergeTypes !== false
   let filters: PaletteFilterState = {
     ...ALL_FILTERS,
-    pack:
-      request.initialPackKey &&
+    source:
+      request.initialSourceKey &&
       request.entries.some(
-        (entry) => entryPackKey(entry) === request.initialPackKey
+        (entry) => entrySourceKey(entry) === request.initialSourceKey
       )
-        ? request.initialPackKey
+        ? request.initialSourceKey
+        : "all",
+    dialect:
+      request.initialDialect &&
+      request.entries.some(
+        (entry) => entryDialect(entry) === request.initialDialect
+      )
+        ? request.initialDialect
         : "all",
     labels: {}
   }
@@ -1044,7 +1054,7 @@ export const mountQueryView = (
     )
     const narrowFilterCount =
       Number(filters.dialect !== "all") +
-      Number(filters.pack !== "all") +
+      Number(filters.source !== "all") +
       Number(filters.group !== "all") +
       Object.values(filters.labels ?? {}).filter((value) => value !== "all")
         .length
@@ -1153,19 +1163,19 @@ export const mountQueryView = (
 
     filterRow.appendChild(
       makeSelect({
-        ariaLabel: "Filter by query pack",
-        title: "Show queries from one source pack",
-        active: filters.pack !== "all",
-        value: filters.pack,
+        ariaLabel: "Filter by query source",
+        title: "Show queries from one community, team or personal source",
+        active: filters.source !== "all",
+        value: filters.source,
         entries: [
-          { value: "all", label: "Pack: all" },
-          ...facets.packs.map((option) => ({
+          { value: "all", label: "Source: all" },
+          ...facets.sources.map((option) => ({
             value: option.value,
             label: `${option.label} (${option.count})`,
             title: option.title
           }))
         ],
-        onChange: (value) => setFilters({ pack: value })
+        onChange: (value) => setFilters({ source: value })
       })
     )
 
@@ -1376,12 +1386,16 @@ export const mountQueryView = (
     meta.appendChild(badges)
 
     meta.appendChild(
-      makeText("p", `${entry.path.join(" › ")} · ${entry.pack.name}`, {
-        "font-size": "11px",
-        "word-break": "break-word",
-        "overflow-wrap": "anywhere",
-        color: muted
-      })
+      makeText(
+        "p",
+        `${entry.path.join(" › ")} · ${entry.pack.name} · ${querySourceLabel(entry.pack)}`,
+        {
+          "font-size": "11px",
+          "word-break": "break-word",
+          "overflow-wrap": "anywhere",
+          color: muted
+        }
+      )
     )
 
     if (entry.template.description) {

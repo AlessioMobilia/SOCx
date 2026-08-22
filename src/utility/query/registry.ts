@@ -554,7 +554,12 @@ export const userLibraryToPacks = (
       { knownDialects }
     )
     if (built.ok) {
-      packs.push({ ...built.pack, sourceId: "user" })
+      packs.push({
+        ...built.pack,
+        sourceId: "user",
+        sourceLabel: "My queries",
+        sourceBuiltIn: false
+      })
     }
   }
 
@@ -580,7 +585,12 @@ export const loadLibrary = async (
         // Narrowing the technology selection takes effect at once, without
         // waiting for the next refresh to prune the cache.
         .filter((pack) => isSelectedDialect(source, pack.dialect))
-        .map((pack) => ({ ...pack, sourceId: cached.sourceId }))
+        .map((pack) => ({
+          ...pack,
+          sourceId: cached.sourceId,
+          sourceLabel: source.label?.trim() || source.url,
+          sourceBuiltIn: source.builtIn === true
+        }))
     )
   }
 

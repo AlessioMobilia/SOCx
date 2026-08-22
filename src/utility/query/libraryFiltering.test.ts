@@ -44,6 +44,7 @@ const seed = (dialects?: string[]) => {
   store.set(QUERY_PACK_SOURCES_KEY, [
     {
       id: "team",
+      label: "Security team catalogue",
       url: "https://example.test/index.json",
       kind: "ioc",
       enabled: true,
@@ -71,6 +72,21 @@ describe("technology selection applied to the library", () => {
     expect(await loadedPackIds()).toEqual(["kql-pack", "spl-pack"])
     seed([])
     expect(await loadedPackIds()).toEqual(["kql-pack", "spl-pack"])
+  })
+
+  it("attaches the configured source identity to every loaded pack", async () => {
+    seed()
+    const loaded = await loadLibrary()
+
+    expect(loaded.packs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "team",
+          sourceLabel: "Security team catalogue",
+          sourceBuiltIn: false
+        })
+      ])
+    )
   })
 
   it("hides the languages the source no longer imports", async () => {

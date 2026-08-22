@@ -146,9 +146,9 @@ const QueryWorkspace = () => {
   }, [dialects, entries, favorites, loading, mergeTypes])
 
   return (
-    <main className="min-h-screen bg-socx-cloud px-4 py-3 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
-      <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-3 rounded-socx-lg border border-socx-border-light bg-white/90 px-4 py-2.5 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+    <main className="h-screen overflow-hidden bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
+      <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-socx-lg border border-socx-border-light bg-white/90 px-6 py-4 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
           <div className="flex min-w-0 items-center gap-3">
             <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
               SOCx
@@ -186,7 +186,7 @@ const QueryWorkspace = () => {
         <div
           ref={viewHost}
           aria-busy={loading}
-          className="h-[calc(100vh-5.75rem)] min-h-[36rem]">
+          className="min-h-0 flex-1">
           {loading && (
             <p className="rounded-xl border border-socx-border-light bg-white/90 p-6 text-center text-sm text-socx-muted dark:border-socx-border-dark dark:bg-socx-night-soft/80">
               Loading query packs…

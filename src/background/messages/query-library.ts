@@ -12,7 +12,7 @@ import {
   resolveBooleanPreference,
   resolvePaletteScope
 } from "../../utility/query/paletteBridge"
-import { queryPackKey } from "../../utility/query/paletteFilters"
+import { querySourceKey } from "../../utility/query/paletteFilters"
 import {
   loadLibrary,
   matchPacksForUrl,
@@ -33,7 +33,8 @@ export type QueryLibraryRequest = {
 export type QueryLibraryResponse = {
   packs: QueryPack[]
   platformLabel?: string
-  platformPackKey?: string
+  platformSourceKey?: string
+  platformDialect?: string
   indicators?: string[]
   matched: boolean
   paletteEnabled: boolean
@@ -70,7 +71,8 @@ const handler: PlasmoMessaging.MessageHandler<
   }
   let packs = library.packs
   let platformLabel: string | undefined
-  let platformPackKey: string | undefined
+  let platformSourceKey: string | undefined
+  let platformDialect: string | undefined
   let matched = false
 
   if (body.matchPlatform !== false && body.pageUrl) {
@@ -87,7 +89,8 @@ const handler: PlasmoMessaging.MessageHandler<
     // self-hosted platforms. Everything else must genuinely match this page.
     if (matches.length > 0) {
       platformLabel = matches[0].pack.name
-      platformPackKey = queryPackKey(matches[0].pack)
+      platformSourceKey = querySourceKey(matches[0].pack)
+      platformDialect = matches[0].pack.dialect
       matched = true
     }
     if (scope === "matched") {
@@ -106,7 +109,8 @@ const handler: PlasmoMessaging.MessageHandler<
   res.send({
     packs,
     platformLabel,
-    platformPackKey,
+    platformSourceKey,
+    platformDialect,
     indicators,
     matched,
     paletteEnabled
