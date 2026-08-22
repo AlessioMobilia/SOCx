@@ -219,10 +219,13 @@ The in-page palette never appears on its own. It opens only when you ask for it:
   **Insert query** submenu inside editable fields or selected text.
 
 The palette is not a long list to scroll: a filter bar narrows it down by
-**favorites**, by **kind** (IOC or hunting), by **query language**, by source
-**pack**, by **category**, and by any custom dimension the repository declared.
-When the current URL matches a known SIEM or EDR, its pack is selected
-automatically and remains visible as an active filter. Search runs
+**favorites**, by **kind** (IOC or hunting), by **query language**, by
+repository **source**, by **category**, and by any custom dimension the
+repository declared. Sources are the SOCx community catalogue, personal
+queries, or repositories added in settings; they are not the individual packs
+inside those catalogues. When the current URL matches a known SIEM or EDR, its
+source and query language are selected automatically and remain visible as
+active filters. Search runs
 over everything — name, description, group, tags, labels — _and over the query
 itself_, so `DeviceNetworkEvents`, `src_ip` or `T1059` find the templates that
 actually contain them; space separated terms all have to match. Star a query
@@ -235,7 +238,7 @@ the same three-card layout on wide screens, using the same canvas, surfaces,
 borders, rounded controls, accent states and scrollbars as Bulk Check and the
 other SOCx tools. They also share the same filters, source path, pack-verification
 state, tags, repository facets, ATT&CK ids, references, variables and
-rendered-query warnings. Language, pack, category and custom
+rendered-query warnings. Language, source, category and custom
 facets sit inside the collapsed **More filters** disclosure; their native hover
 help is painted outside the panel and cannot be clipped by its scrolling
 columns. Fixed grid tracks keep column widths stable while queries change, and
@@ -246,9 +249,10 @@ its optional browser shortcut. It accepts a mixed IOC list, offers the same
 filters, favorites and deep search over every enabled IOC and hunting template,
 keeps the full catalogue in a scrolling column, exposes template variables,
 shows uncovered IOC types and chunk warnings, and copies the generated query.
-Its compact one-line banner gives nearly all of the tab height to that shared
-browser. Boolean variables use a consistent switch instead of a browser-native
-checkbox.
+Its compact one-line banner retains the standard `max-w-6xl`, outer margins and
+section spacing used by Bulk Check, while the flexible browser consumes all
+remaining tab height. Boolean variables use a consistent switch instead of a
+browser-native checkbox.
 
 Inside the shared query browser is a collapsed **Query language mini guide**. It
 covers every bundled dialect — including regex and PowerShell — and can be

@@ -382,9 +382,10 @@ Run this matrix on all three browsers before a release:
     add a link and open the browser shortcut manager. In Rule builder, create an
     IOC template with variables and per-type bindings, preview it, export it,
     import it again, and confirm the variables survive the round trip. Filter
-    the palette by favorites, kind, language, source pack, category and a
-    repository declared facet. On a recognised console, confirm its pack filter
-    is active on open. Switch between IOC and hunting templates and verify the
+    the palette by favorites, kind, language, repository source, category and a
+    repository declared facet. On a recognised console, confirm its source and
+    language filters are active on open. Switch between IOC and hunting
+    templates and verify the
     grid tracks do not move, no horizontal scrollbar appears, and the query-list
     scrollbar uses the SOCx theme. Compare the workspace cards, controls,
     spacing and active states with Bulk Check in both themes. Open the
