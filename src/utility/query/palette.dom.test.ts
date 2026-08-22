@@ -6,8 +6,10 @@ import {
   closePalette,
   entriesFromTree,
   isPaletteOpen,
+  mountQueryView,
   openPalette
 } from "./palette"
+import { entrySourceKey } from "./paletteFilters"
 import { bundledDialectMap } from "./render"
 
 const knownDialects = new Set(bundledDialectMap().keys())
@@ -75,8 +77,8 @@ const splunkPack = makePack({
 
 const entries = entriesFromTree(
   buildGroupTree([
-    { ...makePack(), sourceId: "a" },
-    { ...splunkPack, sourceId: "b" }
+    { ...makePack(), sourceId: "a", sourceLabel: "Defender catalogue" },
+    { ...splunkPack, sourceId: "b", sourceLabel: "Security team queries" }
   ])
 )
 
@@ -171,7 +173,7 @@ describe("query palette", () => {
       variables: [
         {
           id: "summariesonly",
-          label: "Summaries only",
+          label: "tstats: summaries only",
           type: "checkbox",
           default: "true"
         }
@@ -204,10 +206,18 @@ describe("query palette", () => {
     } as never)
 
     const checkbox = document.querySelector(
-      'input[aria-label="Summaries only"]'
+      'input[aria-label="tstats: summaries only"]'
     ) as HTMLInputElement
     expect(checkbox.type).toBe("checkbox")
     expect(checkbox.checked).toBe(true)
+
+    const label = checkbox
+      .closest("label")
+      ?.querySelector("span") as HTMLElement
+    expect(label.textContent).toBe("tstats: summaries only")
+    expect(label.style.whiteSpace).toBe("normal")
+    expect(label.style.textOverflow).toBe("clip")
+    expect(label.style.overflow).toBe("visible")
 
     checkbox.click()
     expect(values.at(-1)).toBe("false")
@@ -217,8 +227,81 @@ describe("query palette", () => {
     open()
     expect(isPaletteOpen()).toBe(true)
     expect(rows()).toHaveLength(entries.length)
+    const closeButton = document.querySelector(
+      'button[aria-label="Close query palette"]'
+    ) as HTMLButtonElement
+    expect(closeButton).toBeTruthy()
+    closeButton.click()
+    expect(isPaletteOpen()).toBe(false)
+
+    open()
     closePalette()
     expect(isPaletteOpen()).toBe(false)
+  })
+
+  it("mounts the same browser as an embedded workspace", () => {
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const onIndicatorTextChange = vi.fn()
+    const cleanup = mountQueryView(
+      {
+        entries,
+        dialects: bundledDialectMap(),
+        indicatorHint: ["8.8.8.8"],
+        onIndicatorTextChange,
+        onRender: () => [{ text: "embedded query" }]
+      },
+      { mode: "workspace", host }
+    )
+
+    expect(isPaletteOpen()).toBe(false)
+    expect(host.querySelector('[role="region"]')).toBeTruthy()
+    expect(
+      host.querySelector('button[aria-label="Close query palette"]')
+    ).toBeNull()
+    expect(rows()).toHaveLength(entries.length)
+    expect(host.textContent).toContain("embedded query")
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (button) => button.textContent === "Copy query"
+      )
+    ).toBe(true)
+    expect(host.querySelector("details")?.open).toBe(false)
+    expect(
+      [...host.querySelectorAll("[data-socx-query-section]")].map((section) =>
+        section.getAttribute("data-socx-query-section")
+      )
+    ).toEqual(["templates", "indicators", "preview"])
+
+    const workspaceGuide = host.querySelector(
+      'details[data-socx-language-guide="true"]'
+    ) as HTMLDetailsElement
+    const workspaceGuideDialect = workspaceGuide.querySelector(
+      'select[aria-label="Filter guide by language and product"]'
+    ) as HTMLSelectElement
+    expect(workspaceGuideDialect.value).toBe("all")
+    workspaceGuide.open = true
+    workspaceGuide.dispatchEvent(new Event("toggle"))
+    const workspaceGuideContent = workspaceGuide.querySelector(
+      '[data-socx-language-guide-content="true"]'
+    ) as HTMLElement
+    expect(workspaceGuideContent.style.position).toBe("static")
+    expect(workspaceGuideContent.style.overflowY).toBe("visible")
+    expect(
+      host.querySelector('[data-socx-query-section="templates"]')?.parentElement
+        ?.style.display
+    ).toBe("grid")
+
+    const field = indicatorField()
+    expect(field.classList.contains("socx-query-scroll")).toBe(true)
+    expect(field.style.overflowY).toBe("auto")
+    expect(field.style.resize).toBe("none")
+    field.value = "1.1.1.1"
+    field.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(onIndicatorTextChange).toHaveBeenCalledWith("1.1.1.1")
+
+    cleanup()
+    expect(host.childElementCount).toBe(0)
   })
 
   it("narrows the list from a value that only appears inside the query", () => {
@@ -262,6 +345,78 @@ describe("query palette", () => {
     select.dispatchEvent(new Event("change", { bubbles: true }))
     expect(rows()).toHaveLength(1)
     expect(rows()[0]).toContain("Proxy hits")
+  })
+
+  it("starts from the source and language recognized for the platform", () => {
+    const splunkEntry = entries.find((entry) => entry.pack.name === "Splunk")!
+    open({
+      initialSourceKey: entrySourceKey(splunkEntry),
+      initialDialect: "spl"
+    })
+
+    const select = document.querySelector(
+      'select[aria-label="Filter by query source"]'
+    ) as HTMLSelectElement
+    expect(select.value).toBe(entrySourceKey(splunkEntry))
+    expect(rows()).toHaveLength(2)
+    expect(rows().every((row) => /Proxy hits|VPN sessions/.test(row))).toBe(
+      true
+    )
+  })
+
+  it("keeps the language guide inside the shared palette", async () => {
+    open({ dialects: bundledDialectMap() })
+    const guide = document.querySelector(
+      'details[data-socx-language-guide="true"]'
+    ) as HTMLDetailsElement
+    expect(guide).toBeTruthy()
+    expect(guide.closest('[role="dialog"]')).toBeTruthy()
+    expect(guide.open).toBe(false)
+    expect(
+      (
+        guide.querySelector(
+          'select[aria-label="Filter guide by language and product"]'
+        ) as HTMLSelectElement
+      ).value
+    ).toBe("all")
+
+    guide.open = true
+    guide.dispatchEvent(new Event("toggle"))
+    await Promise.resolve()
+
+    const guideContent = guide.querySelector(
+      '[data-socx-language-guide-content="true"]'
+    ) as HTMLElement
+    expect(guide.style.flex).toBe("1 1 0%")
+    expect(guide.style.minHeight).toBe("0")
+    expect(
+      (guide.closest('[role="dialog"]') as HTMLElement).style.height
+    ).toBe("720px")
+    expect(guideContent.style.position).toBe("absolute")
+    expect(guideContent.style.bottom).toBe("0px")
+    expect(guideContent.style.overflowY).toBe("auto")
+    expect(
+      guide.querySelector('input[aria-label="Search query language guides"]')
+    ).toBeTruthy()
+    expect(guide.textContent).toContain("Main fields")
+    expect(guide.textContent).toContain("Commands and operators")
+    const officialLink = guide.querySelector(
+      'a[target="_blank"]'
+    ) as HTMLAnchorElement
+    expect(officialLink?.rel).toContain("noreferrer")
+  })
+
+  it("filters the palette guide for a recognised console only", () => {
+    open({
+      dialects: bundledDialectMap(),
+      initialDialect: "spl",
+      platformLabel: "Splunk"
+    })
+
+    const guideDialect = document.querySelector(
+      'select[aria-label="Filter guide by language and product"]'
+    ) as HTMLSelectElement
+    expect(guideDialect.value).toBe("spl")
   })
 
   it("stars a query, reports it, and lists it first", () => {

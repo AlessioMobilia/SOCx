@@ -4,7 +4,7 @@ import {
   getContextMenuDefinitions,
   setupContextMenus,
   SOCX_MENU_ROOT,
-  SOCX_QUERY_WORKSPACE_MENU,
+  SOCX_QUERY_PALETTE_MENU,
   type ContextMenuApi
 } from "./menus"
 
@@ -17,16 +17,15 @@ describe("context menu registration", () => {
     expect(definitions.length).toBeGreaterThan(10)
     expect(idSet.size).toBe(ids.length)
     const root = definitions.find(({ id }) => id === SOCX_MENU_ROOT)
-    const workspace = definitions.find(
-      ({ id }) => id === SOCX_QUERY_WORKSPACE_MENU
-    )
+    const palette = definitions.find(({ id }) => id === SOCX_QUERY_PALETTE_MENU)
     expect(root?.contexts).toEqual(["page", "selection", "editable"])
-    expect(workspace?.contexts).toContain("page")
+    expect(palette?.contexts).toContain("page")
+    expect(palette?.title).toBe("Open query palette…")
     expect(
       definitions
         .filter(
           ({ id }) =>
-            ![SOCX_MENU_ROOT, SOCX_QUERY_WORKSPACE_MENU].includes(String(id))
+            ![SOCX_MENU_ROOT, SOCX_QUERY_PALETTE_MENU].includes(String(id))
         )
         .every(({ contexts }) => contexts?.includes("selection"))
     ).toBe(true)

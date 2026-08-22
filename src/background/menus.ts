@@ -1,7 +1,7 @@
 import { servicesConfig } from "../utility/servicesConfig"
 
 export const SOCX_MENU_ROOT = "socxRoot"
-export const SOCX_QUERY_WORKSPACE_MENU = "socxQueryWorkspace"
+export const SOCX_QUERY_PALETTE_MENU = "socxQueryPalette"
 
 export type ContextMenuApi = {
   create: (properties: chrome.contextMenus.CreateProperties) => Promise<void>
@@ -89,9 +89,9 @@ export const getContextMenuDefinitions =
         contexts: ["page", "selection", "editable"]
       },
       {
-        id: SOCX_QUERY_WORKSPACE_MENU,
+        id: SOCX_QUERY_PALETTE_MENU,
         parentId: SOCX_MENU_ROOT,
-        title: "Open query workspace…",
+        title: "Open query palette…",
         contexts: ["page", "selection", "editable"]
       }
     )

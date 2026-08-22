@@ -9,6 +9,7 @@ import {
   buildFacets,
   collectFacetDefinitions,
   dialectChipLabel,
+  entrySourceKey,
   rankEntries,
   resolveEntryLabels,
   type PaletteFilterState
@@ -68,8 +69,8 @@ const splunkPack = makePack({
 
 const entries = entriesFromTree(
   buildGroupTree([
-    { ...makePack(), sourceId: "a" },
-    { ...splunkPack, sourceId: "b" }
+    { ...makePack(), sourceId: "a", sourceLabel: "Defender catalogue" },
+    { ...splunkPack, sourceId: "b", sourceLabel: "Security team queries" }
   ])
 )
 
@@ -172,6 +173,46 @@ describe("built-in facets", () => {
     )
     expect(outcome.entries.map((entry) => entry.template.id)).toEqual([
       "connections"
+    ])
+  })
+
+  it("lists and filters repository sources independently from language", () => {
+    const splunkEntry = entries.find((entry) => entry.pack.name === "Splunk")!
+    const sourceKey = entrySourceKey(splunkEntry)
+    const facets = buildFacets(entries, withFilters({ source: sourceKey }))
+
+    expect(facets.sources.map((option) => option.label).sort()).toEqual([
+      "Defender catalogue",
+      "Security team queries"
+    ])
+    expect(
+      applyPaletteFilters(
+        entries,
+        withFilters({ source: sourceKey })
+      ).entries.map((entry) => entry.pack.name)
+    ).toEqual(["Splunk"])
+  })
+
+  it("groups the two built-in community catalogues as one source", () => {
+    const communityEntries = entriesFromTree(
+      buildGroupTree([
+        { ...makePack(), sourceId: "community-ioc", sourceBuiltIn: true },
+        {
+          ...splunkPack,
+          sourceId: "community-hunting",
+          sourceBuiltIn: true
+        }
+      ])
+    )
+    const facets = buildFacets(communityEntries, withFilters({}))
+
+    expect(facets.sources).toEqual([
+      {
+        value: "socx-community",
+        label: "SOCx community packs",
+        title: "SOCx community packs",
+        count: 2
+      }
     ])
   })
 

@@ -215,24 +215,64 @@ The in-page palette never appears on its own. It opens only when you ask for it:
   are reassigned. The query palette and **Smart format selection**
   (`Ctrl+Shift+Period`) have defaults; workspace commands start disabled so nothing
   else is taken from the console you are on;
-- the **Insert query** submenu inside editable fields or selected text.
+- `SOCx › Open query palette…` from the page context menu, or the
+  **Insert query** submenu inside editable fields or selected text.
 
 The palette is not a long list to scroll: a filter bar narrows it down by
 **favorites**, by **kind** (IOC or hunting), by **query language**, by
-**category**, and by any custom dimension the repository declared. Search runs
+repository **source**, by **category**, and by any custom dimension the
+repository declared. Sources are the SOCx community catalogue, personal
+queries, or repositories added in settings; they are not the individual packs
+inside those catalogues. When the current URL matches a known SIEM or EDR, its
+source and query language are selected automatically and remain visible as
+active filters. Search runs
 over everything — name, description, group, tags, labels — _and over the query
 itself_, so `DeviceNetworkEvents`, `src_ip` or `T1059` find the templates that
 actually contain them; space separated terms all have to match. Star a query
 with `Alt+F` or the ☆ next to its name and it is pinned to the top of the list
 under **★ Favorites**, on every console, until you unstar it.
 
-When no console is open, use **Query workspace** from the SOCx popup or from the
-persistent `SOCx › Open query workspace…` page context menu. It accepts a mixed
-IOC list, offers the same filters, favorites and deep search over every enabled
-IOC and hunting template, lists them 25 to a page inside a scrolling column,
-exposes template variables, shows uncovered IOC types and chunk warnings, and
-copies the generated query. IOC-only context actions
-remain hidden until text is selected, so an empty page menu stays compact.
+The in-page palette and the dedicated Query workspace share the same query
+data, filtering and rendering rather than maintaining two implementations.
+Their layouts follow the surface they run in: the constrained overlay keeps its
+three-pane browser, while the full page uses a wider two-column workspace with
+the indicators above the preview. Both use the same canvas, surfaces, borders,
+rounded controls, accent states and scrollbars as Bulk Check and the other SOCx
+tools. They also share the same filters, source path, pack-verification state,
+tags, repository facets, ATT&CK ids, references, variables and rendered-query
+warnings. Language, source, category and custom
+facets sit inside the collapsed **More filters** disclosure; their native hover
+help is painted outside the panel and cannot be clipped by its scrolling
+columns. Fixed grid tracks keep column widths stable while queries change, and
+the shared, themed scrollbars never introduce horizontal scrolling.
+
+When no console is open, use **Query workspace** from the SOCx popup or assign
+its optional browser shortcut. It accepts a mixed IOC list, offers the same
+filters, favorites and deep search over every enabled IOC and hunting template,
+keeps the full catalogue in a scrolling column, exposes template variables,
+shows uncovered IOC types and chunk warnings, and copies the generated query.
+The page uses the same centred `max-w-6xl` shell, header hierarchy, margins and
+section spacing as Bulk Check. Its 720-pixel working area gives the catalogue
+and generated query a stable, comfortable height; the document itself scrolls
+normally instead of clipping either one to the viewport. Boolean variables use
+a consistent switch instead of a browser-native checkbox.
+
+Inside the shared query browser is a collapsed **Query language mini guide**. It
+covers every bundled dialect — including regex and PowerShell — and can be
+filtered by language/product or searched by command, syntax, option, example
+and field. Each language card explains its main fields; every command opens to
+show concise syntax, its main options and a short example. Field cards can also
+include practical notes and a query fragment; the Splunk guide distinguishes
+default, internal and CIM fields and covers statistical functions, `stats`,
+`eventstats`, `streamstats`, `tstats`, `chart`, `bin` and frequency commands.
+Each guide also links to the relevant official documentation in a new tab. In
+the page workspace it expands in normal document flow and uses page scrolling;
+inside the palette it keeps its own bounded scrollbar. The workspace always
+starts on **All languages and products**; only a palette opened on a recognised
+SIEM or EDR starts from that console's query language.
+IOC-only context actions remain hidden until text is selected, so an empty page
+menu stays compact. If a page blocks the palette content script, the context
+menu falls back to opening Query workspace with the same selected indicators.
 
 Pick a template, fill in its variables, and the query is written **into the
 search bar you were standing in** rather than opened in a new tab, so the
@@ -240,10 +280,10 @@ console keeps your session, filters and time picker. Insertion goes through the
 one path React, CodeMirror and Monaco all recognise, and falls back to the
 clipboard with a message when a field refuses it.
 
-The palette carries its own **indicator field**, at the top of the preview
-column: it opens prefilled with whatever was found, shows what was recognised
-("3 indicators · 2 IP · 1 Domain"), and can be typed into or pasted over at any
-time — the query below it re-renders as you edit.
+The shared query browser carries its own **indicator field**, in the left
+column on wide screens: it opens prefilled with whatever was found, shows what
+was recognised ("3 indicators · 2 IP · 1 Domain"), and can be typed into or
+pasted over at any time — the query below it re-renders as you edit.
 
 Indicators come from your current selection, or from the Bulk Check workspace
 when there is none. Each template maps every indicator type to its own field,
@@ -255,7 +295,8 @@ cannot merge safely — types read from different tables, or a body that is not
 one field-to-list comparison — falls back to one query per type and says why.
 Long lists are split into chunks and labelled, and quoting and escaping are
 decided by the dialect, never by the pack. Hunting queries read no indicator, so
-the indicator list disappears when one is selected.
+the overlay dims its fixed indicator column while the page explains the unused
+input above the preview; compact layouts hide it to preserve preview space.
 
 ### The rule builder
 
@@ -297,8 +338,10 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.4.3 release notes](docs/RELEASE_NOTES_1.4.3.md) for checkbox
-query variables and the safer public query catalogue; the [1.4.2
+See the [SOCx 1.5.0 release notes](docs/RELEASE_NOTES_1.5.0.md) for the unified
+query browser, searchable language guides and redesigned workspace; the [1.4.3
+notes](docs/RELEASE_NOTES_1.4.3.md) for checkbox query variables and the safer
+public query catalogue; the [1.4.2
 notes](docs/RELEASE_NOTES_1.4.2.md) for Splunk smart formatting and Firefox
 shortcut migration fixes; the [1.4.1
 notes](docs/RELEASE_NOTES_1.4.1.md) for Firefox shortcut support; the [1.4.0

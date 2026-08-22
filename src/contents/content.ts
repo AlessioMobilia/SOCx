@@ -1028,7 +1028,7 @@ if (!(window as any)._formatScriptInitialized) {
         kind: body.kind,
         templateKey: body.templateKey
       }).then(
-        () => sendResponse({ opened: true }),
+        (opened) => sendResponse({ opened }),
         (error) => {
           console.error("Query palette failed to open:", error)
           sendResponse({ opened: false })

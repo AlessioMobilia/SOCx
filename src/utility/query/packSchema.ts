@@ -167,6 +167,10 @@ export type QueryPack = {
   templates: QueryTemplate[]
   /** Runtime-only namespace; never read from or written to a pack file. */
   sourceId?: string
+  /** Runtime-only display name of the repository or personal library. */
+  sourceLabel?: string
+  /** Runtime-only marker used to group the two community catalogues. */
+  sourceBuiltIn?: boolean
 }
 
 export type PackIndexEntry = {

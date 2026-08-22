@@ -12,6 +12,7 @@ import {
   resolveBooleanPreference,
   resolvePaletteScope
 } from "../../utility/query/paletteBridge"
+import { querySourceKey } from "../../utility/query/paletteFilters"
 import {
   loadLibrary,
   matchPacksForUrl,
@@ -32,6 +33,8 @@ export type QueryLibraryRequest = {
 export type QueryLibraryResponse = {
   packs: QueryPack[]
   platformLabel?: string
+  platformSourceKey?: string
+  platformDialect?: string
   indicators?: string[]
   matched: boolean
   paletteEnabled: boolean
@@ -68,9 +71,11 @@ const handler: PlasmoMessaging.MessageHandler<
   }
   let packs = library.packs
   let platformLabel: string | undefined
+  let platformSourceKey: string | undefined
+  let platformDialect: string | undefined
   let matched = false
 
-  if (scope === "matched" && body.matchPlatform !== false && body.pageUrl) {
+  if (body.matchPlatform !== false && body.pageUrl) {
     const matches = matchPacksForUrl(packs, body.pageUrl)
     const matchedPacks = new Set(matches.map((match) => match.pack))
     const hasPlatformMatcher = (pack: QueryPack) =>
@@ -82,12 +87,16 @@ const handler: PlasmoMessaging.MessageHandler<
 
     // Packs without a declared console include personal templates and generic
     // self-hosted platforms. Everything else must genuinely match this page.
-    packs = packs.filter(
-      (pack) => matchedPacks.has(pack) || !hasPlatformMatcher(pack)
-    )
     if (matches.length > 0) {
       platformLabel = matches[0].pack.name
+      platformSourceKey = querySourceKey(matches[0].pack)
+      platformDialect = matches[0].pack.dialect
       matched = true
+    }
+    if (scope === "matched") {
+      packs = packs.filter(
+        (pack) => matchedPacks.has(pack) || !hasPlatformMatcher(pack)
+      )
     }
   }
 
@@ -97,7 +106,15 @@ const handler: PlasmoMessaging.MessageHandler<
     indicators = Array.isArray(bulk) ? bulk : []
   }
 
-  res.send({ packs, platformLabel, indicators, matched, paletteEnabled })
+  res.send({
+    packs,
+    platformLabel,
+    platformSourceKey,
+    platformDialect,
+    indicators,
+    matched,
+    paletteEnabled
+  })
 }
 
 export default handler

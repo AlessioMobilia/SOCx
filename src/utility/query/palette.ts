@@ -1,7 +1,7 @@
-// The query palette: an in-page overlay that is only ever created when the
-// analyst asks for it — keyboard shortcut, context menu entry, or the SOCx UI.
-// Nothing is injected on page load, and no floating control is added to the
-// host page.
+// The shared query browser. It mounts as an in-page overlay only when the
+// analyst asks for the palette, or as the main region of Query workspace.
+// Nothing is injected into a host page on load and no floating control is
+// added.
 //
 // The overlay lives in a hostile styling environment, so every node is built
 // from `all: initial` plus explicit `!important` declarations rather than from
@@ -11,8 +11,10 @@ import { showToast } from "../toast"
 import { toggleFavoriteKey } from "./favorites"
 import { flattenGroupTree, type GroupNode } from "./groups"
 import { insertQueryText, resolveTarget, type InsertMode } from "./insertText"
+import { createLanguageGuideView } from "./languageGuideView"
 import {
   templateVariables,
+  type QueryDialect,
   type QueryPack,
   type QueryTemplate
 } from "./packSchema"
@@ -22,9 +24,11 @@ import {
   buildFacets,
   dialectChipLabel,
   entryDialect,
+  entrySourceKey,
   FAVORITES_LABEL,
   hasActiveFilters,
   KIND_LABELS,
+  querySourceLabel,
   resolveEntryLabels,
   type PaletteFilterState
 } from "./paletteFilters"
@@ -55,13 +59,23 @@ export type PaletteRequest = {
   /** Start with the per-type comparisons merged into one query. */
   mergeTypes?: boolean
   onMergeTypesChange?: (value: boolean) => void
+  /** Keeps an embedding surface's draft alive if the library is remounted. */
+  onIndicatorTextChange?: (value: string) => void
+  /** Keeps the current template alive if the library is remounted. */
+  onSelectedKeyChange?: (key: string) => void
   platformLabel?: string
+  /** Repository source selected automatically from the current SIEM/EDR URL. */
+  initialSourceKey?: string
+  /** Query language selected automatically from the current SIEM/EDR URL. */
+  initialDialect?: string
   /** Starred entry keys, most recently starred first. */
   favorites?: string[]
   /** Entry to open on, e.g. the template a context menu entry named. */
   initialKey?: string
   /** Dialect id to human label, used for the language chip tooltips. */
   dialectLabels?: Map<string, string>
+  /** Full dialect metadata used by the embedded language guide. */
+  dialects?: Map<string, QueryDialect>
   onToggleFavorite?: (key: string, favorites: string[]) => void
   onRender: (
     entry: PaletteEntry,
@@ -71,6 +85,13 @@ export type PaletteRequest = {
       mergeTypes: boolean
     }
   ) => { text: string; note?: string; warning?: string }[]
+}
+
+export type QueryViewMode = "overlay" | "workspace"
+
+export type QueryViewOptions = {
+  mode: QueryViewMode
+  host: HTMLElement
 }
 
 const setStyles = (
@@ -108,70 +129,126 @@ export const closePalette = (): void => {
 export const isPaletteOpen = (): boolean =>
   Boolean(document.querySelector(`[${OVERLAY_ATTRIBUTE}="true"]`))
 
-export const openPalette = (request: PaletteRequest): void => {
-  if (typeof document === "undefined" || !document.documentElement) return
-  closePalette()
+/**
+ * Mounts the one query browser used by both the in-page palette and the
+ * dedicated workspace. The mode only changes the surrounding chrome and the
+ * actions that make sense in that context; catalogue, filters and preview stay
+ * identical.
+ */
+export const mountQueryView = (
+  request: PaletteRequest,
+  options: QueryViewOptions
+): (() => void) => {
+  if (typeof document === "undefined" || !document.documentElement) {
+    return () => undefined
+  }
+  const embedded = options.mode === "workspace"
+  if (!embedded) closePalette()
 
   // Captured before the overlay steals the focus, so the query can be inserted
   // back into the field the analyst was standing in.
-  const insertionTarget = resolveTarget()
+  const insertionTarget = embedded ? null : resolveTarget()
   const dark = isDark()
   const font =
     "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
   const mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 
-  // The SOCx palette: one accent, two neutrals, and translucency for
-  // everything in between, so the overlay reads the same on a light and on a
-  // dark console.
-  const ink = dark ? "#f4f7ff" : "#111322"
-  const muted = dark ? "rgba(244,247,255,0.62)" : "rgba(17,19,34,0.58)"
-  const faint = dark ? "rgba(244,247,255,0.45)" : "rgba(17,19,34,0.45)"
-  const line = dark ? "rgba(255,255,255,0.10)" : "rgba(17,19,34,0.09)"
-  const strongLine = dark ? "rgba(255,255,255,0.20)" : "rgba(17,19,34,0.16)"
-  const fill = dark ? "rgba(255,255,255,0.06)" : "rgba(17,19,34,0.04)"
+  // Resolved Tailwind design tokens. The overlay cannot consume the app
+  // stylesheet because it lives inside third-party pages, so keeping the
+  // palette on these values makes its shared renderer visually identical to
+  // native SOCx pages such as Bulk Check.
+  const ink = dark ? "#ffffff" : "#111322"
+  const muted = dark ? "#9da7bf" : "#6b7280"
+  const faint = dark ? "rgba(157,167,191,0.72)" : "rgba(107,114,128,0.72)"
+  const line = dark ? "#1f273a" : "#e4e8f4"
+  const strongLine = dark ? "#36415a" : "#cfd6e6"
+  const scrollThumb = dark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.20)"
+  const canvas = dark ? "#050912" : "#f5f6fb"
+  const surface = dark ? "rgba(12,20,36,0.88)" : "rgba(255,255,255,0.90)"
+  const control = dark ? "rgba(22,31,50,0.60)" : "rgba(255,255,255,0.95)"
+  const fill = dark ? "rgba(22,31,50,0.65)" : "rgba(238,241,247,0.70)"
   const accent = "#f5c242"
-  const accentSoft = dark ? "rgba(245,194,66,0.18)" : "rgba(245,194,66,0.22)"
+  const accentSoft = "rgba(245,194,66,0.12)"
   const warn = "#f59e0b"
 
   const overlay = document.createElement("div")
-  overlay.setAttribute(OVERLAY_ATTRIBUTE, "true")
+  const overlayValue = embedded ? "workspace" : "true"
+  overlay.setAttribute(OVERLAY_ATTRIBUTE, overlayValue)
   setStyles(overlay, {
     all: "initial",
-    position: "fixed",
-    inset: "0",
-    "z-index": MAX_Z_INDEX,
+    position: embedded ? "relative" : "fixed",
+    inset: embedded ? "auto" : "0",
+    "z-index": embedded ? "1" : MAX_Z_INDEX,
     display: "flex",
     "align-items": "flex-start",
     "justify-content": "center",
-    padding: "8vh 16px 16px",
-    "background-color": dark ? "rgba(2, 6, 16, 0.6)" : "rgba(15, 23, 42, 0.42)",
+    width: "100%",
+    height: embedded ? "100%" : "auto",
+    "min-height": "0",
+    "box-sizing": "border-box",
+    padding: embedded ? "0" : "4vh 16px 16px",
+    "background-color": embedded
+      ? "transparent"
+      : dark
+        ? "rgba(2, 6, 16, 0.6)"
+        : "rgba(15, 23, 42, 0.42)",
     isolation: "isolate"
   })
 
+  const scrollClass = "socx-query-scroll"
+  const scrollStyle = document.createElement("style")
+  scrollStyle.textContent = `
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass} {
+      scrollbar-width: thin !important;
+      scrollbar-color: ${scrollThumb} transparent !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar {
+      width: 6px !important;
+      height: 6px !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-thumb {
+      background: ${scrollThumb} !important;
+      border-radius: 999px !important;
+    }
+    [${OVERLAY_ATTRIBUTE}="${overlayValue}"] .${scrollClass}::-webkit-scrollbar-thumb:hover {
+      background: ${accent} !important;
+    }
+  `
+  overlay.appendChild(scrollStyle)
+
   const panel = document.createElement("div")
-  panel.setAttribute("role", "dialog")
-  panel.setAttribute("aria-modal", "true")
-  panel.setAttribute("aria-label", "SOCx query palette")
+  panel.setAttribute("role", embedded ? "region" : "dialog")
+  if (!embedded) panel.setAttribute("aria-modal", "true")
+  panel.setAttribute(
+    "aria-label",
+    embedded ? "SOCx query workspace" : "SOCx query palette"
+  )
   setStyles(panel, {
     all: "initial",
+    position: "relative",
     display: "flex",
     "flex-direction": "column",
-    width: "880px",
-    "max-width": "calc(100vw - 32px)",
-    "max-height": "80vh",
+    gap: embedded ? "24px" : "12px",
+    width: embedded ? "100%" : "1180px",
+    height: "auto",
+    "max-width": embedded ? "none" : "calc(100vw - 32px)",
+    "max-height": embedded ? "none" : "90vh",
     "box-sizing": "border-box",
     color: ink,
-    "background-color": dark
-      ? "rgba(13, 21, 36, 0.99)"
-      : "rgba(255, 255, 255, 0.99)",
-    border: `1px solid ${strongLine}`,
-    "border-top": `3px solid ${accent}`,
+    padding: embedded ? "0" : "12px",
+    "background-color": embedded ? "transparent" : canvas,
+    border: embedded ? "0" : `1px solid ${line}`,
     "border-radius": "16px",
-    "box-shadow": dark
-      ? "0 32px 64px rgba(0,0,0,0.62)"
-      : "0 32px 64px rgba(15,23,42,0.26)",
+    "box-shadow": embedded
+      ? "none"
+      : dark
+        ? "0 32px 64px rgba(0,0,0,0.62)"
+        : "0 32px 64px rgba(15,23,42,0.26)",
     "font-family": font,
-    overflow: "hidden"
+    overflow: embedded ? "visible" : "hidden"
   })
 
   // -------------------------------------------------------- small factories
@@ -191,12 +268,15 @@ export const openPalette = (request: PaletteRequest): void => {
     makeText("span", text, {
       display: "inline-flex",
       "align-items": "center",
+      "max-width": "100%",
       padding: "2px 8px",
       "border-radius": "999px",
       "font-size": "10px",
       "font-weight": "700",
       "letter-spacing": "0.06em",
       "text-transform": "uppercase",
+      "word-break": "break-word",
+      "overflow-wrap": "anywhere",
       color: tone === "warn" ? warn : tone === "accent" ? ink : muted,
       "background-color":
         tone === "accent"
@@ -332,6 +412,7 @@ export const openPalette = (request: PaletteRequest): void => {
 
   const makeSelect = (options: {
     ariaLabel: string
+    title?: string
     entries: { value: string; label: string; title?: string }[]
     value: string
     active: boolean
@@ -339,6 +420,7 @@ export const openPalette = (request: PaletteRequest): void => {
   }) => {
     const select = document.createElement("select")
     select.setAttribute("aria-label", options.ariaLabel)
+    if (options.title) select.title = options.title
     setStyles(select, {
       all: "initial",
       display: "inline-flex",
@@ -429,16 +511,19 @@ export const openPalette = (request: PaletteRequest): void => {
     all: "initial",
     display: "flex",
     "flex-direction": "column",
-    gap: "10px",
-    padding: "12px 14px 10px",
-    "border-bottom": `1px solid ${line}`,
+    gap: embedded ? "12px" : "10px",
+    padding: embedded ? "20px" : "12px 14px",
+    "box-sizing": "border-box",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
   const titleRow = document.createElement("div")
   setStyles(titleRow, {
     all: "initial",
-    display: "flex",
+    display: embedded ? "none" : "flex",
     "align-items": "center",
     gap: "8px",
     "font-family": font
@@ -447,11 +532,11 @@ export const openPalette = (request: PaletteRequest): void => {
     makeText("span", "SOCx", {
       "font-size": "10px",
       "font-weight": "800",
-      "letter-spacing": "0.28em",
+      "letter-spacing": "0.4em",
       "text-transform": "uppercase",
-      color: accent
+      color: muted
     }),
-    makeText("span", "Query palette", {
+    makeText("span", embedded ? "Query workspace" : "Query palette", {
       "font-size": "11px",
       "font-weight": "600",
       color: muted
@@ -469,6 +554,32 @@ export const openPalette = (request: PaletteRequest): void => {
     color: faint
   })
   titleRow.append(spacer, counter)
+  if (!embedded) {
+    const closeButton = document.createElement("button")
+    closeButton.type = "button"
+    closeButton.textContent = "×"
+    closeButton.title = "Close query palette"
+    closeButton.setAttribute("aria-label", "Close query palette")
+    setStyles(closeButton, {
+      all: "initial",
+      display: "inline-flex",
+      "align-items": "center",
+      "justify-content": "center",
+      width: "26px",
+      height: "26px",
+      "flex-shrink": "0",
+      "border-radius": "999px",
+      "font-family": font,
+      "font-size": "20px",
+      "line-height": "1",
+      color: muted,
+      cursor: "pointer",
+      border: `1px solid ${line}`,
+      "background-color": "transparent"
+    })
+    closeButton.addEventListener("click", () => closePalette())
+    titleRow.appendChild(closeButton)
+  }
 
   const searchRow = document.createElement("div")
   setStyles(searchRow, {
@@ -477,8 +588,8 @@ export const openPalette = (request: PaletteRequest): void => {
     "align-items": "center",
     gap: "8px",
     padding: "8px 10px",
-    "border-radius": "12px",
-    "background-color": fill,
+    "border-radius": "16px",
+    "background-color": control,
     border: `1px solid ${line}`,
     "font-family": font
   })
@@ -486,6 +597,8 @@ export const openPalette = (request: PaletteRequest): void => {
   const search = document.createElement("input")
   search.type = "text"
   search.setAttribute("aria-label", "Search queries")
+  search.title =
+    "Search names, descriptions, query text, fields, commands, tags and ATT&CK identifiers"
   // Deep search: the placeholder has to say so, or nobody types a field name.
   search.placeholder = "Search a name, a description, a field or a value"
   setStyles(search, {
@@ -508,7 +621,8 @@ export const openPalette = (request: PaletteRequest): void => {
     search
   )
 
-  // Two rows, on purpose: which library you are in, then how you narrow it.
+  // The library choice stays visible. Narrowing filters are collapsed until
+  // needed, which gives the catalogue more vertical room in both surfaces.
   const scopeRow = document.createElement("div")
   setStyles(scopeRow, {
     all: "initial",
@@ -526,36 +640,146 @@ export const openPalette = (request: PaletteRequest): void => {
     "align-items": "center",
     "flex-wrap": "wrap",
     gap: "6px",
-    "padding-top": "8px",
+    padding: "8px 10px 10px",
     "border-top": `1px solid ${line}`,
     "font-family": font
   })
 
-  header.append(titleRow, searchRow, scopeRow, filterRow)
+  const filterDetails = document.createElement("details")
+  setStyles(filterDetails, {
+    all: "initial",
+    display: "block",
+    "border-radius": "12px",
+    border: `1px solid ${line}`,
+    "background-color": control,
+    "font-family": font,
+    overflow: "hidden"
+  })
+  const filterSummary = document.createElement("summary")
+  filterSummary.title =
+    "Filter by query language, category and repository-specific fields"
+  setStyles(filterSummary, {
+    all: "initial",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "space-between",
+    gap: "8px",
+    padding: "7px 10px",
+    "font-family": font,
+    "font-size": "11px",
+    "font-weight": "700",
+    color: muted,
+    cursor: "pointer"
+  })
+  const filterSummaryLabel = makeText("span", "More filters", {
+    "font-size": "11px",
+    "font-weight": "700",
+    color: "inherit"
+  })
+  const filterSummaryMeta = makeText("span", "", {
+    "font-size": "10px",
+    "font-variant-numeric": "tabular-nums",
+    color: faint
+  })
+  filterSummary.append(filterSummaryLabel, filterSummaryMeta)
+  filterDetails.append(filterSummary, filterRow)
+  filterDetails.addEventListener("toggle", () => {
+    filterSummaryMeta.textContent = `${filtered.length} matches · ${
+      filterDetails.open ? "Hide" : "Show"
+    }`
+  })
+
+  header.append(titleRow, searchRow, scopeRow, filterDetails)
 
   // ------------------------------------------------------------------- body
   const body = document.createElement("div")
   setStyles(body, {
     all: "initial",
-    display: "flex",
-    flex: "1 1 auto",
+    display: "grid",
+    flex: embedded ? "0 0 auto" : "1 1 auto",
+    height: embedded ? "720px" : "auto",
+    width: "100%",
     "min-height": "0",
+    "min-width": "0",
+    gap: embedded ? "24px" : "12px",
+    overflow: "hidden",
     "font-family": font
   })
+
+  const threePane = !embedded && window.innerWidth >= 1100
+  const singlePane = embedded && window.innerWidth < 760
+  body.style.setProperty(
+    "grid-template-columns",
+    singlePane
+      ? "minmax(0, 1fr)"
+      : threePane
+      ? "minmax(210px, 24%) minmax(280px, 34%) minmax(0, 1fr)"
+      : embedded
+        ? "minmax(300px, 38%) minmax(0, 1fr)"
+        : "minmax(220px, 42%) minmax(0, 1fr)",
+    "important"
+  )
+
+  const listColumn = document.createElement("section")
+  listColumn.setAttribute("data-socx-query-section", "templates")
+  setStyles(listColumn, {
+    all: "initial",
+    display: "flex",
+    "flex-direction": "column",
+    width: "100%",
+    "min-width": "0",
+    "min-height": "0",
+    "box-sizing": "border-box",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
+    overflow: "hidden",
+    "font-family": font
+  })
+
+  const listHeader = document.createElement("div")
+  setStyles(listHeader, {
+    all: "initial",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "space-between",
+    gap: "8px",
+    padding: "11px 14px 8px",
+    "font-family": font
+  })
+  const listCounter = makeText("span", "", {
+    "font-size": "10px",
+    "font-variant-numeric": "tabular-nums",
+    color: faint
+  })
+  listHeader.append(
+    makeText("span", "Query templates", {
+      "font-size": "12px",
+      "font-weight": "700",
+      color: ink
+    }),
+    listCounter
+  )
 
   const list = document.createElement("div")
   list.setAttribute("role", "listbox")
   list.setAttribute("aria-label", "Query results")
+  list.classList.add(scrollClass)
   setStyles(list, {
     all: "initial",
     display: "block",
-    width: "42%",
-    "min-width": "220px",
+    width: "100%",
+    "min-width": "0",
+    "max-width": "100%",
     "overflow-y": "auto",
-    padding: "6px 0 10px",
-    "border-right": `1px solid ${line}`,
+    "overflow-x": "hidden",
+    "scrollbar-width": "thin",
+    "scrollbar-color": `${scrollThumb} transparent`,
+    flex: "1 1 auto",
+    padding: "0 6px 10px",
     "font-family": font
   })
+  listColumn.append(listHeader, list)
 
   // The right hand column: the indicator list on top, always visible and always
   // editable, and the template detail below it. The analyst must be able to see
@@ -567,19 +791,29 @@ export const openPalette = (request: PaletteRequest): void => {
     display: "flex",
     "flex-direction": "column",
     flex: "1 1 auto",
+    width: "100%",
     "min-width": "0",
     "min-height": "0",
+    gap: embedded ? "24px" : "12px",
+    overflow: "hidden",
     "font-family": font
   })
 
   const indicatorBox = document.createElement("div")
+  indicatorBox.setAttribute("data-socx-query-section", "indicators")
   setStyles(indicatorBox, {
     all: "initial",
     display: "flex",
     "flex-direction": "column",
     gap: "6px",
-    padding: "10px 16px",
-    "border-bottom": `1px solid ${line}`,
+    width: "100%",
+    "min-width": "0",
+    "max-width": "100%",
+    "box-sizing": "border-box",
+    padding: "12px 14px",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
@@ -588,10 +822,14 @@ export const openPalette = (request: PaletteRequest): void => {
     all: "initial",
     display: "flex",
     "align-items": "center",
+    "flex-wrap": "wrap",
     gap: "8px",
     "font-family": font
   })
   const indicatorSummary = makeText("span", "", {
+    display: "block",
+    width: "100%",
+    order: "2",
     "font-size": "11px",
     color: muted
   })
@@ -608,11 +846,12 @@ export const openPalette = (request: PaletteRequest): void => {
       color: faint
     }),
     indicatorSpacer,
-    indicatorSummary,
-    mergeSlot
+    mergeSlot,
+    indicatorSummary
   )
 
   const indicators = document.createElement("textarea")
+  indicators.classList.add(scrollClass)
   indicators.rows = 3
   indicators.spellcheck = false
   indicators.setAttribute("aria-label", "Indicators used by the query")
@@ -624,13 +863,17 @@ export const openPalette = (request: PaletteRequest): void => {
     display: "block",
     width: "100%",
     "box-sizing": "border-box",
-    resize: "vertical",
+    resize: "none",
     "font-family": mono,
     "font-size": "12px",
     "line-height": "1.45",
     "max-height": "22vh",
+    "overflow-y": "auto",
+    "overflow-x": "hidden",
+    "scrollbar-width": "thin",
+    "scrollbar-color": `${scrollThumb} transparent`,
     color: ink,
-    "background-color": fill,
+    "background-color": control,
     border: `1px solid ${line}`,
     "border-radius": "10px",
     padding: "8px 10px",
@@ -640,11 +883,15 @@ export const openPalette = (request: PaletteRequest): void => {
   indicatorBox.append(indicatorHeader, indicators)
 
   const preview = document.createElement("div")
+  preview.setAttribute("data-socx-query-section", "preview")
   setStyles(preview, {
     all: "initial",
     display: "flex",
     "flex-direction": "column",
     flex: "1 1 auto",
+    width: "100%",
+    "max-width": "100%",
+    "box-sizing": "border-box",
     "min-width": "0",
     "min-height": "0",
     // The two children scroll on their own, so the query keeps its share of the
@@ -652,11 +899,36 @@ export const openPalette = (request: PaletteRequest): void => {
     overflow: "hidden",
     padding: "14px 16px",
     gap: "8px",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
-  previewColumn.append(indicatorBox, preview)
-  body.append(list, previewColumn)
+  if (threePane) {
+    setStyles(indicatorBox, {
+      width: "100%",
+      "min-width": "0",
+      "max-width": "100%",
+      "box-sizing": "border-box",
+      padding: "14px"
+    })
+    setStyles(indicators, {
+      flex: "1 1 auto",
+      "min-height": "180px",
+      "max-height": "none",
+      resize: "none"
+    })
+    body.append(indicatorBox, listColumn, preview)
+  } else {
+    previewColumn.append(indicatorBox, preview)
+    body.append(listColumn, previewColumn)
+  }
+  if (singlePane) {
+    setStyles(body, { height: "auto", overflow: "visible" })
+    setStyles(listColumn, { height: "440px" })
+    setStyles(previewColumn, { height: "720px" })
+  }
 
   // ----------------------------------------------------------------- footer
   const footer = document.createElement("div")
@@ -667,13 +939,18 @@ export const openPalette = (request: PaletteRequest): void => {
     "justify-content": "space-between",
     gap: "8px",
     padding: "10px 14px",
-    "border-top": `1px solid ${line}`,
+    "box-sizing": "border-box",
+    "background-color": surface,
+    border: `1px solid ${line}`,
+    "border-radius": "16px",
     "font-family": font
   })
 
   const hint = makeText(
     "span",
-    "↑↓ move · ↵ insert · ⇧↵ at caret · Alt+F favorite · Esc close",
+    embedded
+      ? "Select a template, adjust its options, then copy the generated query"
+      : "↑↓ move · ↵ insert · ⇧↵ at caret · Alt+F favorite · Esc close",
     { "font-size": "11px", color: faint }
   )
 
@@ -681,16 +958,79 @@ export const openPalette = (request: PaletteRequest): void => {
   const insertButton = makeButton("Insert", true)
   const actions = document.createElement("div")
   setStyles(actions, { all: "initial", display: "flex", gap: "8px" })
-  actions.append(copyButton, insertButton)
+  actions.append(copyButton)
+  if (!embedded) actions.append(insertButton)
   footer.append(hint, actions)
 
-  panel.append(header, body, footer)
+  const guideView = createLanguageGuideView({
+    dialects: request.dialects,
+    constrained: !embedded,
+    theme: {
+      ink,
+      muted,
+      faint,
+      line,
+      strongLine,
+      scrollThumb,
+      fill,
+      surface,
+      control,
+      accent,
+      accentSoft,
+      warn,
+      font,
+      mono,
+      scrollClass,
+      dark
+    }
+  })
+  guideView.element.addEventListener("toggle", () => {
+    if (!embedded) {
+      panel.style.setProperty(
+        "height",
+        guideView.element.open ? "720px" : "auto",
+        "important"
+      )
+      body.style.setProperty(
+        "display",
+        guideView.element.open ? "none" : "grid",
+        "important"
+      )
+    }
+  })
+
+  if (embedded) panel.append(header, body, guideView.element)
+  else panel.append(header, body, guideView.element, footer)
   overlay.appendChild(panel)
+
+  // A standalone workspace is not tied to the page that opened it, so its
+  // guide always starts from the complete language catalogue. Only an in-page
+  // palette with a recognised console receives a relevant language shortcut.
+  if (!embedded && request.platformLabel && request.initialDialect) {
+    guideView.syncDialect(request.initialDialect)
+  }
 
   // ------------------------------------------------------------------ state
   let favorites = [...(request.favorites ?? [])]
   let mergeTypes = request.mergeTypes !== false
-  let filters: PaletteFilterState = { ...ALL_FILTERS, labels: {} }
+  let filters: PaletteFilterState = {
+    ...ALL_FILTERS,
+    source:
+      request.initialSourceKey &&
+      request.entries.some(
+        (entry) => entrySourceKey(entry) === request.initialSourceKey
+      )
+        ? request.initialSourceKey
+        : "all",
+    dialect:
+      request.initialDialect &&
+      request.entries.some(
+        (entry) => entryDialect(entry) === request.initialDialect
+      )
+        ? request.initialDialect
+        : "all",
+    labels: {}
+  }
   let filtered = request.entries
   let favoriteCount = 0
   let activeIndex = 0
@@ -733,10 +1073,8 @@ export const openPalette = (request: PaletteRequest): void => {
 
   // -------------------------------------------------------------- filter bar
   //
-  // Every filter stays on screen at all times, whatever is selected: a control
-  // that disappears when you click elsewhere cannot be reasoned about. A value
-  // that no longer matches anything is shown counting zero instead of being
-  // removed, and the order never changes while you type.
+  // Filter values never disappear or reorder. The containing disclosure may be
+  // closed, but its active count makes the current state visible at a glance.
   function renderFilters() {
     scopeRow.textContent = ""
     filterRow.textContent = ""
@@ -746,6 +1084,18 @@ export const openPalette = (request: PaletteRequest): void => {
       favorites,
       request.dialectLabels
     )
+    const narrowFilterCount =
+      Number(filters.dialect !== "all") +
+      Number(filters.source !== "all") +
+      Number(filters.group !== "all") +
+      Object.values(filters.labels ?? {}).filter((value) => value !== "all")
+        .length
+    filterSummaryLabel.textContent = narrowFilterCount
+      ? `More filters · ${narrowFilterCount} active`
+      : "More filters"
+    filterSummaryMeta.textContent = `${filtered.length} matches · ${
+      filterDetails.open ? "Hide" : "Show"
+    }`
 
     // The two libraries are not one filter among many: they choose *what you
     // are browsing*, so they get a segmented control of their own.
@@ -798,6 +1148,7 @@ export const openPalette = (request: PaletteRequest): void => {
       "text-decoration": "underline"
     }) as HTMLButtonElement
     clear.type = "button"
+    clear.title = "Reset search, query type and every narrowing filter"
     clear.disabled = !hasActiveFilters(filters)
     clear.addEventListener("click", () => {
       search.value = ""
@@ -826,6 +1177,7 @@ export const openPalette = (request: PaletteRequest): void => {
       filterRow.appendChild(
         makeSelect({
           ariaLabel: "Filter by query language",
+          title: "Show templates written for one query language or product",
           active: filters.dialect !== "all",
           value: filters.dialect,
           entries: [
@@ -843,7 +1195,26 @@ export const openPalette = (request: PaletteRequest): void => {
 
     filterRow.appendChild(
       makeSelect({
+        ariaLabel: "Filter by query source",
+        title: "Show queries from one community, team or personal source",
+        active: filters.source !== "all",
+        value: filters.source,
+        entries: [
+          { value: "all", label: "Source: all" },
+          ...facets.sources.map((option) => ({
+            value: option.value,
+            label: `${option.label} (${option.count})`,
+            title: option.title
+          }))
+        ],
+        onChange: (value) => setFilters({ source: value })
+      })
+    )
+
+    filterRow.appendChild(
+      makeSelect({
         ariaLabel: "Filter by category",
+        title: "Narrow templates to one catalogue category",
         active: filters.group !== "all",
         value: filters.group,
         entries: [
@@ -863,6 +1234,7 @@ export const openPalette = (request: PaletteRequest): void => {
       filterRow.appendChild(
         makeSelect({
           ariaLabel: `Filter by ${facet.label}`,
+          title: facet.description || `Narrow templates by ${facet.label}`,
           active: (filters.labels?.[facet.id] ?? "all") !== "all",
           value: filters.labels?.[facet.id] ?? "all",
           entries: [
@@ -886,7 +1258,13 @@ export const openPalette = (request: PaletteRequest): void => {
     const entry = activeEntry()
     if (!entry) {
       rendered = []
-      indicatorBox.style.setProperty("display", "none", "important")
+      indicatorBox.style.setProperty(
+        "display",
+        threePane ? "flex" : "none",
+        "important"
+      )
+      indicatorBox.style.setProperty("opacity", "0.5", "important")
+      indicatorSummary.textContent = "No selected query"
       preview.append(
         makeText(
           "p",
@@ -906,22 +1284,31 @@ export const openPalette = (request: PaletteRequest): void => {
       return
     }
 
-    // A hunting playbook runs as it is written: showing it an indicator list it
-    // will never read only invites the analyst to fill one in for nothing.
+    // In the three-pane view the indicator column stays put so selecting a
+    // hunting playbook does not make the layout jump. Compact overlays can
+    // still hide it to protect the query preview.
     indicatorBox.style.setProperty(
       "display",
-      entry.template.requiresIocs ? "flex" : "none",
+      entry.template.requiresIocs || threePane ? "flex" : "none",
       "important"
     )
-
+    indicatorBox.style.setProperty(
+      "opacity",
+      entry.template.requiresIocs ? "1" : "0.5",
+      "important"
+    )
+    indicatorSummary.textContent = entry.template.requiresIocs
+      ? (request.describeIndicators?.(indicators.value) ?? "")
+      : "Not used by this hunting query"
     const variables = variablesByEntry.get(entry.key) ?? {}
     variablesByEntry.set(entry.key, variables)
 
-    // Everything that describes the query goes in the top box, which takes at
-    // most half the column and scrolls; the query itself owns the rest. A
+    // Everything that describes the query goes in the top box, which takes a
+    // limited share of the column and scrolls; the query itself owns the rest. A
     // template with a long description and a handful of variables used to push
     // its own output out of sight.
     const meta = document.createElement("div")
+    meta.classList.add(scrollClass)
     setStyles(meta, {
       all: "initial",
       display: "flex",
@@ -929,11 +1316,15 @@ export const openPalette = (request: PaletteRequest): void => {
       gap: "8px",
       flex: "0 1 auto",
       "min-height": "0",
-      "max-height": "45%",
+      "max-height": embedded ? "38%" : "45%",
       "overflow-y": "auto",
+      "overflow-x": "hidden",
+      "scrollbar-width": "thin",
+      "scrollbar-color": `${scrollThumb} transparent`,
       "font-family": font
     })
     const queryBox = document.createElement("div")
+    queryBox.classList.add(scrollClass)
     setStyles(queryBox, {
       all: "initial",
       display: "flex",
@@ -945,9 +1336,22 @@ export const openPalette = (request: PaletteRequest): void => {
       // keep the split comfortable when the column is tall.
       "min-height": "120px",
       "overflow-y": "auto",
+      "overflow-x": "hidden",
+      "scrollbar-width": "thin",
+      "scrollbar-color": `${scrollThumb} transparent`,
       "font-family": font
     })
     preview.append(meta, queryBox)
+
+    meta.appendChild(
+      makeText("p", "Query preview", {
+        "font-size": "10px",
+        "font-weight": "700",
+        "letter-spacing": "0.2em",
+        "text-transform": "uppercase",
+        color: muted
+      })
+    )
 
     const titleLine = document.createElement("div")
     setStyles(titleLine, {
@@ -962,15 +1366,23 @@ export const openPalette = (request: PaletteRequest): void => {
       event.preventDefault()
       toggleFavorite(entry.key)
     })
-    titleLine.append(
+    titleLine.appendChild(
       makeText("p", entry.template.name, {
         "font-size": "15px",
         "font-weight": "700",
         flex: "1 1 auto",
+        "min-width": "0",
+        "word-break": "break-word",
+        "overflow-wrap": "anywhere",
         color: ink
-      }),
-      star
+      })
     )
+    if (embedded) {
+      const previewCopy = makeButton("Copy query")
+      previewCopy.addEventListener("click", () => void copy())
+      titleLine.appendChild(previewCopy)
+    }
+    titleLine.appendChild(star)
     meta.appendChild(titleLine)
 
     const badges = document.createElement("div")
@@ -986,8 +1398,15 @@ export const openPalette = (request: PaletteRequest): void => {
       makeBadge(KIND_LABELS[entry.pack.kind] ?? entry.pack.kind, "neutral"),
       makeBadge(dialectChipLabel(entryDialect(entry)), "neutral")
     )
-    if (entry.pack.verified !== true) {
-      badges.appendChild(makeBadge("unverified fields", "warn"))
+    badges.appendChild(
+      makeBadge(
+        entry.pack.verified === true ? "verified pack" : "unverified fields",
+        entry.pack.verified === true ? "accent" : "warn"
+      )
+    )
+    for (const values of Object.values(resolveEntryLabels(entry))) {
+      for (const value of values)
+        badges.appendChild(makeBadge(value, "neutral"))
     }
     const tags = entry.template.tags ?? []
     for (const tag of tags.slice(0, 4)) {
@@ -1002,10 +1421,16 @@ export const openPalette = (request: PaletteRequest): void => {
     meta.appendChild(badges)
 
     meta.appendChild(
-      makeText("p", `${entry.path.join(" › ")} · ${entry.pack.name}`, {
-        "font-size": "11px",
-        color: muted
-      })
+      makeText(
+        "p",
+        `${entry.path.join(" › ")} · ${entry.pack.name} · ${querySourceLabel(entry.pack)}`,
+        {
+          "font-size": "11px",
+          "word-break": "break-word",
+          "overflow-wrap": "anywhere",
+          color: muted
+        }
+      )
     )
 
     if (entry.template.description) {
@@ -1017,6 +1442,31 @@ export const openPalette = (request: PaletteRequest): void => {
         })
       )
     }
+
+    const references = document.createElement("div")
+    setStyles(references, {
+      all: "initial",
+      display: "flex",
+      "flex-wrap": "wrap",
+      gap: "6px",
+      "font-family": font
+    })
+    if (/^https?:\/\//i.test(entry.template.reference ?? "")) {
+      const reference = makeText("a", "Template reference ↗", {
+        "font-size": "11px",
+        "font-weight": "600",
+        color: muted,
+        "text-decoration": "underline"
+      }) as HTMLAnchorElement
+      reference.href = entry.template.reference
+      reference.target = "_blank"
+      reference.rel = "noreferrer"
+      references.appendChild(reference)
+    }
+    for (const technique of entry.template.mitre ?? []) {
+      references.appendChild(makeBadge(technique, "neutral"))
+    }
+    if (references.childElementCount > 0) meta.appendChild(references)
 
     // Variable inputs, which are the only input a standard query needs. Only
     // the ones this template actually substitutes are offered: a pack declares
@@ -1035,6 +1485,9 @@ export const openPalette = (request: PaletteRequest): void => {
 
     for (const variable of variableFields) {
       const row = document.createElement("label")
+      row.title =
+        variable.description ||
+        `${variable.label} changes the value inserted into the generated query.`
       setStyles(row, {
         all: "initial",
         display: "flex",
@@ -1047,11 +1500,14 @@ export const openPalette = (request: PaletteRequest): void => {
       })
       const label = makeText("span", variable.label, {
         "font-size": "12px",
+        flex: variable.type === "checkbox" ? "1 1 auto" : "0 1 48%",
         "min-width": "0",
-        "max-width": "45%",
-        "white-space": "nowrap",
-        overflow: "hidden",
-        "text-overflow": "ellipsis",
+        "max-width": variable.type === "checkbox" ? "none" : "52%",
+        "line-height": "1.35",
+        "white-space": "normal",
+        "overflow-wrap": "anywhere",
+        overflow: "visible",
+        "text-overflow": "clip",
         color: muted
       })
 
@@ -1061,14 +1517,17 @@ export const openPalette = (request: PaletteRequest): void => {
       input.setAttribute("aria-label", variable.label)
       if (variable.type === "checkbox" && input instanceof HTMLInputElement) {
         input.type = "checkbox"
+        input.setAttribute("role", "switch")
         setStyles(input, {
           all: "initial",
-          appearance: "auto",
-          width: "16px",
-          height: "16px",
+          appearance: "none",
+          width: "34px",
+          height: "20px",
           flex: "0 0 auto",
           cursor: "pointer",
-          "accent-color": accent
+          "border-radius": "999px",
+          border: `1px solid ${line}`,
+          outline: "none"
         })
       } else {
         setStyles(input, {
@@ -1100,6 +1559,13 @@ export const openPalette = (request: PaletteRequest): void => {
         input.value = current
       } else if (input.type === "checkbox") {
         input.checked = current === "true"
+        const thumbPosition = input.checked ? "24px" : "9px"
+        setStyles(input, {
+          "background-color": input.checked ? accentSoft : fill,
+          "background-image": `radial-gradient(circle at ${thumbPosition} 50%, ${
+            input.checked ? accent : faint
+          } 0 6px, transparent 6.5px)`
+        })
       } else {
         ;(input as HTMLInputElement).value = current
       }
@@ -1149,11 +1615,15 @@ export const openPalette = (request: PaletteRequest): void => {
       queryBox.appendChild(
         makeText("pre", query.text, {
           display: "block",
+          width: "100%",
+          "max-width": "100%",
+          "box-sizing": "border-box",
           "font-family": mono,
           "font-size": "12px",
           "line-height": "1.5",
           "white-space": "pre-wrap",
           "word-break": "break-word",
+          "overflow-wrap": "anywhere",
           padding: "10px 12px",
           "border-radius": "12px",
           color: ink,
@@ -1179,6 +1649,7 @@ export const openPalette = (request: PaletteRequest): void => {
   function renderList() {
     list.textContent = ""
     counter.textContent = `${filtered.length} of ${request.entries.length}`
+    listCounter.textContent = `${filtered.length} of ${request.entries.length}`
 
     if (filtered.length === 0) {
       list.appendChild(
@@ -1214,14 +1685,14 @@ export const openPalette = (request: PaletteRequest): void => {
         gap: "6px",
         margin: "1px 6px",
         padding: "6px 8px",
-        "border-radius": "9px",
+        "box-sizing": "border-box",
+        "border-radius": "12px",
         "font-family": font,
         "font-size": "13px",
         cursor: "pointer",
         color: ink,
         "background-color": index === activeIndex ? accentSoft : "transparent",
-        "box-shadow":
-          index === activeIndex ? `inset 2px 0 0 0 ${accent}` : "none"
+        border: `1px solid ${index === activeIndex ? accent : "transparent"}`
       })
 
       const isFavorite = favorites.includes(entry.key)
@@ -1235,6 +1706,7 @@ export const openPalette = (request: PaletteRequest): void => {
         star.style.setProperty("opacity", "1", "important")
         if (index !== activeIndex) {
           item.style.setProperty("background-color", fill, "important")
+          item.style.setProperty("border-color", line, "important")
         }
       })
       item.addEventListener("mouseleave", () => {
@@ -1243,6 +1715,7 @@ export const openPalette = (request: PaletteRequest): void => {
         }
         if (index !== activeIndex) {
           item.style.setProperty("background-color", "transparent", "important")
+          item.style.setProperty("border-color", "transparent", "important")
         }
       })
       star.addEventListener("click", (event) => {
@@ -1296,10 +1769,13 @@ export const openPalette = (request: PaletteRequest): void => {
       item.append(text, star)
       item.addEventListener("click", () => {
         activeIndex = index
+        request.onSelectedKeyChange?.(entry.key)
         renderList()
         renderPreview()
       })
-      item.addEventListener("dblclick", () => void insert("replace"))
+      if (!embedded) {
+        item.addEventListener("dblclick", () => void insert("replace"))
+      }
       list.appendChild(item)
     }
 
@@ -1356,7 +1832,7 @@ export const openPalette = (request: PaletteRequest): void => {
     if (!text) return
     try {
       await navigator.clipboard.writeText(text)
-      closePalette()
+      if (!embedded) closePalette()
       showToast("Query copied to clipboard", "success")
     } catch {
       showToast("Could not copy the query", "danger")
@@ -1369,6 +1845,8 @@ export const openPalette = (request: PaletteRequest): void => {
       Math.max(activeIndex + delta, 0),
       filtered.length - 1
     )
+    const entry = activeEntry()
+    if (entry) request.onSelectedKeyChange?.(entry.key)
     // Walking past the fold expands it rather than trapping the cursor.
     if (activeIndex >= visibleLimit) {
       visibleLimit = Math.min(filtered.length, activeIndex + PAGE_SIZE)
@@ -1383,8 +1861,11 @@ export const openPalette = (request: PaletteRequest): void => {
   search.addEventListener("input", () => setFilters({ search: search.value }))
 
   const renderIndicatorSummary = () => {
+    const selected = activeEntry()
     indicatorSummary.textContent =
-      request.describeIndicators?.(indicators.value) ?? ""
+      selected && !selected.template.requiresIocs
+        ? "Not used by this hunting query"
+        : (request.describeIndicators?.(indicators.value) ?? "")
 
     // One query for the whole selection, or one per indicator type. The choice
     // lives next to the list it applies to, and is remembered.
@@ -1406,11 +1887,13 @@ export const openPalette = (request: PaletteRequest): void => {
     )
   }
   indicators.addEventListener("input", () => {
+    request.onIndicatorTextChange?.(indicators.value)
     renderIndicatorSummary()
     renderPreview()
   })
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (embedded) return
     if (event.key === "Escape") {
       event.preventDefault()
       event.stopPropagation()
@@ -1445,21 +1928,33 @@ export const openPalette = (request: PaletteRequest): void => {
   }
 
   const cleanup = () => {
-    document.removeEventListener("keydown", onKeyDown, true)
+    if (!embedded) document.removeEventListener("keydown", onKeyDown, true)
     overlay.remove()
     if (activePaletteCleanup === cleanup) {
       activePaletteCleanup = null
     }
   }
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) cleanup()
-  })
-  document.addEventListener("keydown", onKeyDown, true)
-  activePaletteCleanup = cleanup
+  if (!embedded) {
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) cleanup()
+    })
+    document.addEventListener("keydown", onKeyDown, true)
+    activePaletteCleanup = cleanup
+  }
 
-  ;(document.body ?? document.documentElement).appendChild(overlay)
+  options.host.appendChild(overlay)
   renderIndicatorSummary()
   recompute()
-  search.focus()
+  if (!embedded) search.focus()
+  return cleanup
+}
+
+export const openPalette = (request: PaletteRequest): void => {
+  if (typeof document === "undefined" || !document.documentElement) return
+  closePalette()
+  mountQueryView(request, {
+    mode: "overlay",
+    host: document.body ?? document.documentElement
+  })
 }

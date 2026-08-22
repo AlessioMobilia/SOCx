@@ -47,7 +47,14 @@ lock and is also used by the publication workflow.
 - `src/utility`: IOC parsing, API clients, exports, storage, and UI helpers.
 - `src/utility/query`: untrusted pack validation, source pinning, dialects,
   rendering, grouping, faceted filtering (`paletteFilters.ts`), starred queries
-  (`favorites.ts`), palette insertion, and the personal rule builder.
+  (`favorites.ts`), language mini-guide metadata (`guides.ts`), expandable
+  command details (`guideCommands.ts`), and its shared DOM view
+  (`languageGuideView.ts`). `palette.ts` mounts the same query browser as an
+  injected overlay or as the dedicated workspace, while `queryViewRequest.ts`
+  owns the shared indicator summary and render-result mapping.
+  `guides.test.ts` enforces one guide and one detailed command set for every
+  dialect declared in `dialects.json`; it also audits the richer Splunk field
+  and statistical-command reference.
 - `scripts/validate-builds.mjs`: validates target manifests and referenced files.
 - `scripts/publish-chrome.mjs`: Chrome Web Store V2 publisher with temporary V1
   compatibility.
@@ -352,10 +359,13 @@ Run this matrix on all three browsers before a release:
 10. If file-URL support is part of the release, enable **Allow access to file
     URLs** in Chrome/Edge and test an explicit local HTML file. This user toggle
     cannot be enabled by the extension.
-11. On a fresh profile, open Query workspace from both the popup and a page
-    context menu without selecting text. Paste a mixed IOC list, browse both IOC
-    and standard templates, set variables and copy a rendered query. Confirm
-    IOC-specific context actions remain selection-only.
+11. On a fresh profile, open Query workspace from the popup without selecting
+    text. Paste a mixed IOC list, browse both IOC and standard templates, set
+    variables and copy a rendered query. On a regular page, use
+    `SOCx › Open query palette…` and confirm it opens the in-page palette rather
+    than a workspace tab; repeat on a page that blocks content scripts and
+    confirm Query workspace opens as the fallback. Confirm IOC-specific context
+    actions remain selection-only.
 12. Open the query palette and confirm the built-in sources populate
     automatically. Verify the catalogue count, platform matching,
     fuzzy search, keyboard navigation, insertion into a plain input and a
@@ -372,9 +382,23 @@ Run this matrix on all three browsers before a release:
     add a link and open the browser shortcut manager. In Rule builder, create an
     IOC template with variables and per-type bindings, preview it, export it,
     import it again, and confirm the variables survive the round trip. Filter
-    the palette by favorites, kind, language, category and a repository declared
-    facet, and confirm a starred query survives a pack refresh and a browser
-    restart. Search for a field name that only appears inside a query body, and
+    the palette by favorites, kind, language, repository source, category and a
+    repository declared facet. On a recognised console, confirm its source and
+    language filters are active on open. Switch between IOC and hunting
+    templates and verify the
+    grid tracks do not move, no horizontal scrollbar appears, and the query-list
+    scrollbar uses the SOCx theme. Confirm Query workspace uses the standard
+    Bulk Check page shell, a two-column 720px work area and normal page
+    scrolling. Open the workspace guide and confirm it expands in document
+    flow, starts on **All languages and products**, and keeps that selection as
+    queries change. Then open the palette guide on a recognised console,
+    confirm it starts from the matched language, and scroll its bounded viewport
+    from the first fields to the last commands. Confirm the Indicators field
+    uses the themed vertical scrollbar and long variable labels wrap instead of
+    ending in an ellipsis. Search for a command and follow an
+    official-documentation link. Confirm a starred
+    query survives a pack refresh and a browser restart. Search for a field name
+    that only appears inside a query body, and
     for two space separated terms. Point a source at an index whose `includes`
     reference other index files and confirm every pack is imported once, that a
     duplicate pack id is refused, and that restricting the source to a couple of
