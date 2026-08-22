@@ -387,10 +387,12 @@ Run this matrix on all three browsers before a release:
     language filters are active on open. Switch between IOC and hunting
     templates and verify the
     grid tracks do not move, no horizontal scrollbar appears, and the query-list
-    scrollbar uses the SOCx theme. Compare the workspace cards, controls,
-    spacing and active states with Bulk Check in both themes. Open the
-    in-palette language guide, search
-    for a command and follow an official-documentation link. Confirm a starred
+    scrollbar uses the SOCx theme. Confirm Query workspace uses the standard
+    Bulk Check page shell, a two-column 720px work area and normal page
+    scrolling. Open the workspace guide and confirm it expands in document
+    flow; then open the palette guide and scroll its bounded viewport from the
+    first fields to the last commands. Search for a command and follow an
+    official-documentation link. Confirm a starred
     query survives a pack refresh and a browser restart. Search for a field name
     that only appears inside a query body, and
     for two space separated terms. Point a source at an index whose `includes`

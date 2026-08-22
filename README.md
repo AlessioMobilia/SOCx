@@ -232,13 +232,15 @@ actually contain them; space separated terms all have to match. Star a query
 with `Alt+F` or the ☆ next to its name and it is pinned to the top of the list
 under **★ Favorites**, on every console, until you unstar it.
 
-The in-page palette and the dedicated Query workspace use the same query
-browser rather than maintaining two parallel interfaces. Both therefore show
-the same three-card layout on wide screens, using the same canvas, surfaces,
-borders, rounded controls, accent states and scrollbars as Bulk Check and the
-other SOCx tools. They also share the same filters, source path, pack-verification
-state, tags, repository facets, ATT&CK ids, references, variables and
-rendered-query warnings. Language, source, category and custom
+The in-page palette and the dedicated Query workspace share the same query
+data, filtering and rendering rather than maintaining two implementations.
+Their layouts follow the surface they run in: the constrained overlay keeps its
+three-pane browser, while the full page uses a wider two-column workspace with
+the indicators above the preview. Both use the same canvas, surfaces, borders,
+rounded controls, accent states and scrollbars as Bulk Check and the other SOCx
+tools. They also share the same filters, source path, pack-verification state,
+tags, repository facets, ATT&CK ids, references, variables and rendered-query
+warnings. Language, source, category and custom
 facets sit inside the collapsed **More filters** disclosure; their native hover
 help is painted outside the panel and cannot be clipped by its scrolling
 columns. Fixed grid tracks keep column widths stable while queries change, and
@@ -249,10 +251,11 @@ its optional browser shortcut. It accepts a mixed IOC list, offers the same
 filters, favorites and deep search over every enabled IOC and hunting template,
 keeps the full catalogue in a scrolling column, exposes template variables,
 shows uncovered IOC types and chunk warnings, and copies the generated query.
-Its compact one-line banner retains the standard `max-w-6xl`, outer margins and
-section spacing used by Bulk Check, while the flexible browser consumes all
-remaining tab height. Boolean variables use a consistent switch instead of a
-browser-native checkbox.
+The page uses the same centred `max-w-6xl` shell, header hierarchy, margins and
+section spacing as Bulk Check. Its 720-pixel working area gives the catalogue
+and generated query a stable, comfortable height; the document itself scrolls
+normally instead of clipping either one to the viewport. Boolean variables use
+a consistent switch instead of a browser-native checkbox.
 
 Inside the shared query browser is a collapsed **Query language mini guide**. It
 covers every bundled dialect — including regex and PowerShell — and can be
@@ -262,7 +265,9 @@ show concise syntax, its main options and a short example. Field cards can also
 include practical notes and a query fragment; the Splunk guide distinguishes
 default, internal and CIM fields and covers statistical functions, `stats`,
 `eventstats`, `streamstats`, `tstats`, `chart`, `bin` and frequency commands.
-Each guide also links to the relevant official documentation in a new tab.
+Each guide also links to the relevant official documentation in a new tab. In
+the page workspace it expands in normal document flow and uses page scrolling;
+inside the palette it keeps its own bounded scrollbar.
 IOC-only context actions remain hidden until text is selected, so an empty page
 menu stays compact. If a page blocks the palette content script, the context
 menu falls back to opening Query workspace with the same selected indicators.
@@ -288,8 +293,8 @@ cannot merge safely — types read from different tables, or a body that is not
 one field-to-list comparison — falls back to one query per type and says why.
 Long lists are split into chunks and labelled, and quoting and escaping are
 decided by the dialect, never by the pack. Hunting queries read no indicator, so
-the fixed three-pane layout dims the indicator column and explains that it is
-not used; compact layouts hide it to preserve preview space.
+the overlay dims its fixed indicator column while the page explains the unused
+input above the preview; compact layouts hide it to preserve preview space.
 
 ### The rule builder
 
