@@ -775,6 +775,36 @@ const extractSemanticPairs = (
   ).map((pair) => pair.split("\u0000") as [string, string])
 }
 
+const formatSelectedSemanticPairs = (
+  selection: Selection,
+  visual: VisualSelectionSnapshot | null
+): SmartFormatResult | null => {
+  if (selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  const fragment = range.startContainer.ownerDocument.createElement("div")
+  fragment.appendChild(range.cloneContents())
+  if (fragment.querySelector(TABLE_ROOT_SELECTOR)) return null
+
+  let pairs = extractSemanticPairs(fragment)
+  if (visual?.geometryAvailable) {
+    const visibleText = cleanText(
+      visual.tokens.map((token) => token.text).join(" ")
+    ).toLowerCase()
+    pairs = pairs.filter(
+      ([key, value]) =>
+        visibleText.includes(cleanText(key).toLowerCase()) &&
+        visibleText.includes(cleanText(value).toLowerCase())
+    )
+  }
+  if (pairs.length === 0) return null
+
+  return {
+    kind: "semantic-key-value",
+    score: Math.min(98, 86 + pairs.length * 2),
+    text: formatKeyValues(pairs)
+  }
+}
+
 const extractSplunkEventPairs = (
   container: HTMLElement
 ): Array<[string, string]> => {
@@ -1211,6 +1241,13 @@ const parseKeyValueLine = (line: string): [string, string] | null => {
   for (const pattern of candidates) {
     const match = line.match(pattern)
     if (!match) continue
+    if (
+      pattern === candidates[0] &&
+      /\d$/.test(match[1]) &&
+      /^\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/.test(match[2])
+    ) {
+      continue
+    }
     const key = normalizeLabel(match[1])
     const value = cleanText(match[2])
     if (isLikelyLabel(key) && value && !looksLikeStandaloneValue(line))
@@ -1682,6 +1719,7 @@ export type SmartSelectionSnapshot = {
   visual: VisualSelectionSnapshot | null
   markedResult: SmartFormatResult | null
   tableResult: SmartFormatResult | null
+  semanticResult: SmartFormatResult | null
   contextualResult: SmartFormatResult | null
   fallbackResult: SmartFormatResult | null
 }
@@ -1841,6 +1879,7 @@ export const captureSmartSelection = (
   const visual = captureVisualSelection(selection)
   const markedResult = formatMarkedSelection(selection)
   const tableResult = formatSelectedTable(selection)
+  const semanticResult = formatSelectedSemanticPairs(selection, visual)
   const contextualResult = formatContextualSelection(selection, visual)
   const contextualHeaders = readContextualHeaders(selection)
   const atomicContainer = findAtomicSelectionContainer(selection)
@@ -1861,6 +1900,7 @@ export const captureSmartSelection = (
     visual,
     markedResult,
     tableResult,
+    semanticResult,
     contextualResult,
     fallbackResult
   }
@@ -1895,6 +1935,7 @@ export const formatSmartSelectionSnapshot = (
   // cannot improve, and are captured before the page can mutate the selection.
   if (snapshot.markedResult) return snapshot.markedResult
   if (snapshot.tableResult) return snapshot.tableResult
+  if (snapshot.semanticResult) return snapshot.semanticResult
 
   if (snapshot.visual) {
     const visualCandidate = buildVisualCandidate(snapshot.visual)
