@@ -173,7 +173,7 @@ describe("query palette", () => {
       variables: [
         {
           id: "summariesonly",
-          label: "Summaries only",
+          label: "tstats: summaries only",
           type: "checkbox",
           default: "true"
         }
@@ -206,10 +206,18 @@ describe("query palette", () => {
     } as never)
 
     const checkbox = document.querySelector(
-      'input[aria-label="Summaries only"]'
+      'input[aria-label="tstats: summaries only"]'
     ) as HTMLInputElement
     expect(checkbox.type).toBe("checkbox")
     expect(checkbox.checked).toBe(true)
+
+    const label = checkbox
+      .closest("label")
+      ?.querySelector("span") as HTMLElement
+    expect(label.textContent).toBe("tstats: summaries only")
+    expect(label.style.whiteSpace).toBe("normal")
+    expect(label.style.textOverflow).toBe("clip")
+    expect(label.style.overflow).toBe("visible")
 
     checkbox.click()
     expect(values.at(-1)).toBe("false")
@@ -238,6 +246,7 @@ describe("query palette", () => {
     const cleanup = mountQueryView(
       {
         entries,
+        dialects: bundledDialectMap(),
         indicatorHint: ["8.8.8.8"],
         onIndicatorTextChange,
         onRender: () => [{ text: "embedded query" }]
@@ -267,6 +276,10 @@ describe("query palette", () => {
     const workspaceGuide = host.querySelector(
       'details[data-socx-language-guide="true"]'
     ) as HTMLDetailsElement
+    const workspaceGuideDialect = workspaceGuide.querySelector(
+      'select[aria-label="Filter guide by language and product"]'
+    ) as HTMLSelectElement
+    expect(workspaceGuideDialect.value).toBe("all")
     workspaceGuide.open = true
     workspaceGuide.dispatchEvent(new Event("toggle"))
     const workspaceGuideContent = workspaceGuide.querySelector(
@@ -280,6 +293,9 @@ describe("query palette", () => {
     ).toBe("grid")
 
     const field = indicatorField()
+    expect(field.classList.contains("socx-query-scroll")).toBe(true)
+    expect(field.style.overflowY).toBe("auto")
+    expect(field.style.resize).toBe("none")
     field.value = "1.1.1.1"
     field.dispatchEvent(new Event("input", { bubbles: true }))
     expect(onIndicatorTextChange).toHaveBeenCalledWith("1.1.1.1")
@@ -356,6 +372,13 @@ describe("query palette", () => {
     expect(guide).toBeTruthy()
     expect(guide.closest('[role="dialog"]')).toBeTruthy()
     expect(guide.open).toBe(false)
+    expect(
+      (
+        guide.querySelector(
+          'select[aria-label="Filter guide by language and product"]'
+        ) as HTMLSelectElement
+      ).value
+    ).toBe("all")
 
     guide.open = true
     guide.dispatchEvent(new Event("toggle"))
@@ -381,6 +404,19 @@ describe("query palette", () => {
       'a[target="_blank"]'
     ) as HTMLAnchorElement
     expect(officialLink?.rel).toContain("noreferrer")
+  })
+
+  it("filters the palette guide for a recognised console only", () => {
+    open({
+      dialects: bundledDialectMap(),
+      initialDialect: "spl",
+      platformLabel: "Splunk"
+    })
+
+    const guideDialect = document.querySelector(
+      'select[aria-label="Filter guide by language and product"]'
+    ) as HTMLSelectElement
+    expect(guideDialect.value).toBe("spl")
   })
 
   it("stars a query, reports it, and lists it first", () => {

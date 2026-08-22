@@ -851,6 +851,7 @@ export const mountQueryView = (
   )
 
   const indicators = document.createElement("textarea")
+  indicators.classList.add(scrollClass)
   indicators.rows = 3
   indicators.spellcheck = false
   indicators.setAttribute("aria-label", "Indicators used by the query")
@@ -862,11 +863,15 @@ export const mountQueryView = (
     display: "block",
     width: "100%",
     "box-sizing": "border-box",
-    resize: "vertical",
+    resize: "none",
     "font-family": mono,
     "font-size": "12px",
     "line-height": "1.45",
     "max-height": "22vh",
+    "overflow-y": "auto",
+    "overflow-x": "hidden",
+    "scrollbar-width": "thin",
+    "scrollbar-color": `${scrollThumb} transparent`,
     color: ink,
     "background-color": control,
     border: `1px solid ${line}`,
@@ -997,6 +1002,13 @@ export const mountQueryView = (
   if (embedded) panel.append(header, body, guideView.element)
   else panel.append(header, body, guideView.element, footer)
   overlay.appendChild(panel)
+
+  // A standalone workspace is not tied to the page that opened it, so its
+  // guide always starts from the complete language catalogue. Only an in-page
+  // palette with a recognised console receives a relevant language shortcut.
+  if (!embedded && request.platformLabel && request.initialDialect) {
+    guideView.syncDialect(request.initialDialect)
+  }
 
   // ------------------------------------------------------------------ state
   let favorites = [...(request.favorites ?? [])]
@@ -1288,8 +1300,6 @@ export const mountQueryView = (
     indicatorSummary.textContent = entry.template.requiresIocs
       ? (request.describeIndicators?.(indicators.value) ?? "")
       : "Not used by this hunting query"
-    guideView.syncDialect(entryDialect(entry))
-
     const variables = variablesByEntry.get(entry.key) ?? {}
     variablesByEntry.set(entry.key, variables)
 
@@ -1490,11 +1500,14 @@ export const mountQueryView = (
       })
       const label = makeText("span", variable.label, {
         "font-size": "12px",
+        flex: variable.type === "checkbox" ? "1 1 auto" : "0 1 48%",
         "min-width": "0",
-        "max-width": "45%",
-        "white-space": "nowrap",
-        overflow: "hidden",
-        "text-overflow": "ellipsis",
+        "max-width": variable.type === "checkbox" ? "none" : "52%",
+        "line-height": "1.35",
+        "white-space": "normal",
+        "overflow-wrap": "anywhere",
+        overflow: "visible",
+        "text-overflow": "clip",
         color: muted
       })
 
