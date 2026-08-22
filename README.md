@@ -338,8 +338,10 @@ Further format documentation lives in the pack repository:
 
 ## 🛠️ Development and release documentation
 
-See the [SOCx 1.5.1 release notes](docs/RELEASE_NOTES_1.5.1.md) for improved
-Splunk smart formatting and two-column key/value tables. See the
+See the [SOCx 1.5.2 release notes](docs/RELEASE_NOTES_1.5.2.md) for Sentinel
+and Entra ID user-information smart formatting. See the [SOCx 1.5.1 release
+notes](docs/RELEASE_NOTES_1.5.1.md) for improved Splunk smart formatting and
+two-column key/value tables. See the
 [SOCx 1.5.0 release notes](docs/RELEASE_NOTES_1.5.0.md) for the unified
 query browser, searchable language guides and redesigned workspace; the [1.4.3
 notes](docs/RELEASE_NOTES_1.4.3.md) for checkbox query variables and the safer
