@@ -27,6 +27,11 @@ export type LanguageGuideTheme = {
 type LanguageGuideViewOptions = {
   dialects?: Map<string, QueryDialect>
   theme: LanguageGuideTheme
+  /**
+   * Overlay guides scroll inside the dialog; workspace guides grow with the
+   * page.
+   */
+  constrained?: boolean
 }
 
 type LanguageGuideView = {
@@ -47,6 +52,7 @@ export const createLanguageGuideView = (
   options: LanguageGuideViewOptions
 ): LanguageGuideView => {
   const { dialects, theme } = options
+  const constrained = options.constrained !== false
   const {
     ink,
     muted,
@@ -92,6 +98,7 @@ export const createLanguageGuideView = (
   element.setAttribute("data-socx-language-guide", "true")
   setStyles(element, {
     all: "initial",
+    position: constrained ? "relative" : "static",
     display: "block",
     flex: "0 0 auto",
     "max-width": "100%",
@@ -146,19 +153,20 @@ export const createLanguageGuideView = (
   summary.append(summaryText, guideState)
 
   const content = document.createElement("div")
+  content.setAttribute("data-socx-language-guide-content", "true")
   content.classList.add(scrollClass)
   setStyles(content, {
     all: "initial",
     display: "flex",
     "flex-direction": "column",
     gap: "10px",
-    "max-height": "min(52vh, 560px)",
+    "max-height": constrained ? "min(52vh, 560px)" : "none",
     "max-width": "100%",
     "box-sizing": "border-box",
     padding: "12px",
     "border-top": `1px solid ${line}`,
     "font-family": font,
-    "overflow-y": "auto",
+    "overflow-y": constrained ? "auto" : "visible",
     "overflow-x": "hidden",
     "scrollbar-width": "thin",
     "scrollbar-color": `${scrollThumb} transparent`
@@ -619,32 +627,60 @@ export const createLanguageGuideView = (
   element.addEventListener("toggle", () => {
     guideState.textContent = element.open ? "Close" : "Open"
     element.style.setProperty(
-      "display",
-      element.open ? "flex" : "block",
-      "important"
-    )
-    element.style.setProperty(
-      "flex-direction",
-      element.open ? "column" : "initial",
-      "important"
-    )
-    element.style.setProperty(
       "flex",
-      element.open ? "1 1 auto" : "0 0 auto",
+      constrained && element.open ? "1 1 0%" : "0 0 auto",
       "important"
     )
     element.style.setProperty("min-height", "0", "important")
+    element.style.setProperty(
+      "max-height",
+      constrained && element.open ? "100%" : "none",
+      "important"
+    )
     content.style.setProperty(
       "max-height",
-      element.open ? "none" : "min(52vh, 560px)",
+      !constrained
+        ? "none"
+        : element.open
+          ? "none"
+          : "min(52vh, 560px)",
       "important"
     )
     content.style.setProperty(
-      "flex",
-      element.open ? "1 1 auto" : "initial",
+      "position",
+      constrained && element.open ? "absolute" : "static",
       "important"
     )
+    content.style.setProperty(
+      "top",
+      constrained && element.open
+        ? `${summary.getBoundingClientRect().height}px`
+        : "auto",
+      "important"
+    )
+    content.style.setProperty(
+      "right",
+      constrained && element.open ? "0" : "auto",
+      "important"
+    )
+    content.style.setProperty(
+      "bottom",
+      constrained && element.open ? "0" : "auto",
+      "important"
+    )
+    content.style.setProperty(
+      "left",
+      constrained && element.open ? "0" : "auto",
+      "important"
+    )
+    content.style.setProperty("height", "auto", "important")
+    content.style.setProperty("flex", "initial", "important")
     content.style.setProperty("min-height", "0", "important")
+    content.style.setProperty(
+      "overflow-y",
+      constrained ? "auto" : "visible",
+      "important"
+    )
     if (element.open) render()
   })
 

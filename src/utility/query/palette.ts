@@ -231,9 +231,9 @@ export const mountQueryView = (
     position: "relative",
     display: "flex",
     "flex-direction": "column",
-    gap: embedded ? "16px" : "12px",
+    gap: embedded ? "24px" : "12px",
     width: embedded ? "100%" : "1180px",
-    height: embedded ? "100%" : "auto",
+    height: "auto",
     "max-width": embedded ? "none" : "calc(100vw - 32px)",
     "max-height": embedded ? "none" : "90vh",
     "box-sizing": "border-box",
@@ -248,7 +248,7 @@ export const mountQueryView = (
         ? "0 32px 64px rgba(0,0,0,0.62)"
         : "0 32px 64px rgba(15,23,42,0.26)",
     "font-family": font,
-    overflow: "hidden"
+    overflow: embedded ? "visible" : "hidden"
   })
 
   // -------------------------------------------------------- small factories
@@ -511,8 +511,8 @@ export const mountQueryView = (
     all: "initial",
     display: "flex",
     "flex-direction": "column",
-    gap: "10px",
-    padding: embedded ? "16px" : "12px 14px",
+    gap: embedded ? "12px" : "10px",
+    padding: embedded ? "20px" : "12px 14px",
     "box-sizing": "border-box",
     "background-color": surface,
     border: `1px solid ${line}`,
@@ -696,21 +696,27 @@ export const mountQueryView = (
   setStyles(body, {
     all: "initial",
     display: "grid",
-    flex: "1 1 auto",
+    flex: embedded ? "0 0 auto" : "1 1 auto",
+    height: embedded ? "720px" : "auto",
     width: "100%",
     "min-height": "0",
     "min-width": "0",
-    gap: embedded ? "16px" : "12px",
+    gap: embedded ? "24px" : "12px",
     overflow: "hidden",
     "font-family": font
   })
 
-  const threePane = window.innerWidth >= (embedded ? 900 : 1100)
+  const threePane = !embedded && window.innerWidth >= 1100
+  const singlePane = embedded && window.innerWidth < 760
   body.style.setProperty(
     "grid-template-columns",
-    threePane
+    singlePane
+      ? "minmax(0, 1fr)"
+      : threePane
       ? "minmax(210px, 24%) minmax(280px, 34%) minmax(0, 1fr)"
-      : "minmax(220px, 42%) minmax(0, 1fr)",
+      : embedded
+        ? "minmax(300px, 38%) minmax(0, 1fr)"
+        : "minmax(220px, 42%) minmax(0, 1fr)",
     "important"
   )
 
@@ -788,7 +794,7 @@ export const mountQueryView = (
     width: "100%",
     "min-width": "0",
     "min-height": "0",
-    gap: "12px",
+    gap: embedded ? "24px" : "12px",
     overflow: "hidden",
     "font-family": font
   })
@@ -913,6 +919,11 @@ export const mountQueryView = (
     previewColumn.append(indicatorBox, preview)
     body.append(listColumn, previewColumn)
   }
+  if (singlePane) {
+    setStyles(body, { height: "auto", overflow: "visible" })
+    setStyles(listColumn, { height: "440px" })
+    setStyles(previewColumn, { height: "720px" })
+  }
 
   // ----------------------------------------------------------------- footer
   const footer = document.createElement("div")
@@ -948,6 +959,7 @@ export const mountQueryView = (
 
   const guideView = createLanguageGuideView({
     dialects: request.dialects,
+    constrained: !embedded,
     theme: {
       ink,
       muted,
@@ -968,14 +980,22 @@ export const mountQueryView = (
     }
   })
   guideView.element.addEventListener("toggle", () => {
-    body.style.setProperty(
-      "display",
-      guideView.element.open ? "none" : "grid",
-      "important"
-    )
+    if (!embedded) {
+      panel.style.setProperty(
+        "height",
+        guideView.element.open ? "720px" : "auto",
+        "important"
+      )
+      body.style.setProperty(
+        "display",
+        guideView.element.open ? "none" : "grid",
+        "important"
+      )
+    }
   })
 
-  panel.append(header, body, guideView.element, footer)
+  if (embedded) panel.append(header, body, guideView.element)
+  else panel.append(header, body, guideView.element, footer)
   overlay.appendChild(panel)
 
   // ------------------------------------------------------------------ state
@@ -1273,8 +1293,8 @@ export const mountQueryView = (
     const variables = variablesByEntry.get(entry.key) ?? {}
     variablesByEntry.set(entry.key, variables)
 
-    // Everything that describes the query goes in the top box, which takes at
-    // most half the column and scrolls; the query itself owns the rest. A
+    // Everything that describes the query goes in the top box, which takes a
+    // limited share of the column and scrolls; the query itself owns the rest. A
     // template with a long description and a handful of variables used to push
     // its own output out of sight.
     const meta = document.createElement("div")
@@ -1286,7 +1306,7 @@ export const mountQueryView = (
       gap: "8px",
       flex: "0 1 auto",
       "min-height": "0",
-      "max-height": "45%",
+      "max-height": embedded ? "38%" : "45%",
       "overflow-y": "auto",
       "overflow-x": "hidden",
       "scrollbar-width": "thin",
@@ -1336,7 +1356,7 @@ export const mountQueryView = (
       event.preventDefault()
       toggleFavorite(entry.key)
     })
-    titleLine.append(
+    titleLine.appendChild(
       makeText("p", entry.template.name, {
         "font-size": "15px",
         "font-weight": "700",
@@ -1345,9 +1365,14 @@ export const mountQueryView = (
         "word-break": "break-word",
         "overflow-wrap": "anywhere",
         color: ink
-      }),
-      star
+      })
     )
+    if (embedded) {
+      const previewCopy = makeButton("Copy query")
+      previewCopy.addEventListener("click", () => void copy())
+      titleLine.appendChild(previewCopy)
+    }
+    titleLine.appendChild(star)
     meta.appendChild(titleLine)
 
     const badges = document.createElement("div")

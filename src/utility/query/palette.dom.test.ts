@@ -252,12 +252,32 @@ describe("query palette", () => {
     ).toBeNull()
     expect(rows()).toHaveLength(entries.length)
     expect(host.textContent).toContain("embedded query")
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (button) => button.textContent === "Copy query"
+      )
+    ).toBe(true)
     expect(host.querySelector("details")?.open).toBe(false)
     expect(
       [...host.querySelectorAll("[data-socx-query-section]")].map((section) =>
         section.getAttribute("data-socx-query-section")
       )
-    ).toEqual(["indicators", "templates", "preview"])
+    ).toEqual(["templates", "indicators", "preview"])
+
+    const workspaceGuide = host.querySelector(
+      'details[data-socx-language-guide="true"]'
+    ) as HTMLDetailsElement
+    workspaceGuide.open = true
+    workspaceGuide.dispatchEvent(new Event("toggle"))
+    const workspaceGuideContent = workspaceGuide.querySelector(
+      '[data-socx-language-guide-content="true"]'
+    ) as HTMLElement
+    expect(workspaceGuideContent.style.position).toBe("static")
+    expect(workspaceGuideContent.style.overflowY).toBe("visible")
+    expect(
+      host.querySelector('[data-socx-query-section="templates"]')?.parentElement
+        ?.style.display
+    ).toBe("grid")
 
     const field = indicatorField()
     field.value = "1.1.1.1"
@@ -341,6 +361,17 @@ describe("query palette", () => {
     guide.dispatchEvent(new Event("toggle"))
     await Promise.resolve()
 
+    const guideContent = guide.querySelector(
+      '[data-socx-language-guide-content="true"]'
+    ) as HTMLElement
+    expect(guide.style.flex).toBe("1 1 0%")
+    expect(guide.style.minHeight).toBe("0")
+    expect(
+      (guide.closest('[role="dialog"]') as HTMLElement).style.height
+    ).toBe("720px")
+    expect(guideContent.style.position).toBe("absolute")
+    expect(guideContent.style.bottom).toBe("0px")
+    expect(guideContent.style.overflowY).toBe("auto")
     expect(
       guide.querySelector('input[aria-label="Search query language guides"]')
     ).toBeTruthy()

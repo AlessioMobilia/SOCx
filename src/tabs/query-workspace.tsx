@@ -146,35 +146,32 @@ const QueryWorkspace = () => {
   }, [dialects, entries, favorites, loading, mergeTypes])
 
   return (
-    <main className="h-screen overflow-hidden bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
-      <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6">
-        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-socx-lg border border-socx-border-light bg-white/90 px-6 py-4 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
-          <div className="flex min-w-0 items-center gap-3">
-            <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
-              SOCx
-            </p>
-            <span className="h-5 w-px bg-socx-border-light dark:bg-socx-border-dark" />
-            <div className="min-w-0">
-              <h1 className="text-base font-semibold leading-tight">
-                Query workspace
-              </h1>
-              <p className="hidden truncate text-[11px] text-socx-muted dark:text-socx-muted-dark md:block">
+    <main className="min-h-screen bg-socx-cloud px-4 py-6 font-inter text-socx-ink dark:bg-socx-night dark:text-white">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <header className="rounded-socx-lg border border-socx-border-light bg-white/90 p-6 dark:border-socx-border-dark dark:bg-socx-night-soft/80">
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-socx-muted dark:text-socx-muted-dark">
+            SOCx
+          </p>
+          <div className="mt-1 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold">Query workspace</h1>
+              <p className="text-sm text-socx-muted dark:text-socx-muted-dark">
                 Browse templates, adjust inputs and generate a ready-to-use
                 query.
               </p>
             </div>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-3 py-1.5 text-xs font-semibold transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark"
+              onClick={() =>
+                chrome.tabs.create({
+                  url: chrome.runtime.getURL("tabs/query-builder.html")
+                })
+              }>
+              <PencilSquareIcon className="h-4 w-4" />
+              Create custom query
+            </button>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-socx-border-light px-3 py-1.5 text-xs font-semibold transition hover:border-socx-accent hover:text-socx-accent dark:border-socx-border-dark"
-            onClick={() =>
-              chrome.tabs.create({
-                url: chrome.runtime.getURL("tabs/query-builder.html")
-              })
-            }>
-            <PencilSquareIcon className="h-4 w-4" />
-            Create custom query
-          </button>
         </header>
 
         {error && (
@@ -183,10 +180,7 @@ const QueryWorkspace = () => {
           </p>
         )}
 
-        <div
-          ref={viewHost}
-          aria-busy={loading}
-          className="min-h-0 flex-1">
+        <div ref={viewHost} aria-busy={loading}>
           {loading && (
             <p className="rounded-xl border border-socx-border-light bg-white/90 p-6 text-center text-sm text-socx-muted dark:border-socx-border-dark dark:bg-socx-night-soft/80">
               Loading query packs…
