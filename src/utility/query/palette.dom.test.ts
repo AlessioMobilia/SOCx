@@ -119,6 +119,8 @@ const open = (overrides: Record<string, unknown> = {}) =>
 describe("query palette", () => {
   beforeEach(() => {
     closePalette()
+    document.documentElement.classList.remove("dark", "dark-mode")
+    document.body.classList.remove("dark", "dark-mode")
     document.body.innerHTML = ""
   })
 
@@ -302,6 +304,34 @@ describe("query palette", () => {
 
     cleanup()
     expect(host.childElementCount).toBe(0)
+  })
+
+  it("uses the workspace theme stored on the body", () => {
+    document.body.classList.add("dark-mode")
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+
+    const cleanup = mountQueryView(
+      {
+        entries,
+        dialects: bundledDialectMap(),
+        onRender: () => [{ text: "dark query" }]
+      },
+      { mode: "workspace", host }
+    )
+
+    const search = host.querySelector(
+      'input[aria-label="Search queries"]'
+    ) as HTMLInputElement
+    const indicators = host.querySelector(
+      'textarea[aria-label="Indicators used by the query"]'
+    ) as HTMLTextAreaElement
+
+    expect(search.style.color).toBe("#ffffff")
+    expect(indicators.style.color).toBe("#ffffff")
+    expect(indicators.style.backgroundColor).toBe("rgba(22, 31, 50, 0.60)")
+
+    cleanup()
   })
 
   it("narrows the list from a value that only appears inside the query", () => {

@@ -106,6 +106,8 @@ const setStyles = (
 const isDark = (): boolean =>
   document.documentElement.classList.contains("dark") ||
   document.documentElement.classList.contains("dark-mode") ||
+  document.body?.classList.contains("dark") ||
+  document.body?.classList.contains("dark-mode") ||
   (typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-color-scheme: dark)").matches)
 
